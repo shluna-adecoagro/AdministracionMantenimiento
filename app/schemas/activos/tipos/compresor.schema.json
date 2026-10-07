@@ -1,0 +1,16 @@
+{
+  "allOf": [
+    { "$ref": "../categorias/equipo_fijo_tecnico.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "parametros_tecnicos": {
+          "type": "object",
+          "properties": {
+            "capacidad_litros": { "type": ["number", "null"] }
+          }
+        }
+      }
+    }
+  ]
+}

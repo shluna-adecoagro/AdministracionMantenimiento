@@ -1,0 +1,5 @@
+{
+  "allOf": [
+    { "$ref": "../categorias/equipo_fijo.schema.json" }
+  ]
+}

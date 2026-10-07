@@ -1,0 +1,33 @@
+# Entornos virtuales
+.venv/**
+venv/**
+env/**
+
+# Caché de Python y archivos compilados
+__pycache__/**
+*.pyc
+*.pyo
+*.pyd
+
+# Variables de entorno y secretos
+.env
+.env.*
+
+# Git y control de versiones
+.git/**
+.gitignore
+.gitattributes
+
+# Bases de datos locales SQLite (opcional pero recomendado si la creas localmente)
+*.db
+*.sqlite3
+
+# IDEs y editores de código
+.vscode/**
+.idea/**
+.ds_store
+Thumbs.db
+
+data/**
+instance/**
+ml/**

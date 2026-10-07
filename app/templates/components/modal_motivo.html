@@ -1,0 +1,25 @@
+{% if visible %}
+<div id="modal-motivo" class="modal-overlay" style="display:none;">
+    <div class="modal">
+        <h3>Motivo de la operación</h3>
+
+        <div class="modal-body">
+            <label for="select-motivo">Seleccioná un motivo:</label>
+            <select id="select-motivo">
+                <option value="">Cargando motivos...</option>
+            </select>
+
+            <div id="motivo-otro-container" style="display:none; margin-top:1rem;">
+                <label for="motivo-otro">Ingresá el motivo:</label>
+                <textarea id="motivo-otro" rows="3"></textarea>
+            </div>
+        </div>
+
+        <div class="modal-actions">
+            <button id="btn-cancelar-motivo" class="btn-secondary">Cancelar</button>
+            <button id="btn-confirmar-motivo" class="btn-primary">Confirmar</button>
+        </div>
+    </div>
+</div>
+
+{% endif %}

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Favicon -->
+    <!-- <link rel="icon" href="https://adecoagro.com/favicon.ico" type="image/x-icon"> -->
+
+    <!-- FontAwesome -->
+    <link rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/fontawesome.min.css">
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/solid.min.css">
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/brands.min.css">
+
+
+    <!-- Tus estilos -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css') }}">
+
+
+    <title>{% block title %}Mantenimiento - Administración{% endblock %}</title>
+</head>
+
+<body>
+<div id="app">
+
+    <!-- Encabezado -->
+    <header class="main-header">
+
+        <!-- Cinta superior -->
+        <div class="header-top">
+            <img src="/static/img/logo.svg" class="logo" alt="Logo Adeco" />
+            <button class="login-btn">Login</button>
+        </div>
+
+        <!-- Títulos -->
+        <div class="header-title">
+            <h1>Área de mantenimiento de Tambos</h1>
+            <h2>Administración</h2>
+        </div>
+    </header>
+
+    <!-- Navbar principal -->
+    <nav class="top-nav">
+        <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/acerca">Acerca de</a></li>
+            <li><a href="/contacto">Contacto</a></li>
+        </ul>
+    </nav>
+
+    <!-- Layout principal -->
+    <div class="layout">
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <h3>Gestiones</h3>
+            <ul>
+                {% for item in sidebar_items %}
+                    <li><a href="{{ item.url }}">{{ item.label }}</a></li>
+                {% endfor %}
+            </ul>
+        </aside>
+
+
+
+        <!-- Contenido dinámico -->
+        <main class="content">
+            {% block content %}
+            {% endblock %}
+        </main>
+
+    </div>
+
+    <!-- Pie -->
+    <footer>
+        <p>&copy; 2025 Mantenimiento - Administración</p>
+    </footer>
+
+</div>
+
+<!-- Modal de Motivo de Operación -->
+<div id="modal-motivo" class="modal-overlay" style="display:none;">
+    <div class="modal">
+        <h3>Motivo de la operación</h3>
+
+        <label for="select-motivo">Seleccioná un motivo:</label>
+        <select id="select-motivo" class="form-control">
+            <option value="">Cargando motivos...</option>
+        </select>
+
+        <div id="motivo-otro-container" style="display:none; margin-top:1rem;">
+            <label for="motivo-otro">Ingresá el motivo:</label>
+            <textarea id="motivo-otro" class="form-control" rows="3"></textarea>
+        </div>
+
+        <div class="modal-actions">
+            <button id="btn-cancelar-motivo" class="btn-secondary">Cancelar</button>
+            <button id="btn-confirmar-motivo" class="btn-primary">Confirmar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let tipoOperacionActual = null;
+let formularioActual = null;
+
+function abrirModalMotivo(tipoOperacion, formulario) {
+    tipoOperacionActual = tipoOperacion;
+    formularioActual = formulario;
+
+    // Mostrar modal
+    document.getElementById("modal-motivo").style.display = "flex";
+
+    // Cargar motivos vía AJAX
+    fetch(`/motivos/${tipoOperacion}`)
+        .then(r => r.json())
+        .then(motivos => {
+            const select = document.getElementById("select-motivo");
+            select.innerHTML = "";
+
+            motivos.forEach(m => {
+                const opt = document.createElement("option");
+                opt.value = m.nombre;
+                opt.textContent = m.nombre;
+                select.appendChild(opt);
+            });
+
+            // Opción "Otro"
+            const optOtro = document.createElement("option");
+            optOtro.value = "__OTRO__";
+            optOtro.textContent = "Otro...";
+            select.appendChild(optOtro);
+        });
+}
+
+// Mostrar textarea si elige "Otro"
+document.getElementById("select-motivo").addEventListener("change", function () {
+    const otro = document.getElementById("motivo-otro-container");
+    otro.style.display = (this.value === "__OTRO__") ? "block" : "none";
+});
+
+// Cancelar
+document.getElementById("btn-cancelar-motivo").addEventListener("click", function () {
+    document.getElementById("modal-motivo").style.display = "none";
+});
+
+// Confirmar
+document.getElementById("btn-confirmar-motivo").addEventListener("click", function () {
+    const select = document.getElementById("select-motivo");
+    let motivo = select.value;
+
+    if (motivo === "__OTRO__") {
+        motivo = document.getElementById("motivo-otro").value.trim();
+    }
+
+    if (!motivo) {
+        alert("Debés ingresar un motivo.");
+        return;
+    }
+
+    // Crear input hidden para enviar el motivo
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = "motivo_operacion";
+    input.value = motivo;
+
+    formularioActual.appendChild(input);
+
+    // Cerrar modal
+    document.getElementById("modal-motivo").style.display = "none";
+
+    // Enviar formulario
+    formularioActual.submit();
+});
+</script>
+
+
+</body>
+</html>

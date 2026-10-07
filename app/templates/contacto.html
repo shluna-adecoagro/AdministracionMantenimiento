@@ -1,0 +1,56 @@
+{% extends "layout.html" %}
+
+{% block title %}Contacto{% endblock %}
+
+{% block content %}
+
+<div class="form-container">
+
+    <h2 class="form-title">Contacto</h2>
+
+    <p>
+        Si querés dejar un comentario, sugerencia o informar un error, podés hacerlo a través del siguiente formulario:
+    </p>
+
+    <form class="contact-form flex flex-col gap-4 bg-gray-50 p-6 rounded-lg border border-gray-300 mt-4"
+          method="POST" action="/contacto">
+
+        <div class="form-group">
+            <label for="nombre" class="font-bold text-gray-700">Nombre:</label>
+            <input id="nombre" name="nombre" type="text"
+                   placeholder="Tu nombre"
+                   required
+                   class="w-full p-2 border border-gray-300 rounded" />
+        </div>
+
+        <div class="form-group">
+            <label for="email" class="font-bold text-gray-700">Correo electrónico:</label>
+            <input id="email" name="email" type="email"
+                   placeholder="tuemail@ejemplo.com"
+                   required
+                   class="w-full p-2 border border-gray-300 rounded" />
+        </div>
+
+        <div class="form-group">
+            <label for="mensaje" class="font-bold text-gray-700">Mensaje:</label>
+            <textarea id="mensaje" name="mensaje" rows="4"
+                      placeholder="Escribí tu mensaje..."
+                      required
+                      class="w-full p-2 border border-gray-300 rounded"></textarea>
+        </div>
+
+        <button type="submit"
+                class="bg-blue-800 text-white px-4 py-2 rounded hover:bg-blue-600 transition">
+            Enviar
+        </button>
+    </form>
+
+    {% if enviado %}
+    <p class="mensaje-exito mt-4 text-green-600 font-bold">
+        ✅ ¡Mensaje enviado con éxito!
+    </p>
+    {% endif %}
+
+</div>
+
+{% endblock %}

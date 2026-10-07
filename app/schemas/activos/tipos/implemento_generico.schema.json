@@ -1,0 +1,5 @@
+{
+  "allOf": [
+    { "$ref": "../categorias/implemento_generico.schema.json" }
+  ]
+}

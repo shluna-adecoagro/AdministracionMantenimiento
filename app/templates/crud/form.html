@@ -1,0 +1,160 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+<div class="form-container">
+
+    <h2 class="form-title">
+        {% if tipo_operacion == "INSERT" %}
+            Crear {{ label_singular }}
+        {% else %}
+            Editar {{ label_singular }}
+        {% endif %}
+    </h2>
+
+    <form method="POST" id="form-entidad" enctype="multipart/form-data">
+
+        {% for campo, cfg in fields.items() %}
+            {% if not cfg.get("virtual") %}
+
+                <div class="form-group">
+                    <label for="{{ campo }}">{{ cfg.label }}</label>
+
+                    {% if cfg.tipo == "text" %}
+                        <input type="text" name="{{ campo }}" id="{{ campo }}"
+                               value="{{ modelo.get(campo, '') }}"
+                               {% if cfg.required %}required{% endif %}>
+
+                    {% elif cfg.tipo == "number" %}
+                        <input type="number" name="{{ campo }}" id="{{ campo }}"
+                               value="{{ modelo.get(campo, '') }}"
+                               {% if cfg.required %}required{% endif %}>
+
+                    {% elif cfg.tipo == "textarea" %}
+                        <textarea name="{{ campo }}" id="{{ campo }}"
+                                  {% if cfg.required %}required{% endif %}>{{ modelo.get(campo, '') }}</textarea>
+
+                    {% elif cfg.tipo == "select" %}
+                        <select name="{{ campo }}" id="{{ campo }}">
+                            {% for opt in cfg.options %}
+                                <option value="{{ opt.value }}"
+                                        {% if modelo.get(campo) == opt.value %}selected{% endif %}>
+                                    {{ opt.label }}
+                                </option>
+                            {% endfor %}
+                        </select>
+
+                    {% elif cfg.tipo == "fk" %}
+                        <select name="{{ campo }}" id="{{ campo }}">
+                            {% for opt in fk_data[campo] %}
+                                <option value="{{ opt.value }}"
+                                        data-extra="{{ opt.extra_field }}"
+                                        data-extra-value="{{ opt.extra_value }}"
+                                        {% if modelo.get(campo) == opt.value %}selected{% endif %}>
+                                    {{ opt.label }}
+                                </option>
+                            {% endfor %}
+                        </select>
+
+                    {% elif cfg.tipo == "datalist" %}
+                        <input list="{{ campo }}_lista" name="{{ campo }}" id="{{ campo }}"
+                               value="{{ modelo.get(campo, '') }}"
+                               {% if cfg.required %}required{% endif %}>
+                        <datalist id="{{ campo }}_lista">
+                            {% for opt in cfg.options %}
+                                <option value="{{ opt.label }}"></option>
+                            {% endfor %}
+                        </datalist>
+
+                    {% elif cfg.tipo == "file" %}
+                        <input type="file" name="{{ campo }}" id="{{ campo }}"
+                               accept="image/*"
+                               {% if cfg.required %}required{% endif %}>
+                    
+                    {% elif cfg.tipo == "date" %}
+                    <input type="date" name="{{ campo }}" id="{{ campo }}"
+                        value="{{ modelo.get(campo, '') }}"
+                        {% if cfg.required %}required{% endif %}>
+
+                    {% elif cfg.tipo == "datetime" %}
+                    <input type="datetime-local" name="{{ campo }}" id="{{ campo }}"
+                        value="{{ modelo.get(campo, '') }}"
+                        {% if cfg.required %}required{% endif %}>
+
+                    {% endif %}
+
+                </div>
+
+            {% endif %}
+        {% endfor %}
+
+        <div class="form-actions">
+            <button type="button" class="btn-primary"
+                    onclick="abrirModalMotivo('{{ tipo_operacion }}', document.getElementById('form-entidad'))">
+                {% if tipo_operacion == 'INSERT' %}
+                    Guardar
+                {% else %}
+                    Guardar cambios
+                {% endif %}
+            </button>
+
+            {% if es_subentidad %}
+                <a href="{{ url_for(entidad_padre_endpoint, id=padre_id) }}"
+                   class="btn-secondary">Cancelar</a>
+            {% else %}
+                <a href="{{ url_for(endpoint_base + '_listar') }}"
+                   class="btn-secondary">Cancelar</a>
+            {% endif %}
+        </div>
+
+        <script>
+        document.addEventListener("DOMContentLoaded", function () {
+
+            const selects = Array.from(document.querySelectorAll("select"));
+
+            const opcionesOriginales = {};
+            selects.forEach(sel => {
+                opcionesOriginales[sel.id] = Array.from(sel.options);
+            });
+
+            function filtrarDependientes(selectPadre) {
+                const padreId = selectPadre.value;
+                const nombrePadre = selectPadre.id;
+
+                selects.forEach(selectHijo => {
+
+                    if (selectHijo === selectPadre) return;
+
+                    const opcionesHijo = opcionesOriginales[selectHijo.id];
+
+                    const dependeDelPadre = opcionesHijo.some(opt => {
+                        return opt.getAttribute("data-extra") === nombrePadre;
+                    });
+
+                    if (!dependeDelPadre) return;
+
+                    const filtradas = opcionesHijo.filter(opt => {
+                        return opt.getAttribute("data-extra-value") == padreId;
+                    });
+
+                    const opcionesFinales = filtradas.length > 0 ? filtradas : opcionesHijo;
+
+                    selectHijo.innerHTML = "";
+                    opcionesFinales.forEach(opt => selectHijo.appendChild(opt.cloneNode(true)));
+                });
+            }
+
+            selects.forEach(selectPadre => {
+                selectPadre.addEventListener("change", function () {
+                    filtrarDependientes(selectPadre);
+                });
+            });
+
+        });
+        </script>
+
+    </form>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,11 @@
+{
+  "allOf": [
+    { "$ref": "../categorias/implemento_tecnico.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "capacidad_m3": { "type": ["number", "null"] }
+      }
+    }
+  ]
+}

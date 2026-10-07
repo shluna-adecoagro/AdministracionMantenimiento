@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ActivoPlano",
+  "type": "object",
+  "required": ["tipo", "categoria", "descripcion", "estado"],
+  "properties": {
+    "tipo": { "type": "string" },
+    "categoria": { "type": "string" },
+
+    "patente": { "type": ["string", "null"] },
+    "descripcion": { "type": "string" },
+
+    "marca": { "type": ["string", "null"] },
+    "modelo": { "type": ["string", "null"] },
+    "nro_serie_chasis": { "type": ["string", "null"] },
+    "nro_motor": { "type": ["string", "null"] },
+
+    "año": { "type": ["integer", "null"] },
+    "observacion": { "type": ["string", "null"] },
+
+    "sector_asignado": { "type": ["string", "null"] },
+    "usuario_asignado": { "type": ["string", "null"] },
+    "ubicacion": { "type": ["string", "null"] },
+
+    "estado": {
+      "type": "string",
+      "enum": ["activo", "inactivo", "baja", "mantenimiento"]
+    },
+
+    "foto_path": { "type": ["string", "null"] },
+
+    "detalles_tecnicos": { "type": ["object", "null"] }
+  },
+  "additionalProperties": false
+}

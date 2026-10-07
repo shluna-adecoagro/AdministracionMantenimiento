@@ -1,0 +1,46 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+<div class="form-container">
+
+    <h2 class="form-title">Eliminar Sector</h2>
+
+    <form method="POST" id="form-eliminar">
+
+        <p style="text-align:center; color:#b91c1c; font-weight:600;">
+            ¿Está seguro de eliminar el sector
+            "<strong>{{ sector.nombre_sector }}</strong>"?
+        </p>
+
+        <table class="tabla-detalle" style="margin-top:1rem;">
+            <tr>
+                <th>Centro de Costo</th>
+                <td>{{ sector.centro_costo }}</td>
+            </tr>
+
+            <tr>
+                <th>Estado</th>
+                <td>
+                    <span class="badge" style="background-color: {{ sector.estado.color_badge }}">
+                        {{ sector.estado.nombre_estado_sector }}
+                    </span>
+                </td>
+            </tr>
+        </table>
+
+        <div class="form-actions" style="margin-top:1.5rem;">
+            <a href="{{ url_for('sectores_web.sectores_listar') }}"
+            class="btn-secondary">Cancelar</a>
+
+            <button type="button" class="btn-eliminar"
+                    onclick="abrirModalMotivo('DELETE', document.getElementById('form-eliminar'))">
+                Eliminar
+            </button>
+        </div>
+
+    </form>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "required": ["marca", "modelo", "año", "parametros_tecnicos"],
+  "properties": {
+    "marca": { "type": "string" },
+    "modelo": { "type": "string" },
+    "nro_serie_chasis": { "type": ["string", "null"] },
+    "año": { "type": "integer" },
+    "observacion": { "type": ["string", "null"] },
+    "parametros_tecnicos": { "type": "object" }
+  },
+  "additionalProperties": false
+}

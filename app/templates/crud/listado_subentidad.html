@@ -1,0 +1,74 @@
+<section class="p-8">
+
+    {% with 
+        titulo=sub.label_plural | capitalize,
+        boton_url=url_for(endpoint_base + '_crear', **{ fk|string : padre_id }),
+        boton_texto="Crear " ~ sub.label_singular
+    %}
+        {% include "crud/partials/_listado_header.html" %}
+    {% endwith %}
+
+    <div class="tabla-container">
+
+        <table class="tabla-listado">
+            <thead>
+                <tr>
+                    {% for campo, cfg in fields.items() %}
+                        {% if campo != fk %}
+                            <th>{{ cfg.label }}</th>
+                        {% endif %}
+                    {% endfor %}
+                    <th style="width:180px;">Acciones</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+                {% if items %}
+
+                    {% for item in items %}
+                    <tr>
+
+                        {% for campo, cfg in fields.items() %}
+                            {% if campo != fk %}
+                                <td>
+                                    {% if cfg.tipo == "fk" %}
+                                        {{ item[campo ~ "_label"] if item[campo ~ "_label"] else item[campo] }}
+                                    {% else %}
+                                        {{ item[campo] }}
+                                    {% endif %}
+                                </td>
+                            {% endif %}
+                        {% endfor %}
+
+                        <td class="tabla-acciones">
+                            <a class="btn-primary"
+                            href="{{ url_for(endpoint_base + '_detalle',
+                                id=item[pk],
+                                **{ fk|string : padre_id }) }}">
+                                Ver detalle
+                            </a>
+
+                            <a class="btn-primary"
+                            href="{{ url_for(endpoint_base + '_editar',
+                                id=item[pk],
+                                **{ fk|string : padre_id }) }}">
+                                Editar
+                            </a>
+                        </td>
+
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                <tr>
+                    <td colspan="{{ fields|length }}" class="no-registros">
+                        <em>No hay registros</em>
+                    </td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+
+    </div>
+
+</section>

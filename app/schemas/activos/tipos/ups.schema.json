@@ -1,0 +1,24 @@
+{
+  "allOf": [
+    { "$ref": "../categorias/equipo_fijo_tecnico.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "parametros_tecnicos": {
+          "type": "object",
+          "properties": {
+            "baterias": {
+              "type": "object",
+              "properties": {
+                "marca": { "type": ["string", "null"] },
+                "modelo": { "type": ["string", "null"] },
+                "cantidad": { "type": ["integer", "null"] }
+              }
+            },
+            "fecha_instalacion": { "type": ["string", "null"], "format": "date" }
+          }
+        }
+      }
+    }
+  ]
+}

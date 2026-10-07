@@ -1,0 +1,196 @@
+{% extends "layout.html" %}
+
+{% block title %}Gestión de {{ label_plural }}{% endblock %}
+
+{% block content %}
+
+<section class="p-8">
+
+    <!-- Encabezado -->
+    {% with 
+        titulo="Gestión de " ~ label_plural,
+        boton_url=url_for(endpoint_base + '_crear'),
+        boton_texto="Crear " ~ label_singular
+    %}
+        {% include "crud/partials/_listado_header.html" %}
+    {% endwith %}
+
+    <!-- Filtros -->
+    <form method="GET" class="filtros-container" id="filtros-form">
+
+        <div class="filtros-left">
+            <label>Filtros:</label>
+
+            <!-- Campo -->
+            <select class="filtro-select" name="campo" id="campo-select">
+                <option value="todos"
+                    {% if campo_actual == "todos" %}selected{% endif %}>
+                    Todos los campos
+                </option>
+
+                {% for c in filtros.campos %}
+                    <option value="{{ c }}"
+                        {% if campo_actual == c %}selected{% endif %}>
+                        {{ fields[c].label }}
+                    </option>
+                {% endfor %}
+            </select>
+
+            <!-- Si el campo es FK, mostrar select dinámico -->
+            {% if campo_actual in fk_data %}
+                <select class="filtro-select" name="valor_fk" id="fk-select">
+                    <option value="">-- Todos --</option>
+                    {% for opt in fk_data[campo_actual] %}
+                        <option value="{{ opt.value }}"
+                            {% if valor_fk == opt.value|string %}selected{% endif %}>
+                            {{ opt.label }}
+                        </option>
+                    {% endfor %}
+                </select>
+            {% endif %}
+
+            <!-- Búsqueda -->
+            <div class="search-wrapper">
+                <input type="text"
+                name="q"
+                id="search-input"
+                class="filtro-search"
+                placeholder="Buscar..."
+                value="{{ q }}">
+                <span id="clear-search" class="clear-btn" style="display:none;">×</span>
+            </div>
+
+            <button class="btn-filtro" type="submit">Buscar</button>
+        </div>
+
+    </form>
+
+    <!-- Tabla -->
+    <div class="tabla-container">
+
+        <table>
+            <thead>
+                <tr>
+                    {% for col in columns %}
+                        <th>{{ fields[col].label }}</th>
+                    {% endfor %}
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+
+            <tbody>
+            {% if registros %}
+                {% for r in registros %}
+                    {% set rowloop = loop %}
+                    <tr>
+
+                        {% for col in columns %}
+                            <td>
+
+                                {% if fields[col].tipo == "fk" %}
+
+                                    {% if fields[col].get("es_estado") %}
+                                        {% set est = fk_labels[rowloop.index0][col] %}
+                                        {% if est %}
+                                            <span class="badge" style="background-color: {{ est.color }}">
+                                                {{ est.label }}
+                                            </span>
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    {% else %}
+                                        {{ fk_labels[rowloop.index0][col] | default('') }}
+                                    {% endif %}
+
+                                {% else %}
+                                    {{ r[col] | default('') }}
+                                {% endif %}
+
+                            </td>
+                        {% endfor %}
+
+                    <td class="tabla-acciones">
+                        <a href="{{ url_for(endpoint_base + '_detalle', id=r[pk]) }}"
+                        class="btn-info">Ver detalles</a>
+
+                        <a href="{{ url_for(endpoint_base + '_editar', id=r[pk]) }}"
+                        class="btn-primary">Editar</a>
+                    </td>
+
+                </tr>
+                {% endfor %}
+
+            {% else %}
+                <tr>
+                    <td colspan="{{ columns|length + 1 }}" class="no-registros">
+                        No hay registros
+                    </td>
+                </tr>
+            {% endif %}
+            </tbody>
+
+        </table>
+
+    </div>
+
+    <script>
+    document.addEventListener("DOMContentLoaded", function () {
+
+        const campoSelect = document.getElementById("campo-select");
+        const inputTexto = document.getElementById("search-input");
+        const form = document.getElementById("filtros-form");
+
+        const fkData = {{ fk_data | tojson }};
+
+        function actualizarVisibilidad() {
+            const campo = campoSelect.value;
+
+            const esFK = fkData.hasOwnProperty(campo);
+
+            // Mostrar input de texto si NO es FK
+            inputTexto.style.display = esFK ? "none" : "inline-block";
+
+            // Mostrar select FK si corresponde (solo si existe)
+            const fkSelect = document.getElementById("fk-select");
+            if (fkSelect) {
+                fkSelect.style.display = esFK ? "inline-block" : "none";
+            }
+        }
+
+        actualizarVisibilidad();
+
+        campoSelect.addEventListener("change", function () {
+
+            // Limpiar valor FK si existe
+            const fkSelect = document.getElementById("fk-select");
+            if (fkSelect) {
+                fkSelect.value = "";
+            }
+
+            form.submit();
+        });
+
+    });
+    </script>
+
+    <script>
+        const input = document.getElementById("search-input");
+        const clearBtn = document.getElementById("clear-search");
+
+        function toggleClearButton() {
+            clearBtn.style.display = input.value.trim() ? "block" : "none";
+        }
+
+        input.addEventListener("input", toggleClearButton);
+        toggleClearButton();
+
+        clearBtn.addEventListener("click", () => {
+            input.value = "";
+            toggleClearButton();
+            input.form.submit();
+        });
+        </script>
+
+</section>
+
+{% endblock %}

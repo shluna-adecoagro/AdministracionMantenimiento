@@ -1,0 +1,76 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+<div class="form-container">
+
+    <h2 class="form-title">Eliminar {{ label_singular }}</h2>
+
+    <form method="POST" id="form-eliminar">
+
+        <p style="text-align:center; color:#b91c1c; font-weight:600;">
+            ¿Está seguro de eliminar este {{ label_singular }}?
+        </p>
+
+        <table class="tabla-detalle" style="margin-top:1rem;">
+
+            {% for campo, cfg in fields.items() %}
+            <tr>
+                <th>{{ cfg.label }}</th>
+
+                <td>
+                    {% if cfg.tipo == "fk" %}
+
+                        {% if cfg.get("es_estado") %}
+                            {% set est = fk_labels[campo] %}
+                            {% if est %}
+                                <span class="badge" style="background-color: {{ est.color }}">
+                                    {{ est.label }}
+                                </span>
+                            {% else %}
+                                <em>—</em>
+                            {% endif %}
+                        {% else %}
+                            {{ fk_labels[campo] | default('') }}
+                        {% endif %}
+
+                    {% else %}
+                        {{ modelo.get(campo) | default('') }}
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+
+        </table>
+
+        <div class="form-actions" style="margin-top:1.5rem;">
+
+            {# ============================================================
+               NAVEGACIÓN CONTEXTUAL
+               Si es subentidad → volver al detalle del padre
+               Si es entidad → volver al listado
+               ============================================================ #}
+
+            {% if es_subentidad %}
+                <a href="{{ url_for(entidad_padre_endpoint, id=padre_id) }}"
+                   class="btn-secondary">
+                    Cancelar
+                </a>
+            {% else %}
+                <a href="{{ url_for(endpoint_base + '_listar') }}"
+                   class="btn-secondary">
+                    Cancelar
+                </a>
+            {% endif %}
+
+            <button type="button" class="btn-eliminar"
+                    onclick="abrirModalMotivo('DELETE', document.getElementById('form-eliminar'))">
+                Eliminar
+            </button>
+        </div>
+
+    </form>
+
+</div>
+
+{% endblock %}

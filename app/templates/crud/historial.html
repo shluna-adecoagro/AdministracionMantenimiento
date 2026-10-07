@@ -1,0 +1,126 @@
+<div class="historial-wrapper" style="margin-top: 20px;">
+
+    <table class="tabla-historial">
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Tipo de cambio</th>
+                <th>Motivo</th>
+                <th>Modificaciones</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for h in historial %}
+            <tr>
+                <td>{{ h.Fecha.strftime('%d/%m/%Y %H:%M') }}</td>
+                <td>{{ h.TipoDeCambio }}</td>
+
+                <td>
+                    {% if h.motivo_operacion %}
+                        {{ h.motivo_operacion }}
+                    {% else %}
+                        <em>—</em>
+                    {% endif %}
+                </td>
+
+                <td>
+                    {% if h.EstadoAnterior or h.EstadoActual %}
+
+                        {% set antes = h.EstadoAnterior or {} %}
+                        {% set despues = h.EstadoActual or {} %}
+
+                        {% set claves = (antes.keys() | list) + (despues.keys() | list) %}
+                        {% set claves = claves | unique %}
+
+                        {% set ignorar = ignore_fields %}
+
+                        {% set cambios = [] %}
+
+                        {% for key in claves %}
+                            {% if key not in ignorar %}
+                                {% set old = antes.get(key) %}
+                                {% set new = despues.get(key) %}
+
+                                {% if old != new %}
+                                    {% set _ = cambios.append({
+                                        "key": key,
+                                        "old": old,
+                                        "new": new,
+                                        "old_color": antes.get(key ~ "_color"),
+                                        "new_color": despues.get(key ~ "_color")
+                                    }) %}
+                                {% endif %}
+                            {% endif %}
+                        {% endfor %}
+
+                        <ul class="historial-lista">
+                            {% if cambios %}
+                                {% for c in cambios %}
+                                    {% if not (c.key.endswith('_id') or c.key.endswith('_color')) %}
+                                        <li>
+                                            <strong>{{ c.key.replace('_', ' ') | capitalize }}:</strong>
+
+                                            {% if c.key.startswith('estado_') %}
+                                                <span class="badge" style="background-color: {{ c.old_color or '#999' }}">
+                                                    {{ c.old }}
+                                                </span>
+                                                →
+                                                <span class="badge" style="background-color: {{ c.new_color or '#999' }}">
+                                                    {{ c.new }}
+                                                </span>
+                                            {% else %}
+                                                <span class="diff-old">{{ c.old }}</span>
+                                                →
+                                                <span class="diff-new">{{ c.new }}</span>
+                                            {% endif %}
+                                        </li>
+                                    {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                <em>Sin cambios</em>
+                            {% endif %}
+                        </ul>
+
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if pagination and pagination.pages > 1 %}
+    <div class="paginacion">
+
+        {% if pagination.has_prev %}
+            <a class="btn-secondary"
+               href="{{ url_for(endpoint_base + '_detalle', id=modelo[pk], page=pagination.prev_num, seccion='historial') }}">
+               « Anterior
+            </a>
+        {% endif %}
+
+        {% for p in range(1, pagination.pages + 1) %}
+            {% if p == pagination.page %}
+                <span class="pagina-actual">{{ p }}</span>
+            {% else %}
+                <a class="btn-secondary"
+                   href="{{ url_for(endpoint_base + '_detalle', id=modelo[pk], page=p, seccion='historial') }}">
+                   {{ p }}
+                </a>
+            {% endif %}
+        {% endfor %}
+
+        {% if pagination.has_next %}
+            <a class="btn-secondary"
+               href="{{ url_for(endpoint_base + '_detalle', id=modelo[pk], page=pagination.next_num, seccion='historial') }}">
+               Siguiente »
+            </a>
+        {% endif %}
+
+    </div>
+    {% endif %}
+
+</div>

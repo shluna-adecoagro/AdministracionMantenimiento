@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "required": ["patente", "marca", "modelo", "año"],
+  "properties": {
+    "patente": { "type": "string" },
+    "marca": { "type": "string" },
+    "modelo": { "type": "string" },
+    "nro_serie_chasis": { "type": ["string", "null"] },
+    "nro_motor": { "type": ["string", "null"] },
+    "año": { "type": "integer" },
+    "observacion": { "type": ["string", "null"] },
+    "usuario": { "type": ["string", "null"] }
+  },
+  "additionalProperties": false
+}
+

@@ -1,0 +1,133 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+<!-- Encabezado -->
+<div class="seccion-header">
+    <h2>Detalles de {{ label_singular }}</h2>
+    <a href="{{ url_for(endpoint_base + '_listar') }}" class="btn-secondary">Volver</a>
+</div>
+
+<!-- ============================================================
+     NAVBAR DE TABS
+     ============================================================ -->
+<div class="detalle-tabs">
+    {% for sec in secciones %}
+        <a href="{{ url_for(endpoint_base + '_detalle', id=modelo[pk], seccion=sec.id) }}"
+           class="detalle-tab {{ 'active' if sec.id == seccion_activa else '' }}">
+            {{ sec.label }}
+        </a>
+    {% endfor %}
+</div>
+
+<!-- ============================================================
+     CONTENIDO DE LA SECCIÓN ACTIVA
+     ============================================================ -->
+
+{% if seccion_activa == "datos" %}
+
+    <!-- DATOS PRINCIPALES -->
+    <div class="detalle-contenedor">
+
+        <!-- Columna izquierda -->
+        <div class="detalle-col-izq">
+
+            <table class="tabla-detalle">
+                {% for campo, cfg in fields.items() %}
+                <tr>
+                    <th>{{ cfg.label }}</th>
+
+                    <td>
+                        {% if cfg.tipo == "fk" %}
+
+                            {% if cfg.get("es_estado") %}
+                                {% set est_label = modelo.get(campo ~ "_label") %}
+                                {% set est_color = modelo.get(campo ~ "_color") %}
+
+                                {% if est_label %}
+                                    <span class="badge" style="background-color: {{ est_color }}">
+                                        {{ est_label }}
+                                    </span>
+                                {% else %}
+                                    <em>—</em>
+                                {% endif %}
+
+                            {% else %}
+                                {{ modelo.get(campo ~ "_label") or modelo.get(campo) }}
+                            {% endif %}
+
+                        {% elif cfg.tipo == "file" %}
+                            {% if modelo.get(campo) %}
+                                <a href="{{ modelo.get(campo) }}" target="_blank">Ver archivo</a>
+                            {% else %}
+                                <em>—</em>
+                            {% endif %}
+
+                        {% else %}
+                            {{ modelo.get(campo) | default('') }}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+
+            <!-- Botones dentro de la columna izquierda -->
+            <div class="form-actions">
+                <a href="{{ url_for(endpoint_base + '_editar', id=modelo[pk]) }}" class="btn-primary">
+                    Editar
+                </a>
+
+                <a href="{{ url_for(endpoint_base + '_confirmar_eliminar', id=modelo[pk]) }}" class="btn-eliminar">
+                    Eliminar
+                </a>
+            </div>
+
+        </div>
+
+        <!-- Columna derecha: foto -->
+        <div class="detalle-col-der">
+            {% for campo, cfg in fields.items() %}
+                {% if cfg.tipo == "file" and modelo.get(campo) %}
+                    <img src="{{ modelo.get(campo) }}" class="detalle-foto">
+                {% endif %}
+            {% endfor %}
+        </div>
+
+    </div>
+
+
+
+{% elif seccion_activa == "historial" %}
+
+    <!-- HISTORIAL -->
+    {% include "crud/historial.html" %}
+
+{% else %}
+
+    <!-- SUBENTIDAD -->
+    {% set sub = secciones_dict[seccion_activa].sub %}
+
+    {% with 
+        items=sub["items"],
+        fields=sub["fields"],
+        entidad=sub["entidad"],
+        pk=sub["pk"],
+        fk=sub["fk"],
+        modelo=sub["modelo_padre"],
+        padre_id=sub["padre_id"],
+        endpoint_base=sub["endpoint_base"],
+        sub=sub
+    %}
+        {% include sub.template_listado %}
+    {% endwith %}
+
+    {% for tab in tabs_extra %}
+        <li class="tab-item">
+            <a href="{{ url_for(tab.endpoint, id=pk_value) }}">{{ tab.label }}</a>
+        </li>
+    {% endfor %}
+
+
+{% endif %}
+
+{% endblock %}

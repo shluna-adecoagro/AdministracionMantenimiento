@@ -1,0 +1,12 @@
+.venv
+*.pyc
+*.pyd
+.env
+__pycache__/
+.ipynb_checkpoints/
+*.sqlite
+*.db
+.vscode
+*.jpg
+*.png
+*.pdf

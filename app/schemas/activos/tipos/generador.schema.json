@@ -1,0 +1,24 @@
+{
+  "allOf": [
+    { "$ref": "../categorias/equipo_fijo_tecnico.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "parametros_tecnicos": {
+          "type": "object",
+          "properties": {
+            "potencia_kva": { "type": ["number", "null"] },
+            "motor": {
+              "type": "object",
+              "properties": {
+                "marca": { "type": ["string", "null"] },
+                "modelo": { "type": ["string", "null"] },
+                "potencia_hp": { "type": ["number", "null"] }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

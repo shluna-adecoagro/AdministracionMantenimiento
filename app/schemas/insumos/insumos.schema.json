@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Insumo",
+  "type": "object",
+  "required": ["codigo", "descripcion"],
+  "properties": {
+    "codigo": { "type": "string" },
+    "descripcion": { "type": "string" },
+
+    "marca": { "type": ["string", "null"] },
+    "tipo": { "type": ["string", "null"] },
+
+    "presentacion_cantidad": { "type": ["number", "null"] },
+    "unidad_medida": { "type": ["string", "null"] },
+
+    "cantidad_minima": { "type": ["number", "null"] },
+
+    "observaciones": { "type": ["string", "null"] },
+
+    "detalles_tecnicos": { "type": ["object", "null"] }
+  },
+  "additionalProperties": false
+}

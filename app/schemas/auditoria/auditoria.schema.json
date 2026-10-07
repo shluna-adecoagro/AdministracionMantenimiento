@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AuditLogEntry",
+  "type": "object",
+
+  "required": ["usuario", "tabla", "registro_id", "tipo"],
+
+  "properties": {
+    "usuario": {
+      "type": "string",
+      "minLength": 1
+    },
+
+    "tabla": {
+      "type": "string",
+      "minLength": 1
+    },
+
+    "registro_id": {
+      "type": ["string", "number"]
+    },
+
+    "tipo": {
+      "type": "string",
+      "enum": ["INSERT", "UPDATE", "DELETE"]
+    },
+
+    "estado_anterior": {
+      "type": ["object", "null"]
+    },
+
+    "estado_actual": {
+      "type": ["object", "null"]
+    }
+  },
+
+  "additionalProperties": false,
+
+  "allOf": [
+    {
+      "if": {
+        "properties": { "tipo": { "const": "INSERT" } }
+      },
+      "then": {
+        "properties": {
+          "estado_anterior": { "type": "null" },
+          "estado_actual": { "type": "object" }
+        },
+        "required": ["estado_actual"]
+      }
+    },
+
+    {
+      "if": {
+        "properties": { "tipo": { "const": "UPDATE" } }
+      },
+      "then": {
+        "properties": {
+          "estado_anterior": { "type": "object" },
+          "estado_actual": { "type": "object" }
+        },
+        "required": ["estado_anterior", "estado_actual"]
+      }
+    },
+
+    {
+      "if": {
+        "properties": { "tipo": { "const": "DELETE" } }
+      },
+      "then": {
+        "properties": {
+          "estado_anterior": { "type": "object" },
+          "estado_actual": { "type": "null" }
+        },
+        "required": ["estado_anterior"]
+      }
+    }
+  ]
+}
