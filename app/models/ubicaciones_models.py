@@ -15,10 +15,11 @@ class Ubicacion(db.Model, ModelMixin, AuditMixin):
                              info={"label": "Nombre de la ubicación"})
 
     sector_id = db.Column(db.Integer, db.ForeignKey("sectores.sector_id"), nullable=True)
-    # passive_deletes="all": al borrar un sector, SQLAlchemy NO desvincula sus
-    # ubicaciones en silencio; la base rechaza el borrado mientras tenga alguna.
+    # Al borrar un sector se borran sus ubicaciones (cascada), salvo que alguna
+    # esté en uso (activos, stock...): en ese caso no se borra nada.
+    # Ver app/crud/core/dependencias.py.
     sector = db.relationship(
-        "Sector", backref=db.backref("ubicaciones", passive_deletes="all")
+        "Sector", backref=db.backref("ubicaciones", cascade="all, delete")
     )
 
     creado_en = db.Column(db.DateTime, default=datetime.utcnow)

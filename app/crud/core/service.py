@@ -13,11 +13,12 @@ from __future__ import annotations
 
 import re
 
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.exc import IntegrityError
 
 from app.audit.registrar import registrar_cambio
 from app.core.db import db
-from app.crud.core import fk
+from app.crud.core import dependencias, fk
 
 
 class ErrorIntegridad(Exception):
@@ -27,6 +28,22 @@ class ErrorIntegridad(Exception):
         self.mensaje = mensaje
         self.campo = campo
         super().__init__(mensaje)
+
+
+class RegistroEnUso(ErrorIntegridad):
+    """No se puede borrar: otros registros lo usan. `bloqueantes` = [(tabla, cantidad)]."""
+
+    def __init__(self, mensaje: str, bloqueantes: list[tuple[str, int]]):
+        super().__init__(mensaje)
+        self.bloqueantes = bloqueantes
+
+
+def _etiqueta_por_defecto(tabla: str, cantidad: int) -> str:
+    return f"{cantidad} registro{'s' if cantidad != 1 else ''} de {tabla.replace('_', ' ')}"
+
+
+def _enumerar(partes: list[str]) -> str:
+    return partes[0] if len(partes) == 1 else ", ".join(partes[:-1]) + " y " + partes[-1]
 
 
 # Patrones de los mensajes de SQLite y MariaDB/MySQL.
@@ -82,13 +99,16 @@ class ServicioCRUD:
     model      clase SQLAlchemy
     fields     campos del metamodelo (para etiquetas de FK y mensajes)
     auditoria  {"enabled": bool, "ignore_fields": [...]}
+    etiqueta_tabla  función (tabla, cantidad) → texto, para los mensajes
+                    (ej: ("activos", 2) → "2 activos")
     """
 
-    def __init__(self, model, fields: dict, auditoria: dict | None = None):
+    def __init__(self, model, fields: dict, auditoria: dict | None = None, etiqueta_tabla=None):
         self.model = model
         self.fields = fields
         self.auditoria = auditoria or {"enabled": False}
         self.pk = model.__mapper__.primary_key[0].name
+        self.etiqueta_tabla = etiqueta_tabla or _etiqueta_por_defecto
 
     # ------------------------------------------------------------------
     def crear(self, datos: dict, motivo: str | None = None, usuario: str = "sistema"):
@@ -105,9 +125,49 @@ class ServicioCRUD:
         return registro
 
     def eliminar(self, registro, motivo: str | None = None, usuario: str = "sistema"):
+        """
+        Borra el registro y, si el modelo lo declara, sus hijos en cascada
+        (cada uno queda en la auditoría). Si otros registros lo usan, no borra
+        nada y lanza RegistroEnUso.
+        """
+        self.verificar_eliminable(registro)
         anterior = self._estado(registro)
+
+        hijos = dependencias.en_cascada(registro)
+        if hijos:
+            pk = getattr(registro, self.pk)
+            motivo_hijos = f"Eliminación en cascada de {self.model.__tablename__} #{pk}"
+            if motivo:
+                motivo_hijos += f": {motivo}"
+            for hijo in hijos:
+                self._auditar_hijo(hijo, motivo_hijos, usuario)
+
         db.session.delete(registro)
         self._confirmar("DELETE", registro, anterior, motivo, usuario)
+
+    def verificar_eliminable(self, registro):
+        bloqueos = dependencias.bloqueantes(registro)
+        if bloqueos:
+            partes = [self.etiqueta_tabla(tabla, n) for tabla, n in bloqueos]
+            raise RegistroEnUso(
+                f"No se puede eliminar porque lo usan {_enumerar(partes)}. "
+                "Eliminá o reasigná esos registros primero.",
+                bloqueos,
+            )
+
+    def _auditar_hijo(self, hijo, motivo, usuario):
+        if not (hasattr(hijo, "obtener_historial") and hasattr(hijo, "uuid")):
+            return
+        registrar_cambio(
+            tabla=hijo.__tablename__,
+            registro_uuid=hijo.uuid,
+            tipo="DELETE",
+            estado_anterior=hijo.to_dict(),
+            estado_actual=None,
+            motivo_operacion=motivo,
+            usuario=usuario,
+            registro_id=sa_inspect(hijo).identity[0],
+        )
 
     # ------------------------------------------------------------------
     def _estado(self, registro):

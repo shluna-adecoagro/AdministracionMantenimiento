@@ -199,12 +199,97 @@ def test_editar_conserva_campos_que_no_vienen_en_el_formulario(client, sector):
     assert (s.nombre_sector, s.centro_costo) == ("Taller 2", "CC-100")
 
 
-def test_no_se_puede_eliminar_sector_con_ubicaciones(client, sector, ubicacion, auditoria):
+# ---------------------------------------------------------------------------
+# Borrado: cascada a ubicaciones, bloqueo si algo los usa
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def activo_en(db):
+    """Crea un activo asignado a un sector y/o ubicación."""
+    from app.models.activos_models import Activo, CategoriaActivo, EstadoActivo
+
+    def _crear(sector_id=None, ubicacion_id=None):
+        cat = CategoriaActivo.query.first()
+        a = Activo(
+            descripcion="Tractor 1",
+            tipo_activo_id=cat.tipo_activo_id,
+            categoria_activo_id=cat.categoria_activo_id,
+            estado_activo_id=EstadoActivo.query.first().estado_activo_id,
+            sector_id=sector_id,
+            ubicacion_id=ubicacion_id,
+        )
+        db.session.add(a)
+        db.session.commit()
+        return a
+
+    return _crear
+
+
+def test_confirmar_eliminar_avisa_la_cascada(client, sector, ubicacion):
+    r = client.get(f"/sectores/{sector.sector_id}/confirmar_eliminar")
+    html = r.get_data(as_text=True)
+    assert r.status_code == 200
+    assert "También se eliminarán: 1 ubicación." in html
+    assert "btn-eliminar" in html
+
+
+def test_eliminar_sector_borra_sus_ubicaciones_y_las_audita(client, sector, ubicacion, auditoria):
+    from app.models.ubicaciones_models import Ubicacion
+
+    sector_id, ubicacion_uuid = sector.sector_id, ubicacion.uuid
+    r = client.post(f"/sectores/{sector_id}/confirmar_eliminar",
+                    data={"motivo_operacion": "Cierre del sector"})
+    assert r.status_code == 302
+    assert Sector.query.get(sector_id) is None
+    assert Ubicacion.query.count() == 0
+
+    [log_sector] = auditoria("sectores")
+    assert log_sector.TipoDeCambio == "DELETE"
+
+    [log_ubicacion] = auditoria("ubicaciones")
+    assert log_ubicacion.TipoDeCambio == "DELETE"
+    assert log_ubicacion.RegistroUUID == ubicacion_uuid
+    assert log_ubicacion.EstadoAnterior["nombre_ubicacion"] == "Galpón 1"
+    assert log_ubicacion.motivo_operacion == (
+        f"Eliminación en cascada de sectores #{sector_id}: Cierre del sector"
+    )
+
+
+def test_no_se_puede_eliminar_sector_con_activos(client, sector, activo_en, auditoria):
+    activo_en(sector_id=sector.sector_id)
+
+    # La pantalla de confirmación ya avisa y no ofrece el botón.
+    r = client.get(f"/sectores/{sector.sector_id}/confirmar_eliminar")
+    html = r.get_data(as_text=True)
+    assert "No se puede eliminar porque lo usan 1 activo." in html
+    assert "btn-eliminar" not in html
+
     r = client.post(f"/sectores/{sector.sector_id}/confirmar_eliminar")
     assert r.status_code == 409
-    assert "hay otros registros que dependen de este" in r.get_data(as_text=True)
     assert Sector.query.get(sector.sector_id) is not None
     assert auditoria("sectores") == []
+
+
+def test_ubicacion_en_uso_bloquea_la_cascada(client, sector, ubicacion, activo_en, auditoria):
+    from app.models.ubicaciones_models import Ubicacion
+
+    activo_en(ubicacion_id=ubicacion.ubicacion_id)
+    r = client.post(f"/sectores/{sector.sector_id}/confirmar_eliminar")
+    assert r.status_code == 409
+    assert "lo usan 1 activo" in r.get_data(as_text=True)
+    # No se borró nada: ni el sector ni sus ubicaciones.
+    assert Sector.query.get(sector.sector_id) is not None
+    assert Ubicacion.query.count() == 1
+    assert auditoria("sectores") == [] and auditoria("ubicaciones") == []
+
+
+def test_eliminar_ubicacion_en_uso_se_bloquea(client, ubicacion, activo_en):
+    from app.models.ubicaciones_models import Ubicacion
+
+    activo_en(ubicacion_id=ubicacion.ubicacion_id)
+    r = client.post(f"/ubicaciones/{ubicacion.ubicacion_id}/confirmar_eliminar")
+    assert r.status_code == 409
+    assert Ubicacion.query.get(ubicacion.ubicacion_id) is not None
 
 
 def test_campo_de_busqueda_no_permitido_se_ignora(client, sector):

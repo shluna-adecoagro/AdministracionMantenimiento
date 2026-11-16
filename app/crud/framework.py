@@ -9,11 +9,21 @@ por vistas generadas desde el registry tipado.
 """
 from flask import current_app, redirect, render_template, request, url_for
 
-from app.crud.core import coercion, fk, repository
+from app.crud.core import coercion, dependencias, fk, repository
 from app.crud.core.coercion import ErroresValidacion
 from app.crud.core.files import ArchivoInvalido, guardar
-from app.crud.core.service import ErrorIntegridad, ServicioCRUD
+from app.crud.core.service import ErrorIntegridad, RegistroEnUso, ServicioCRUD
 from app.crud.metamodelos import ENTIDADES
+
+
+def etiqueta_tabla(tabla, cantidad):
+    """("ubicaciones", 2) → "2 ubicaciones"; usa los textos del metamodelo si existen."""
+    for cfg in ENTIDADES.values():
+        if cfg["model"].__tablename__ == tabla:
+            texto = cfg.get("label_plural" if cantidad != 1 else "label_singular", tabla)
+            return f"{cantidad} {texto}"
+    nombre = tabla.replace("_", " ")
+    return f"{cantidad} registro{'s' if cantidad != 1 else ''} de {nombre}"
 
 
 class CRUDResource:
@@ -27,7 +37,7 @@ class CRUDResource:
         self.filtros = config["filtros"]
         self.audit = config.get("auditoria", {"enabled": False, "ignore_fields": []})
         self.bp = blueprint
-        self.servicio = ServicioCRUD(self.model, self.fields, self.audit)
+        self.servicio = ServicioCRUD(self.model, self.fields, self.audit, etiqueta_tabla)
 
         self.es_subentidad = config.get("es_subentidad", False)
         self.fk_padre = config.get("fk_padre")
@@ -262,6 +272,14 @@ class CRUDResource:
             except ErrorIntegridad as e:
                 error = e.mensaje
                 registro = repository.obtener_o_404(self.model, id)
+        else:
+            # Avisar ANTES de confirmar si no se puede borrar.
+            try:
+                self.servicio.verificar_eliminable(registro)
+            except RegistroEnUso as e:
+                error = e.mensaje
+
+        cascada = [etiqueta_tabla(t, n) for t, n in dependencias.resumen_cascada(registro)]
 
         return render_template(
             "crud/confirmar_eliminar.html",
@@ -277,7 +295,8 @@ class CRUDResource:
             fk_padre=self.fk_padre,
             entidad_padre_endpoint=self.endpoint_padre,
             error=error,
-        ), (409 if error else 200)
+            cascada=cascada,
+        ), (409 if error and request.method == "POST" else 200)
 
     # ------------------------------------------------------------------
     # DETALLE

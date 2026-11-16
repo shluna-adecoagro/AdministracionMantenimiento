@@ -17,6 +17,11 @@
         <p style="text-align:center; color:#b91c1c; font-weight:600;">
             ¿Está seguro de eliminar este {{ label_singular }}?
         </p>
+        {% if cascada %}
+            <div class="form-aviso" role="note">
+                También se eliminarán: {{ cascada | join(", ") }}.
+            </div>
+        {% endif %}
         {% endif %}
 
         <table class="tabla-detalle" style="margin-top:1rem;">
@@ -70,10 +75,12 @@
                 </a>
             {% endif %}
 
+            {% if not error %}
             <button type="button" class="btn-eliminar"
                     onclick="abrirModalMotivo('DELETE', document.getElementById('form-eliminar'))">
                 Eliminar
             </button>
+            {% endif %}
         </div>
 
     </form>

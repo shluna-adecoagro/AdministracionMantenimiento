@@ -63,10 +63,22 @@ Diseño:
 - **Claves foráneas en SQLite activadas** (`PRAGMA foreign_keys=ON` en `app/core/db.py`):
   la base rechaza referencias a registros inexistentes y borrados de registros en uso,
   igual que lo haría MariaDB.
-- **Borrados en cascada silenciosos:** por defecto SQLAlchemy, al borrar un padre, deja a
-  sus hijos sin padre (pone la FK en `NULL`) sin auditarlo. En `Ubicacion` se corrigió con
-  `passive_deletes="all"`; **revisar el resto de las relaciones al migrar cada entidad
-  (Fase 6)** y decidir en cada caso: bloquear, borrar en cascada o desvincular.
+- **Qué pasa con los registros relacionados al borrar** (`app/crud/core/dependencias.py`).
+  La regla se declara en el modelo, en la relación del hijo, y la pantalla de
+  confirmación avisa antes de borrar:
+  - *Cascada*: `backref=db.backref("hijos", cascade="all, delete")`. Los hijos se
+    borran con el padre y cada uno queda en la auditoría.
+  - *Bloqueo*: si otros registros apuntan al que se borra (o a sus hijos en cascada),
+    no se borra nada y se informa cuántos y de qué tipo.
+  - Por defecto SQLAlchemy *desvincula en silencio* (pone la FK en `NULL`) cuando
+    existe un `backref` sin reglas: evitarlo con `passive_deletes="all"`.
+
+  | Relación | Regla | Decidido |
+  |---|---|---|
+  | Sector → ubicaciones | Cascada | ✅ |
+  | Sector / ubicación → activos, empleados, stock | Bloqueo | Provisorio: revisar en Fase 6 |
+  | Resto de las entidades | — | **Revisar al migrar cada una (Fase 6)** |
+
 - Al reemplazar un archivo subido, el anterior queda en disco (pendiente de definir).
 
 ## Arquitectura objetivo
