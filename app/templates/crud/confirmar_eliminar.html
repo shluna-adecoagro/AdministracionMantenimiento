@@ -8,9 +8,16 @@
 
     <form method="POST" id="form-eliminar">
 
+        {% if error %}
+            <div class="form-errores" role="alert">
+                <strong>No se pudo eliminar.</strong>
+                <p>{{ error }}</p>
+            </div>
+        {% else %}
         <p style="text-align:center; color:#b91c1c; font-weight:600;">
             ¿Está seguro de eliminar este {{ label_singular }}?
         </p>
+        {% endif %}
 
         <table class="tabla-detalle" style="margin-top:1rem;">
 

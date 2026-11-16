@@ -58,6 +58,17 @@ Diseño:
 - Un archivo `routes/web/*_web.py` por módulo solo para instanciar `CRUDResource`.
 - La auditoría usa el nombre de la entidad como nombre de tabla (hoy coinciden de casualidad).
 
+## Notas de la Fase 2
+
+- **Claves foráneas en SQLite activadas** (`PRAGMA foreign_keys=ON` en `app/core/db.py`):
+  la base rechaza referencias a registros inexistentes y borrados de registros en uso,
+  igual que lo haría MariaDB.
+- **Borrados en cascada silenciosos:** por defecto SQLAlchemy, al borrar un padre, deja a
+  sus hijos sin padre (pone la FK en `NULL`) sin auditarlo. En `Ubicacion` se corrigió con
+  `passive_deletes="all"`; **revisar el resto de las relaciones al migrar cada entidad
+  (Fase 6)** y decidir en cada caso: bloquear, borrar en cascada o desvincular.
+- Al reemplazar un archivo subido, el anterior queda en disco (pendiente de definir).
+
 ## Arquitectura objetivo
 
 ```
@@ -98,7 +109,7 @@ la API generada respeta ese contrato.
 |---|---|---|
 | **0. Red de seguridad** | Tests con pytest para sectores, ubicaciones y cuentas (web y API). Errores conocidos marcados como `xfail`. README. `.gitignore` permite `requirements*.txt`. | ✅ Hecha |
 | **1. Metamodelo tipado** | `EntitySpec`/`FieldSpec`, registry (inferido + overrides) y un adaptador para que los dicts actuales sigan funcionando. Overrides de las 3 entidades piloto. `shadow_diff` pasa a ser validación al arrancar. | ✅ Hecha |
-| **2. Capa core** | Coerción, FK, repositorio, servicio (transacción + auditoría) y archivos. `framework.py` delega en ellos. Validación en servidor y manejo de `IntegrityError`. | Pendiente |
+| **2. Capa core** | Coerción, FK, repositorio, servicio (transacción + auditoría) y archivos. `framework.py` delega en ellos. Validación en servidor y manejo de `IntegrityError`. | ✅ Hecha |
 | **3. Web generada** | Vistas genéricas y navegación por registry. Rutas especiales (`bom_final`, `compatibilidad_final`) como vistas extra declaradas en overrides. Se eliminan los `*_web.py` triviales de las entidades migradas. | Pendiente |
 | **4. API generada** | Generador de JSON Schema, endpoints REST genéricos con paginación y errores JSON, especificación OpenAPI. Reemplaza `sectores_routes.py`; se elimina `activos_routes.py`. | Pendiente |
 | **5. Base de datos** | Quitar el respaldo automático y `sync-db`. Flask-Migrate (Alembic) y fuera `create_all` de `before_request`. Configuración por `.env`. | Pendiente |

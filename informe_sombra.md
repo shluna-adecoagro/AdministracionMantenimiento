@@ -401,12 +401,11 @@ Pueden ser catálogos (solo se usan como destino de FK) o modelos que se manejan
 
 ## Blueprints compartidos (`bp_name`)
 
-- `activos`: activos, medidores, bom_activo
+- `activos`: activos, medidores, bom_modelo, bom_activo
 - `cuentas`: cuentas
 - `insumos`: insumos, stock_insumo
 - `lecturas`: lecturas_medidor
 - `marcas_modelos`: marcas, modelos
-- `modelos`: bom_modelo
 - `recursos_web`: recursos, empleados, proveedores, contactos_proveedor
 - `sectores_web`: sectores, ubicaciones
 - `unidades_medida_web`: unidades_medida

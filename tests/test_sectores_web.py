@@ -153,26 +153,59 @@ def test_historial_en_detalle(client, sector):
 
 
 # ---------------------------------------------------------------------------
-# Bugs conocidos (ver docs/plan_refactor_crud.md). Están marcados como xfail
-# estricto: cuando se corrijan, el test empezará a pasar y pytest avisará para
-# quitar la marca.
+# Validación y errores de la base
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(reason="Fase 2: no hay validación de 'required' en el servidor")
-def test_crear_sin_nombre_es_rechazado(client, estado_sector_activo):
-    client.post("/sectores/crear", data={
-        "nombre_sector": "",
+def test_crear_sin_nombre_es_rechazado(client, estado_sector_activo, auditoria):
+    r = client.post("/sectores/crear", data={
+        "nombre_sector": "   ",
         "centro_costo": "CC-1",
         "estado_sector_id": str(estado_sector_activo.estado_sector_id),
     })
+    html = r.get_data(as_text=True)
+    assert r.status_code == 400
+    assert "Nombre del Sector es obligatorio." in html
+    assert 'value="CC-1"' in html  # no se pierde lo que se escribió
     assert Sector.query.count() == 0
+    assert auditoria("sectores") == []
 
 
-@pytest.mark.xfail(reason="Fase 2: IntegrityError (nombre duplicado) termina en error 500")
-def test_crear_duplicado_no_da_500(client, sector):
+def test_crear_duplicado_muestra_mensaje(client, sector, auditoria):
     r = client.post("/sectores/crear", data={
         "nombre_sector": "Taller",
         "centro_costo": "CC-999",
         "estado_sector_id": str(sector.estado_sector_id),
     })
-    assert r.status_code < 500
+    assert r.status_code == 400
+    assert "Ya existe un registro con ese valor de «Nombre del Sector»." in r.get_data(as_text=True)
+    assert Sector.query.count() == 1
+    assert auditoria("sectores") == []  # la auditoría no queda a medias
+
+
+def test_texto_demasiado_largo(client, estado_sector_activo):
+    r = client.post("/sectores/crear", data={
+        "nombre_sector": "x" * 151,
+        "centro_costo": "CC-1",
+        "estado_sector_id": str(estado_sector_activo.estado_sector_id),
+    })
+    assert r.status_code == 400
+    assert "como máximo 150 caracteres" in r.get_data(as_text=True)
+
+
+def test_editar_conserva_campos_que_no_vienen_en_el_formulario(client, sector):
+    r = client.post(f"/sectores/{sector.sector_id}/editar", data={"nombre_sector": "Taller 2"})
+    assert r.status_code == 302
+    s = Sector.query.get(sector.sector_id)
+    assert (s.nombre_sector, s.centro_costo) == ("Taller 2", "CC-100")
+
+
+def test_no_se_puede_eliminar_sector_con_ubicaciones(client, sector, ubicacion, auditoria):
+    r = client.post(f"/sectores/{sector.sector_id}/confirmar_eliminar")
+    assert r.status_code == 409
+    assert "hay otros registros que dependen de este" in r.get_data(as_text=True)
+    assert Sector.query.get(sector.sector_id) is not None
+    assert auditoria("sectores") == []
+
+
+def test_campo_de_busqueda_no_permitido_se_ignora(client, sector):
+    assert client.get("/sectores?campo=uuid&q=abc").status_code == 200
