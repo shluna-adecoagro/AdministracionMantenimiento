@@ -12,9 +12,6 @@ Entidades analizadas: **17**
 | insumos | 0 | 2 | 5 | 1 | 1 |
 | stock_insumo | 0 | 2 | 0 | 0 | 0 |
 | unidades_medida | 1 | 0 | 2 | 0 | 0 |
-| sectores | 0 | 0 | 0 | 0 | 0 |
-| ubicaciones | 0 | 0 | 0 | 0 | 0 |
-| cuentas | 0 | 0 | 2 | 2 | 0 |
 | marcas | 1 | 0 | 1 | 0 | 0 |
 | modelos | 1 | 1 | 1 | 0 | 0 |
 | recursos | 3 | 0 | 2 | 1 | 0 |
@@ -23,7 +20,10 @@ Entidades analizadas: **17**
 | contactos_proveedor | 2 | 0 | 2 | 1 | 0 |
 | bom_modelo | 1 | 3 | 2 | 3 | 0 |
 | bom_activo | 1 | 5 | 3 | 3 | 0 |
-| **TOTAL** | **16** | **16** | **32** | **15** | **3** |
+| cuentas | 0 | 0 | 0 | 0 | 0 |
+| sectores | 0 | 0 | 0 | 0 | 0 |
+| ubicaciones | 0 | 0 | 0 | 0 | 0 |
+| **TOTAL** | **16** | **16** | **30** | **13** | **3** |
 
 ## Detalle por entidad
 
@@ -189,36 +189,6 @@ override(UnidadMedida,
     campos={
         'nombre_unidad': {'label': 'Nombre'},
         'tipo_unidad_id': {'label': 'Tipo'},
-    })
-```
-
-### sectores
-
-✅ Sin diferencias.
-
-### ubicaciones
-
-✅ Sin diferencias.
-
-### cuentas  (`Cuenta`)
-
-**🟡 OVERRIDE**
-
-- `campo:numero_cuenta`: label: 'Número de cuenta' (inferido: 'Numero cuenta')
-- `campo:nombre_cuenta`: label: 'Nombre de cuenta' (inferido: 'Nombre cuenta')
-
-**🟢 MEJORA**
-
-- `campo:estado_cuenta_id`: relacion inferible: 'estado'
-- `campo:estado_cuenta_id`: fk_label inferible: 'nombre_estado_cuenta'
-
-Override sugerido (hace que lo inferido iguale al metamodelo actual):
-
-```python
-override(Cuenta,
-    campos={
-        'numero_cuenta': {'label': 'Número de cuenta'},
-        'nombre_cuenta': {'label': 'Nombre de cuenta'},
     })
 ```
 
@@ -410,6 +380,18 @@ override(BOMActivo,
         'reemplaza_insumo_modelo_id': {'label': 'Reemplaza insumo del modelo'},
     })
 ```
+
+### cuentas
+
+✅ Sin diferencias.
+
+### sectores
+
+✅ Sin diferencias.
+
+### ubicaciones
+
+✅ Sin diferencias.
 
 ## Modelos sin metamodelo
 
