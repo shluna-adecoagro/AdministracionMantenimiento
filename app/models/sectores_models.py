@@ -22,13 +22,15 @@ class Sector(ModelMixin, AuditMixin, db.Model):
     sector_id = db.Column(db.Integer, autoincrement=True, primary_key=True)
     uuid = db.Column(db.String(36), default=lambda: str(uuid.uuid4()), unique=True, nullable=False)
 
-    nombre_sector = db.Column(db.String(150), nullable=False, unique=True)
-    centro_costo = db.Column(db.String(100), nullable=False)
-
+    nombre_sector = db.Column(db.String(150), nullable=False, unique=True,
+                            info={"label": "Nombre del Sector"})
+    centro_costo = db.Column(db.String(100), nullable=False,
+                            info={"label": "Centro de Costo"})
     estado_sector_id = db.Column(
         db.Integer,
         db.ForeignKey("estados_sector.estado_sector_id"),
-        nullable=False
+        nullable=False,
+        info={"label": "Estado"},
     )
     
     estado = db.relationship("EstadoSector")

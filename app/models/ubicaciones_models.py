@@ -11,7 +11,8 @@ class Ubicacion(db.Model, ModelMixin, AuditMixin):
 
     uuid = db.Column(db.String(36), default=lambda: str(uuid.uuid4()), unique=True, nullable=False)
 
-    nombre_ubicacion = db.Column(db.String(100), nullable=False)
+    nombre_ubicacion = db.Column(db.String(100), nullable=False,
+                             info={"label": "Nombre de la ubicación"})
 
     sector_id = db.Column(db.Integer, db.ForeignKey("sectores.sector_id"), nullable=True)
     sector = db.relationship("Sector", backref="ubicaciones")
