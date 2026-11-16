@@ -1,0 +1,113 @@
+"""
+Fixtures comunes de la suite.
+
+Cada test corre contra una base SQLite en memoria, recién creada y con los datos
+iniciales (seed). Así los tests no tocan la base real (instance/fallback.db) ni
+dependen unos de otros.
+"""
+import os
+
+# La URI se lee al importar app.core.config, así que tiene que definirse ANTES de
+# importar la aplicación.
+os.environ["DATABASE_URL"] = "sqlite://"
+
+import pytest  # noqa: E402
+
+from app import create_app  # noqa: E402
+from app.core.db import db as _db  # noqa: E402
+from app.utils.seed import seed_data  # noqa: E402
+
+
+@pytest.fixture
+def app():
+    app = create_app("development")
+    app.config.update(TESTING=True)
+
+    with app.app_context():
+        _db.drop_all()
+        _db.create_all()
+        seed_data()
+        yield app
+        _db.session.remove()
+        _db.drop_all()
+
+
+@pytest.fixture
+def client(app):
+    return app.test_client()
+
+
+@pytest.fixture
+def db(app):
+    return _db
+
+
+# ---------------------------------------------------------------------------
+# Datos de prueba
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def estado_sector_activo(db):
+    from app.models.sectores_models import EstadoSector
+
+    return EstadoSector.query.filter_by(nombre_estado_sector="Activo").one()
+
+
+@pytest.fixture
+def sector(db, estado_sector_activo):
+    from app.models.sectores_models import Sector
+
+    s = Sector(
+        nombre_sector="Taller",
+        centro_costo="CC-100",
+        estado_sector_id=estado_sector_activo.estado_sector_id,
+    )
+    db.session.add(s)
+    db.session.commit()
+    return s
+
+
+@pytest.fixture
+def ubicacion(db, sector):
+    from app.models.ubicaciones_models import Ubicacion
+
+    u = Ubicacion(nombre_ubicacion="Galpón 1", sector_id=sector.sector_id)
+    db.session.add(u)
+    db.session.commit()
+    return u
+
+
+@pytest.fixture
+def estado_cuenta_activa(db):
+    from app.models.cuentas_models import EstadoCuenta
+
+    return EstadoCuenta.query.filter_by(nombre_estado_cuenta="Activa").one()
+
+
+@pytest.fixture
+def cuenta(db, estado_cuenta_activa):
+    from app.models.cuentas_models import Cuenta
+
+    c = Cuenta(
+        numero_cuenta="5101",
+        nombre_cuenta="Repuestos",
+        estado_cuenta_id=estado_cuenta_activa.estado_cuenta_id,
+    )
+    db.session.add(c)
+    db.session.commit()
+    return c
+
+
+@pytest.fixture
+def auditoria():
+    """Devuelve los registros de auditoría de una tabla, del más viejo al más nuevo."""
+    from app.models.auditoria_models import AuditLog
+
+    def _logs(tabla):
+        return (
+            AuditLog.query.filter_by(TablaAfectada=tabla)
+            .order_by(AuditLog.LogID)
+            .all()
+        )
+
+    return _logs
