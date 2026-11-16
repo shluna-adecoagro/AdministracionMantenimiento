@@ -11,6 +11,8 @@ __pycache__/
 *.png
 *.pdf
 *.txt
+# Excepción: las dependencias sí se versionan
+!requirements*.txt
 *.tsv
 *.ipynb
 *.csv
@@ -18,3 +20,5 @@ __pycache__/
 *.xls
 *.xlsb
 *.pbix
+.pytest_cache/
+instance/

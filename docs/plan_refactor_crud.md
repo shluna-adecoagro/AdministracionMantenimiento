@@ -1,0 +1,116 @@
+# Plan: modularización del framework CRUD
+
+Objetivo: reemplazar `app/crud/framework.py` (una sola clase que mezcla rutas, consultas,
+formularios, archivos, auditoría y navegación) por un framework modular que genere
+**automáticamente** la interfaz web y la API a partir de los modelos.
+
+```
+Modelos SQLAlchemy ──► introspección ──┐
+                                       ├──► Metamodelo final ──┬──► Rutas web (Flask + Jinja2)
+Overrides (solo lo no inferible) ──────┘                       └──► API REST (validada con JSON Schema)
+```
+
+## Decisiones tomadas
+
+| Tema | Decisión |
+|---|---|
+| Base de datos | **SQLite**. Se quita el respaldo automático MariaDB → SQLite y el comando `sync-db`. El código se mantiene portable (sin SQL específico de SQLite) por si más adelante se usa MariaDB. |
+| API | Sin autenticación por ahora. Hoy la consume `src/sync`; más adelante, Power Apps y otras apps web. Por eso: contrato REST estable, errores JSON uniformes, paginación, CORS configurable y una **especificación OpenAPI** (los conectores personalizados de Power Apps se crean a partir de ella). La autenticación se diseña como un punto de extensión para agregarla después sin rehacer nada. |
+| Entidades piloto | **Sectores, ubicaciones y cuentas**. El resto sigue con el framework actual hasta revisar su diseño, y después se migra. |
+| Forma de trabajo | Una rama y un *pull request* por fase; cada fase deja la app funcionando y con los tests en verde. |
+
+## Diagnóstico (noviembre 2026)
+
+Errores confirmados ejecutando la app:
+
+1. No se pueden guardar fechas: el formulario envía texto y SQLite exige `date`/`datetime`
+   (crear una lectura de medidor da 500).
+2. No se pueden guardar booleanos: llega `"False"` como texto (crear un BOM da 500).
+3. Las subentidades (ubicaciones, lecturas, stock, modelos, contactos, medidores) dan 500 si
+   se abre su listado o formulario sin el ID del padre; su listado propio falla siempre
+   (`'sub' is undefined` en la plantilla).
+4. `/bom_modelo` falla siempre: el metamodelo dice `bp_name: "modelos"` y se registra en el
+   blueprint `activos`.
+5. `/recursos` da 404: la entidad existe pero nunca se registra.
+6. La API de sectores no puede crear ni actualizar: su decorador de auditoría no completa
+   `RegistroUUID` (columna `NOT NULL`).
+
+Encontrados leyendo el código:
+
+- El detalle de una subentidad arma el enlace al padre con el blueprint propio en vez del
+  del padre.
+- `editar` recorre todos los campos (incluidos `virtual`/`oculto`): lo que no viene en el
+  formulario queda en `None`.
+- `sync-db` compara `updated_at`, pero los modelos usan `actualizado_en` (se elimina).
+- `routes/api/activos_routes.py` importa una función inexistente y no está registrado.
+- No hay validación en el servidor (`required` solo en el HTML) y un `IntegrityError` da 500.
+- Rendimiento: cada pantalla carga tablas FK completas, `listar` ejecuta la consulta dos
+  veces y las relaciones se resuelven una por fila (N+1).
+- Seguridad: subida de archivos sin lista de extensiones y con ruta relativa al directorio
+  actual; sin CSRF; `SECRET_KEY` con valor por defecto.
+- La base se crea con `create_all()` en `before_request`; `flask-migrate` está instalado
+  pero no se usa.
+
+Diseño:
+
+- `fk_data` copiado 3 veces, labels de entidad 5 veces, subida de archivos 2 veces.
+- La navegación depende de `bp_name` escritos a mano (origen de los errores 3 y 4).
+- Un archivo `routes/web/*_web.py` por módulo solo para instanciar `CRUDResource`.
+- La auditoría usa el nombre de la entidad como nombre de tabla (hoy coinciden de casualidad).
+
+## Arquitectura objetivo
+
+```
+app/crud/
+├── meta/
+│   ├── spec.py          # EntitySpec / FieldSpec: dataclasses tipadas en lugar de dicts
+│   ├── introspect.py    # modelo → FieldSpec (ya existe)
+│   ├── overrides/       # un archivo por entidad, solo con lo no inferible
+│   └── registry.py      # inferido + overrides = EntitySpec, validado al arrancar
+├── core/                # sin Flask: reutilizable desde web, API y CLI
+│   ├── coercion.py      # texto del formulario → tipos Python ("" → None, fechas, booleanos…)
+│   ├── fk.py            # opciones y labels de FK, en un solo lugar
+│   ├── repository.py    # consultas, búsqueda, filtros, paginación, eager loading
+│   ├── service.py       # alta/modificación/baja en una transacción + auditoría + hooks
+│   └── files.py         # almacenamiento de archivos
+├── schema/
+│   └── jsonschema.py    # EntitySpec → JSON Schema (alta / modificación) + validación
+├── web/
+│   ├── views.py         # listar / crear / editar / eliminar / detalle genéricos
+│   ├── navigation.py    # padre/hijo resuelto por el registry, no por bp_name
+│   └── register.py      # register_web(app, registry)
+└── api/
+    ├── views.py         # GET lista/uno, POST, PUT, PATCH, DELETE → JSON
+    ├── openapi.py       # especificación OpenAPI generada desde el registry
+    └── register.py
+```
+
+Principio central: **web y API comparten el mismo servicio y el mismo JSON Schema**. El
+formulario web se convierte a un dict tipado, se valida con el schema de la API y recién
+entonces se guarda. Las reglas se escriben una sola vez.
+
+Compatibilidad: `src/sync/backend_client.py` usa `GET/POST {url}` y `PUT/DELETE {url}/{id}`;
+la API generada respeta ese contrato.
+
+## Fases
+
+| Fase | Contenido | Estado |
+|---|---|---|
+| **0. Red de seguridad** | Tests con pytest para sectores, ubicaciones y cuentas (web y API). Errores conocidos marcados como `xfail`. README. `.gitignore` permite `requirements*.txt`. | ✅ Hecha |
+| **1. Metamodelo tipado** | `EntitySpec`/`FieldSpec`, registry (inferido + overrides) y un adaptador para que los dicts actuales sigan funcionando. Overrides de las 3 entidades piloto. `shadow_diff` pasa a ser validación al arrancar. | Pendiente |
+| **2. Capa core** | Coerción, FK, repositorio, servicio (transacción + auditoría) y archivos. `framework.py` delega en ellos. Validación en servidor y manejo de `IntegrityError`. | Pendiente |
+| **3. Web generada** | Vistas genéricas y navegación por registry. Rutas especiales (`bom_final`, `compatibilidad_final`) como vistas extra declaradas en overrides. Se eliminan los `*_web.py` triviales de las entidades migradas. | Pendiente |
+| **4. API generada** | Generador de JSON Schema, endpoints REST genéricos con paginación y errores JSON, especificación OpenAPI. Reemplaza `sectores_routes.py`; se elimina `activos_routes.py`. | Pendiente |
+| **5. Base de datos** | Quitar el respaldo automático y `sync-db`. Flask-Migrate (Alembic) y fuera `create_all` de `before_request`. Configuración por `.env`. | Pendiente |
+| **6. Migrar el resto** | Tras revisar su diseño: activos, medidores, lecturas, insumos, stock, unidades, marcas, modelos, recursos, BOM. | Pendiente |
+| **7. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados, y separar `app/__init__.py` (comandos CLI a `cli.py`). | Pendiente |
+
+## Cómo verificar cada fase
+
+```bash
+python -m pytest                     # todos los tests en verde (los xfail cuentan como esperados)
+python tools/crud_shadow.py          # coherencia de metamodelos
+```
+
+Al corregir un error conocido, su test `xfail` empieza a pasar y pytest lo informa como
+falla (`xfail_strict = true`): en ese momento se quita la marca.
