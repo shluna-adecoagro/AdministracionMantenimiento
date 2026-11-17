@@ -48,3 +48,13 @@ def test_eliminar(client, cuenta, auditoria):
     assert client.post(f"/cuentas/{cid}/confirmar_eliminar").status_code == 302
     assert Cuenta.query.get(cid) is None
     assert auditoria("cuentas")[-1].TipoDeCambio == "DELETE"
+
+
+def test_numero_de_cuenta_repetido_se_rechaza(client, cuenta):
+    r = client.post("/cuentas/crear", data={
+        "numero_cuenta": "5101",
+        "nombre_cuenta": "Otra",
+        "estado_cuenta_id": str(cuenta.estado_cuenta_id),
+    })
+    assert r.status_code == 400
+    assert "Ya existe un registro con ese valor de «Número de cuenta»." in r.get_data(as_text=True)

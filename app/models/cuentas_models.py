@@ -19,7 +19,7 @@ class Cuenta(ModelMixin, AuditMixin, db.Model):
 
     cuenta_id = db.Column(db.Integer, autoincrement=True, primary_key=True)
     uuid = db.Column(db.String(36), default=lambda: str(uuid.uuid4()), unique=True, nullable=False)
-    numero_cuenta = db.Column(db.String(50), nullable=False,
+    numero_cuenta = db.Column(db.String(50), nullable=False, unique=True,
                               info={"label": "Número de cuenta"})
     nombre_cuenta = db.Column(db.String(120), nullable=False,
                               info={"label": "Nombre de cuenta"})
