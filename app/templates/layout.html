@@ -58,8 +58,8 @@
         <aside class="sidebar">
             {% for grupo in sidebar_grupos %}
                 {% set activo = grupo["items"] | selectattr("url", "in", [request.path, "/" ~ request.path.split("/")[1]]) | list %}
-                {% if grupo.clave == "maestros" %}
-                    <h3>{{ grupo.titulo }}</h3>
+                {% if grupo.clave != "catalogos" %}
+                    <h3 {% if not loop.first %}class="sidebar-separado"{% endif %}>{{ grupo.titulo }}</h3>
                     <ul>
                         {% for item in grupo["items"] %}
                             <li><a href="{{ item.url }}" {% if item in activo %}class="activo"{% endif %}>{{ item.label }}</a></li>
