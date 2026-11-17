@@ -1,5 +1,5 @@
 """Rutas generadas desde el registry (app/crud/web/views.py)."""
-from app.crud.metamodelos import REGISTRY
+from app.crud.entidades import REGISTRY
 from app.crud.web.views import ACCIONES, endpoint
 
 

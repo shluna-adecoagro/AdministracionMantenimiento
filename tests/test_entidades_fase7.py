@@ -6,7 +6,7 @@ from datetime import datetime
 
 import pytest
 
-from app.crud.metamodelos import REGISTRY
+from app.crud.entidades import REGISTRY
 from app.models.activos_models import Activo, CategoriaActivo, EstadoActivo
 from app.models.bom_activo_models import BOMActivo
 from app.models.bom_modelo_models import BOMModelo

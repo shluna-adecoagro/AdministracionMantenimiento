@@ -27,14 +27,3 @@ class Ubicacion(db.Model, ModelMixin, AuditMixin):
 
     creado_en = db.Column(db.DateTime, default=datetime.utcnow)
     actualizado_en = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    def to_dict(self):
-        return {
-            "ubicacion_id": self.ubicacion_id,
-            "uuid": self.uuid,
-            "nombre_ubicacion": self.nombre_ubicacion,
-            "sector_id": self.sector_id,
-            "sector": self.sector.nombre_sector if self.sector else None,
-            "creado_en": self.creado_en.isoformat() if self.creado_en else None,
-            "actualizado_en": self.actualizado_en.isoformat() if self.actualizado_en else None
-        }

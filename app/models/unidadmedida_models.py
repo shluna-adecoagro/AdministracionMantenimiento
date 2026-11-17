@@ -12,12 +12,6 @@ class TipoUnidad(db.Model, ModelMixin):
     tipo_unidad_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     nombre_tipo = db.Column(db.String(100), nullable=False, unique=True)
 
-    def to_dict(self):
-        return {
-            "tipo_unidad_id": self.tipo_unidad_id,
-            "nombre_tipo": self.nombre_tipo,
-        }
-
 
 class UnidadMedida(db.Model, ModelMixin, AuditMixin):
     __tablename__ = "unidades_medida"

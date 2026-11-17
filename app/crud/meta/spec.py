@@ -2,13 +2,11 @@
 """
 Metamodelo tipado: la descripción completa de una entidad CRUD.
 
-`EntitySpec` y `FieldSpec` reemplazan a los dicts escritos a mano en
-app/crud/metamodelos/. Los construye el registry (registry.py) combinando lo que
-se infiere del modelo SQLAlchemy con los overrides de cada entidad.
+`EntitySpec` y `FieldSpec` los construye el registry (registry.py) combinando lo
+que se infiere del modelo SQLAlchemy con los overrides de cada entidad.
 
 Son objetos de solo lectura: todo lo que el framework necesita saber de una
-entidad está acá, con nombres y tipos explícitos. Mientras conviva el framework
-viejo, `to_legacy()` los traduce al formato de dict que espera framework.py.
+entidad está acá, con nombres y tipos explícitos.
 """
 from __future__ import annotations
 
@@ -83,26 +81,6 @@ class FieldSpec:
         """Claves que se pueden sobrescribir desde un override de campo."""
         return frozenset(f.name for f in dc_fields(cls)) - {"name"}
 
-    def to_legacy(self) -> dict:
-        d = {"label": self.label, "tipo": self.tipo, "required": self.required}
-        if self.tipo == "fk":
-            d["fk_model"] = self.fk_model
-            if self.fk_label:
-                d["fk_label"] = self.fk_label
-            if self.relacion:
-                d["relacion"] = self.relacion
-        if self.es_estado:
-            d["es_estado"] = True
-        if self.oculto:
-            d["oculto"] = True
-        if self.solo_lectura:
-            d["solo_lectura"] = True
-        if self.options:
-            d["options"] = [dict(o) for o in self.options]
-        if self.subcarpeta:
-            d["subcarpeta"] = self.subcarpeta
-        return d
-
 
 @dataclass(frozen=True)
 class ParentSpec:
@@ -166,49 +144,3 @@ class EntitySpec:
     @property
     def tabla(self) -> str:
         return self.model.__tablename__
-
-    # ------------------------------------------------------------------
-    # Compatibilidad con framework.py (se elimina en la Fase 3)
-    # ------------------------------------------------------------------
-    def to_legacy(self, specs: dict[str, "EntitySpec"], bp_name: str) -> dict:
-        """
-        Traduce la spec al dict que espera CRUDResource.
-
-        `specs` es el registry completo (para resolver hijos) y `bp_name` el
-        blueprint donde se registran las rutas, que todavía depende de cómo
-        estén armados los archivos de app/routes/web/.
-        """
-        d = {
-            "model": self.model,
-            "pk": self.pk,
-            "label_singular": self.label_singular,
-            "label_plural": self.label_plural,
-            "genero": self.genero,
-            "bp_name": bp_name,
-            "es_subentidad": self.es_subentidad,
-            "fields": {n: f.to_legacy() for n, f in self.fields.items()},
-            "listado": {"columns": list(self.listado)},
-            "filtros": {"campos": list(self.filtros)},
-            "auditoria": {
-                "enabled": self.auditoria,
-                "ignore_fields": list(self.auditoria_ignorar),
-            },
-            "mostrar_en_sidebar": self.sidebar,
-            "orden": self.orden,
-        }
-        if self.padre:
-            d["entidad_padre"] = self.padre.entidad
-            d["fk_padre"] = self.padre.fk
-        if self.hijos:
-            d["subentidades"] = [
-                {
-                    "entidad": h,
-                    "label": specs[h].label_plural[:1].upper() + specs[h].label_plural[1:],
-                    "label_singular": specs[h].label_singular,
-                    "label_plural": specs[h].label_plural,
-                    "fk": specs[h].padre_de_tipo(self.name).fk,
-                    "template_listado": "crud/listado_subentidad.html",
-                }
-                for h in self.hijos
-            ]
-        return d

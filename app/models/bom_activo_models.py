@@ -53,25 +53,3 @@ class BOMActivo(db.Model, ModelMixin, AuditMixin):
     actualizado_en = db.Column(
         db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
-
-    def to_dict(self):
-        return {
-            "bom_activo_id": self.bom_activo_id,
-            "uuid": self.uuid,
-            "activo_id": self.activo_id,
-            "activo": self.activo.descripcion if self.activo else None,
-            "insumo_id": self.insumo_id,
-            "insumo": self.insumo.descripcion if self.insumo else None,
-            "cantidad": self.cantidad,
-            "es_equivalencia": self.es_equivalencia,
-            "nota_equivalencia": self.nota_equivalencia,
-            "origen_equivalencia": self.origen_equivalencia,
-            "reemplaza_insumo_modelo_id": self.reemplaza_insumo_modelo_id,
-            "reemplaza_insumo_modelo": (
-                self.reemplaza_insumo_modelo.descripcion
-                if self.reemplaza_insumo_modelo
-                else None
-            ),
-            "creado_en": self.creado_en.isoformat(),
-            "actualizado_en": self.actualizado_en.isoformat(),
-        }

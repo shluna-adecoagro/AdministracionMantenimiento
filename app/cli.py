@@ -46,7 +46,7 @@ def _borrar_base():
 
 
 def _spec(entidad):
-    from app.crud.metamodelos import REGISTRY
+    from app.crud.entidades import REGISTRY
 
     if entidad not in REGISTRY:
         disponibles = ", ".join(sorted(REGISTRY))

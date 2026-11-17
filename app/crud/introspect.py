@@ -2,11 +2,9 @@
 """
 Introspección de modelos SQLAlchemy -> metamodelo CRUD.
 
-Genera, a partir de un modelo, un dict con el MISMO esquema que usan hoy los
-metamodelos escritos a mano (app/crud/metamodelos/*.py). Eso permite:
-
-  1. compararlo contra los metamodelos actuales (modo sombra, ver shadow_diff.py);
-  2. más adelante, reemplazarlos: lo inferido + overrides = metamodelo final.
+Genera, a partir de un modelo, la descripción de sus campos (etiqueta, widget,
+obligatoriedad, FKs...). El registry (app/crud/meta/registry.py) la combina con
+los overrides de cada entidad: lo inferido + overrides = EntitySpec.
 
 Solo infiere lo que el modelo realmente sabe. Lo que NO puede saber (labels con
 acentos, género, columnas del listado, widgets especiales, subentidades, tabs)

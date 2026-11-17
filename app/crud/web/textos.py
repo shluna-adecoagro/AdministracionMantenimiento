@@ -1,7 +1,7 @@
 # app/crud/web/textos.py
 """Textos que dependen de los nombres de las entidades."""
 from app.crud.introspect import inicial  # noqa: F401 (se usa desde las vistas)
-from app.crud.metamodelos import REGISTRY
+from app.crud.entidades import REGISTRY
 
 
 def etiqueta_tabla(tabla: str, cantidad: int) -> str:

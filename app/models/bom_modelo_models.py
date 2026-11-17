@@ -44,20 +44,3 @@ class BOMModelo(db.Model, ModelMixin, AuditMixin):
     actualizado_en = db.Column(
         db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
-
-    def to_dict(self):
-        return {
-            "bom_modelo_id": self.bom_modelo_id,
-            "uuid": self.uuid,
-            "insumo_id": self.insumo_id,
-            "insumo": self.insumo.descripcion if self.insumo else None,
-            "modelo_id": self.modelo_id,
-            "modelo": self.modelo.nombre_modelo if self.modelo else None,
-            "marca": self.modelo.marca.nombre_marca if self.modelo else None,
-            "cantidad": self.cantidad,
-            "es_equivalencia": self.es_equivalencia,
-            "nota_equivalencia": self.nota_equivalencia,
-            "origen_equivalencia": self.origen_equivalencia,
-            "creado_en": self.creado_en.isoformat(),
-            "actualizado_en": self.actualizado_en.isoformat(),
-        }

@@ -17,8 +17,6 @@ from app.routes.web.index_web import index_web_bp
 from app.routes.web.motivos_web import motivos_web
 
 
-from app.utils.json_validator import JSONValidationError
-
 
 CARPETA_MIGRACIONES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "migrations")
 
@@ -55,7 +53,7 @@ def create_app(env="development", config_extra=None):
     app.register_blueprint(motivos_web)
 
     # Pantallas CRUD generadas desde el registry
-    from app.crud.metamodelos import REGISTRY
+    from app.crud.entidades import REGISTRY
     from app.crud.web.views import registrar_web
 
     registrar_web(app, REGISTRY)
@@ -76,16 +74,6 @@ def create_app(env="development", config_extra=None):
     def mostrar(valor):
         """Valor para mostrar en una celda: None (dato vacío) se ve como un guion."""
         return "—" if valor is None or valor == "" else valor
-
-    # ============================
-    # Manejo de errores JSON
-    # ============================
-    @app.errorhandler(JSONValidationError)
-    def manejar_error_json(e):
-        return (
-            jsonify({"status": "error", "message": "JSON inválido", "details": str(e)}),
-            400,
-        )
 
     # ============================
     # Comandos de consola (flask --app run ...)

@@ -3,9 +3,9 @@ class ModelMixin:
     Mixin genérico para modelos del framework CRUD.
     Provee:
     - pk: propiedad para obtener la clave primaria
-    - label: representación legible del registro
-    - to_dict: serialización genérica
-    - as_fk_option: opción para selects de FK
+    - label: representación legible del registro (para FKs y mensajes)
+
+    Para pasar un registro a dict se usa app.crud.core.repository.valores().
     """
 
     @property
@@ -24,8 +24,9 @@ class ModelMixin:
         Si el modelo define __label_field__, se usa ese campo.
         Si no, se usa el primer campo de texto disponible.
         """
-        if hasattr(self, "__label_field__"):
-            return getattr(self, self.__label_field__)
+        campo = getattr(self, "__label_field__", None)
+        if campo:
+            return getattr(self, campo)
 
         # fallback: buscar el primer string column
         for col in self.__table__.columns:
@@ -34,22 +35,3 @@ class ModelMixin:
 
         # último recurso
         return str(self.pk)
-
-    def to_dict(self):
-        """
-        Serialización genérica del modelo.
-        Convierte todos los campos simples a dict.
-        """
-        data = {}
-        for col in self.__table__.columns:
-            data[col.name] = getattr(self, col.name)
-        return data
-
-    def as_fk_option(self, label_field=None):
-        """
-        Devuelve un dict para usar en selects de FK.
-        """
-        return {
-            "value": self.pk,
-            "label": getattr(self, label_field) if label_field else self.label
-        }

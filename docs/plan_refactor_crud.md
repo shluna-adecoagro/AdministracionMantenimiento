@@ -313,8 +313,6 @@ la API generada respeta ese contrato.
    modelo. Lo mínimo es `{"model": MiModelo}`; las claves posibles están documentadas en
    `app/crud/meta/overrides/__init__.py`.
 3. Nada más: las pantallas (listado, alta, detalle, edición y baja) se generan solas.
-   Si la entidad migrada estaba en `app/crud/metamodelos/`, borrar su dict y su
-   `CRUDResource` de `app/routes/web/`.
 
 Si algo no cierra (un campo mal escrito, un padre inexistente, una FK que no apunta al
 padre), la app **no arranca** y el error dice qué corregir, con una sugerencia.
@@ -323,8 +321,10 @@ padre), la app **no arranca** y el error dice qué corregir, con una sugerencia.
 
 ```bash
 python -m pytest                     # todos los tests en verde (los xfail cuentan como esperados)
-python tools/crud_shadow.py          # coherencia de metamodelos
 ```
+
+La coherencia entre overrides y modelos la valida el registry al arrancar (la app no
+arranca si algo no cierra).
 
 Al corregir un error conocido, su test `xfail` empieza a pasar y pytest lo informa como
 falla (`xfail_strict = true`): en ese momento se quita la marca.
