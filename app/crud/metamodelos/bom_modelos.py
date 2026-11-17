@@ -13,7 +13,7 @@ ENTIDAD_BOM_MODELOS = {
     "genero": "f",
     # Blueprint donde vive esta entidad
     # Podés elegir "modelos" o crear uno específico "bom"
-    "bp_name": "modelos",
+    "bp_name": "activos",  # se registra en activos_web_bp
     # Campos del formulario
     "fields": {
         "insumo_id": {

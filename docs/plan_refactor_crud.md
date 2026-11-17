@@ -58,6 +58,29 @@ Diseño:
 - Un archivo `routes/web/*_web.py` por módulo solo para instanciar `CRUDResource`.
 - La auditoría usa el nombre de la entidad como nombre de tabla (hoy coinciden de casualidad).
 
+## Notas de la Fase 2
+
+- **Claves foráneas en SQLite activadas** (`PRAGMA foreign_keys=ON` en `app/core/db.py`):
+  la base rechaza referencias a registros inexistentes y borrados de registros en uso,
+  igual que lo haría MariaDB.
+- **Qué pasa con los registros relacionados al borrar** (`app/crud/core/dependencias.py`).
+  La regla se declara en el modelo, en la relación del hijo, y la pantalla de
+  confirmación avisa antes de borrar:
+  - *Cascada*: `backref=db.backref("hijos", cascade="all, delete")`. Los hijos se
+    borran con el padre y cada uno queda en la auditoría.
+  - *Bloqueo*: si otros registros apuntan al que se borra (o a sus hijos en cascada),
+    no se borra nada y se informa cuántos y de qué tipo.
+  - Por defecto SQLAlchemy *desvincula en silencio* (pone la FK en `NULL`) cuando
+    existe un `backref` sin reglas: evitarlo con `passive_deletes="all"`.
+
+  | Relación | Regla | Decidido |
+  |---|---|---|
+  | Sector → ubicaciones | Cascada | ✅ |
+  | Sector / ubicación → activos, empleados, stock | Bloqueo | Provisorio: revisar en Fase 6 |
+  | Resto de las entidades | — | **Revisar al migrar cada una (Fase 6)** |
+
+- Al reemplazar un archivo subido, el anterior queda en disco (pendiente de definir).
+
 ## Arquitectura objetivo
 
 ```
@@ -98,7 +121,7 @@ la API generada respeta ese contrato.
 |---|---|---|
 | **0. Red de seguridad** | Tests con pytest para sectores, ubicaciones y cuentas (web y API). Errores conocidos marcados como `xfail`. README. `.gitignore` permite `requirements*.txt`. | ✅ Hecha |
 | **1. Metamodelo tipado** | `EntitySpec`/`FieldSpec`, registry (inferido + overrides) y un adaptador para que los dicts actuales sigan funcionando. Overrides de las 3 entidades piloto. `shadow_diff` pasa a ser validación al arrancar. | ✅ Hecha |
-| **2. Capa core** | Coerción, FK, repositorio, servicio (transacción + auditoría) y archivos. `framework.py` delega en ellos. Validación en servidor y manejo de `IntegrityError`. | Pendiente |
+| **2. Capa core** | Coerción, FK, repositorio, servicio (transacción + auditoría) y archivos. `framework.py` delega en ellos. Validación en servidor y manejo de `IntegrityError`. | ✅ Hecha |
 | **3. Web generada** | Vistas genéricas y navegación por registry. Rutas especiales (`bom_final`, `compatibilidad_final`) como vistas extra declaradas en overrides. Se eliminan los `*_web.py` triviales de las entidades migradas. | Pendiente |
 | **4. API generada** | Generador de JSON Schema, endpoints REST genéricos con paginación y errores JSON, especificación OpenAPI. Reemplaza `sectores_routes.py`; se elimina `activos_routes.py`. | Pendiente |
 | **5. Base de datos** | Quitar el respaldo automático y `sync-db`. Flask-Migrate (Alembic) y fuera `create_all` de `before_request`. Configuración por `.env`. | Pendiente |

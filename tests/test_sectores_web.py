@@ -153,26 +153,144 @@ def test_historial_en_detalle(client, sector):
 
 
 # ---------------------------------------------------------------------------
-# Bugs conocidos (ver docs/plan_refactor_crud.md). Están marcados como xfail
-# estricto: cuando se corrijan, el test empezará a pasar y pytest avisará para
-# quitar la marca.
+# Validación y errores de la base
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(reason="Fase 2: no hay validación de 'required' en el servidor")
-def test_crear_sin_nombre_es_rechazado(client, estado_sector_activo):
-    client.post("/sectores/crear", data={
-        "nombre_sector": "",
+def test_crear_sin_nombre_es_rechazado(client, estado_sector_activo, auditoria):
+    r = client.post("/sectores/crear", data={
+        "nombre_sector": "   ",
         "centro_costo": "CC-1",
         "estado_sector_id": str(estado_sector_activo.estado_sector_id),
     })
+    html = r.get_data(as_text=True)
+    assert r.status_code == 400
+    assert "Nombre del Sector es obligatorio." in html
+    assert 'value="CC-1"' in html  # no se pierde lo que se escribió
     assert Sector.query.count() == 0
+    assert auditoria("sectores") == []
 
 
-@pytest.mark.xfail(reason="Fase 2: IntegrityError (nombre duplicado) termina en error 500")
-def test_crear_duplicado_no_da_500(client, sector):
+def test_crear_duplicado_muestra_mensaje(client, sector, auditoria):
     r = client.post("/sectores/crear", data={
         "nombre_sector": "Taller",
         "centro_costo": "CC-999",
         "estado_sector_id": str(sector.estado_sector_id),
     })
-    assert r.status_code < 500
+    assert r.status_code == 400
+    assert "Ya existe un registro con ese valor de «Nombre del Sector»." in r.get_data(as_text=True)
+    assert Sector.query.count() == 1
+    assert auditoria("sectores") == []  # la auditoría no queda a medias
+
+
+def test_texto_demasiado_largo(client, estado_sector_activo):
+    r = client.post("/sectores/crear", data={
+        "nombre_sector": "x" * 151,
+        "centro_costo": "CC-1",
+        "estado_sector_id": str(estado_sector_activo.estado_sector_id),
+    })
+    assert r.status_code == 400
+    assert "como máximo 150 caracteres" in r.get_data(as_text=True)
+
+
+def test_editar_conserva_campos_que_no_vienen_en_el_formulario(client, sector):
+    r = client.post(f"/sectores/{sector.sector_id}/editar", data={"nombre_sector": "Taller 2"})
+    assert r.status_code == 302
+    s = Sector.query.get(sector.sector_id)
+    assert (s.nombre_sector, s.centro_costo) == ("Taller 2", "CC-100")
+
+
+# ---------------------------------------------------------------------------
+# Borrado: cascada a ubicaciones, bloqueo si algo los usa
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def activo_en(db):
+    """Crea un activo asignado a un sector y/o ubicación."""
+    from app.models.activos_models import Activo, CategoriaActivo, EstadoActivo
+
+    def _crear(sector_id=None, ubicacion_id=None):
+        cat = CategoriaActivo.query.first()
+        a = Activo(
+            descripcion="Tractor 1",
+            tipo_activo_id=cat.tipo_activo_id,
+            categoria_activo_id=cat.categoria_activo_id,
+            estado_activo_id=EstadoActivo.query.first().estado_activo_id,
+            sector_id=sector_id,
+            ubicacion_id=ubicacion_id,
+        )
+        db.session.add(a)
+        db.session.commit()
+        return a
+
+    return _crear
+
+
+def test_confirmar_eliminar_avisa_la_cascada(client, sector, ubicacion):
+    r = client.get(f"/sectores/{sector.sector_id}/confirmar_eliminar")
+    html = r.get_data(as_text=True)
+    assert r.status_code == 200
+    assert "También se eliminarán: 1 ubicación." in html
+    assert "btn-eliminar" in html
+
+
+def test_eliminar_sector_borra_sus_ubicaciones_y_las_audita(client, sector, ubicacion, auditoria):
+    from app.models.ubicaciones_models import Ubicacion
+
+    sector_id, ubicacion_uuid = sector.sector_id, ubicacion.uuid
+    r = client.post(f"/sectores/{sector_id}/confirmar_eliminar",
+                    data={"motivo_operacion": "Cierre del sector"})
+    assert r.status_code == 302
+    assert Sector.query.get(sector_id) is None
+    assert Ubicacion.query.count() == 0
+
+    [log_sector] = auditoria("sectores")
+    assert log_sector.TipoDeCambio == "DELETE"
+
+    [log_ubicacion] = auditoria("ubicaciones")
+    assert log_ubicacion.TipoDeCambio == "DELETE"
+    assert log_ubicacion.RegistroUUID == ubicacion_uuid
+    assert log_ubicacion.EstadoAnterior["nombre_ubicacion"] == "Galpón 1"
+    assert log_ubicacion.motivo_operacion == (
+        f"Eliminación en cascada de sectores #{sector_id}: Cierre del sector"
+    )
+
+
+def test_no_se_puede_eliminar_sector_con_activos(client, sector, activo_en, auditoria):
+    activo_en(sector_id=sector.sector_id)
+
+    # La pantalla de confirmación ya avisa y no ofrece el botón.
+    r = client.get(f"/sectores/{sector.sector_id}/confirmar_eliminar")
+    html = r.get_data(as_text=True)
+    assert "No se puede eliminar porque lo usan 1 activo." in html
+    assert "btn-eliminar" not in html
+
+    r = client.post(f"/sectores/{sector.sector_id}/confirmar_eliminar")
+    assert r.status_code == 409
+    assert Sector.query.get(sector.sector_id) is not None
+    assert auditoria("sectores") == []
+
+
+def test_ubicacion_en_uso_bloquea_la_cascada(client, sector, ubicacion, activo_en, auditoria):
+    from app.models.ubicaciones_models import Ubicacion
+
+    activo_en(ubicacion_id=ubicacion.ubicacion_id)
+    r = client.post(f"/sectores/{sector.sector_id}/confirmar_eliminar")
+    assert r.status_code == 409
+    assert "lo usan 1 activo" in r.get_data(as_text=True)
+    # No se borró nada: ni el sector ni sus ubicaciones.
+    assert Sector.query.get(sector.sector_id) is not None
+    assert Ubicacion.query.count() == 1
+    assert auditoria("sectores") == [] and auditoria("ubicaciones") == []
+
+
+def test_eliminar_ubicacion_en_uso_se_bloquea(client, ubicacion, activo_en):
+    from app.models.ubicaciones_models import Ubicacion
+
+    activo_en(ubicacion_id=ubicacion.ubicacion_id)
+    r = client.post(f"/ubicaciones/{ubicacion.ubicacion_id}/confirmar_eliminar")
+    assert r.status_code == 409
+    assert Ubicacion.query.get(ubicacion.ubicacion_id) is not None
+
+
+def test_campo_de_busqueda_no_permitido_se_ignora(client, sector):
+    assert client.get("/sectores?campo=uuid&q=abc").status_code == 200

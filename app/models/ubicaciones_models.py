@@ -15,7 +15,12 @@ class Ubicacion(db.Model, ModelMixin, AuditMixin):
                              info={"label": "Nombre de la ubicación"})
 
     sector_id = db.Column(db.Integer, db.ForeignKey("sectores.sector_id"), nullable=True)
-    sector = db.relationship("Sector", backref="ubicaciones")
+    # Al borrar un sector se borran sus ubicaciones (cascada), salvo que alguna
+    # esté en uso (activos, stock...): en ese caso no se borra nada.
+    # Ver app/crud/core/dependencias.py.
+    sector = db.relationship(
+        "Sector", backref=db.backref("ubicaciones", cascade="all, delete")
+    )
 
     creado_en = db.Column(db.DateTime, default=datetime.utcnow)
     actualizado_en = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -57,12 +57,14 @@ class StockInsumo(db.Model, ModelMixin, AuditMixin):
     sector_id = db.Column(
         db.Integer, db.ForeignKey("sectores.sector_id"), nullable=True
     )
-    sector = db.relationship("Sector", backref="stock")
+    # passive_deletes="all": borrar un sector o una ubicación con stock se
+    # bloquea, en vez de dejar el stock sin sector/ubicación en silencio.
+    sector = db.relationship("Sector", backref=db.backref("stock", passive_deletes="all"))
 
     ubicacion_id = db.Column(
         db.Integer, db.ForeignKey("ubicaciones.ubicacion_id"), nullable=False
     )
-    ubicacion = db.relationship("Ubicacion", backref="stock")
+    ubicacion = db.relationship("Ubicacion", backref=db.backref("stock", passive_deletes="all"))
 
     cantidad = db.Column(db.Float, nullable=False, default=0)
     fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow)

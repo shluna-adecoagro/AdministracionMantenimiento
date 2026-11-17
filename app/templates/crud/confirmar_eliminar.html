@@ -8,9 +8,21 @@
 
     <form method="POST" id="form-eliminar">
 
+        {% if error %}
+            <div class="form-errores" role="alert">
+                <strong>No se pudo eliminar.</strong>
+                <p>{{ error }}</p>
+            </div>
+        {% else %}
         <p style="text-align:center; color:#b91c1c; font-weight:600;">
             ¿Está seguro de eliminar este {{ label_singular }}?
         </p>
+        {% if cascada %}
+            <div class="form-aviso" role="note">
+                También se eliminarán: {{ cascada | join(", ") }}.
+            </div>
+        {% endif %}
+        {% endif %}
 
         <table class="tabla-detalle" style="margin-top:1rem;">
 
@@ -63,10 +75,12 @@
                 </a>
             {% endif %}
 
+            {% if not error %}
             <button type="button" class="btn-eliminar"
                     onclick="abrirModalMotivo('DELETE', document.getElementById('form-eliminar'))">
                 Eliminar
             </button>
+            {% endif %}
         </div>
 
     </form>
