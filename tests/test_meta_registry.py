@@ -87,7 +87,7 @@ def test_listado_y_filtros_por_defecto():
 
 def test_formato_legacy_para_framework():
     d = ENTIDADES["sectores"]
-    assert d["bp_name"] == "sectores_web"
+    assert d["bp_name"] == "crud"
     assert d["listado"] == {"columns": ["nombre_sector", "centro_costo", "estado_sector_id"]}
     assert d["subentidades"][0]["entidad"] == "ubicaciones"
     assert d["subentidades"][0]["fk"] == "sector_id"

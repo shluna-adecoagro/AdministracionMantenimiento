@@ -402,10 +402,9 @@ Pueden ser catálogos (solo se usan como destino de FK) o modelos que se manejan
 ## Blueprints compartidos (`bp_name`)
 
 - `activos`: activos, medidores, bom_modelo, bom_activo
-- `cuentas`: cuentas
+- `crud`: cuentas, sectores, ubicaciones
 - `insumos`: insumos, stock_insumo
 - `lecturas`: lecturas_medidor
 - `marcas_modelos`: marcas, modelos
 - `recursos_web`: recursos, empleados, proveedores, contactos_proveedor
-- `sectores_web`: sectores, ubicaciones
 - `unidades_medida_web`: unidades_medida

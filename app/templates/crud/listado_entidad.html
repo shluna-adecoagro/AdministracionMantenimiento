@@ -99,11 +99,11 @@
                                             -
                                         {% endif %}
                                     {% else %}
-                                        {{ fk_labels[rowloop.index0][col] | default('') }}
+                                        {{ fk_labels[rowloop.index0][col] | mostrar }}
                                     {% endif %}
 
                                 {% else %}
-                                    {{ r[col] | default('') }}
+                                    {{ r[col] | mostrar }}
                                 {% endif %}
 
                             </td>

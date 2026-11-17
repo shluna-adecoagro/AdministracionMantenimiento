@@ -5,7 +5,13 @@
 <!-- Encabezado -->
 <div class="seccion-header">
     <h2>Detalles de {{ label_singular }}</h2>
-    <a href="{{ url_for(endpoint_base + '_listar') }}" class="btn-secondary">Volver</a>
+    {% if url_volver is defined %}
+        <a href="{{ url_volver }}" class="btn-secondary">
+            {% if es_subentidad %}Volver a {{ entidad_padre }}{% else %}Volver{% endif %}
+        </a>
+    {% else %}
+        <a href="{{ url_for(endpoint_base + '_listar') }}" class="btn-secondary">Volver</a>
+    {% endif %}
 </div>
 
 <!-- ============================================================
@@ -64,7 +70,7 @@
                             {% endif %}
 
                         {% else %}
-                            {{ modelo.get(campo) | default('') }}
+                            {{ modelo.get(campo) | mostrar }}
                         {% endif %}
                     </td>
                 </tr>

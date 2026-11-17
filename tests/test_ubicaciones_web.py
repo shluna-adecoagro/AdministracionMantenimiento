@@ -4,7 +4,6 @@ import pytest
 from app.models.ubicaciones_models import Ubicacion
 
 
-@pytest.mark.xfail(reason="Fase 3: el listado propio de una subentidad falla ('sub' is undefined en la plantilla)")
 def test_listado_filtrado_por_sector(client, ubicacion, sector, db):
     from app.models.sectores_models import Sector
 
@@ -35,7 +34,7 @@ def test_crear_desde_sector_vuelve_al_detalle_del_sector(client, sector, auditor
         "motivo_operacion": "Alta",
     })
     assert r.status_code == 302
-    assert r.headers["Location"].endswith(f"/sectores/{sector.sector_id}")
+    assert r.headers["Location"].endswith(f"/sectores/{sector.sector_id}?seccion=ubicaciones")
 
     u = Ubicacion.query.filter_by(nombre_ubicacion="Pañol").one()
     assert u.sector_id == sector.sector_id
@@ -57,7 +56,7 @@ def test_editar(client, ubicacion, sector, auditoria):
         "sector_id": str(sector.sector_id),
     })
     assert r.status_code == 302
-    assert r.headers["Location"].endswith(f"/sectores/{sector.sector_id}")
+    assert r.headers["Location"].endswith(f"/sectores/{sector.sector_id}?seccion=ubicaciones")
     assert Ubicacion.query.get(ubicacion.ubicacion_id).nombre_ubicacion == "Galpón 2"
     assert auditoria("ubicaciones")[-1].TipoDeCambio == "UPDATE"
 
@@ -66,17 +65,50 @@ def test_eliminar(client, ubicacion, sector):
     uid = ubicacion.ubicacion_id
     r = client.post(f"/ubicaciones/{uid}/confirmar_eliminar")
     assert r.status_code == 302
-    assert r.headers["Location"].endswith(f"/sectores/{sector.sector_id}")
+    assert r.headers["Location"].endswith(f"/sectores/{sector.sector_id}?seccion=ubicaciones")
     assert Ubicacion.query.get(uid) is None
 
 
-# --- Bugs conocidos --------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Ubicaciones por su cuenta (sin venir desde un sector)
+# ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(reason="Fase 3: abrir el listado sin ?sector_id da error 500 (BuildError)")
-def test_listado_sin_sector_no_da_500(client):
-    assert client.get("/ubicaciones").status_code < 500
+def test_listado_completo_muestra_el_sector(client, ubicacion):
+    r = client.get("/ubicaciones")
+    html = r.get_data(as_text=True)
+    assert r.status_code == 200
+    assert "Galpón 1" in html
+    assert "Taller" in html  # columna Sector con su nombre, no el ID
 
 
-@pytest.mark.xfail(reason="Fase 3: abrir el formulario sin ?sector_id da error 500 (BuildError)")
-def test_crear_sin_sector_no_da_500(client):
-    assert client.get("/ubicaciones/crear").status_code < 500
+def test_formulario_crear_sin_sector(client, sector):
+    r = client.get("/ubicaciones/crear")
+    html = r.get_data(as_text=True)
+    assert r.status_code == 200
+    assert 'name="sector_id"' in html
+    assert 'href="/ubicaciones"' in html  # Cancelar vuelve al listado
+
+
+def test_crear_sin_sector_vuelve_al_listado(client, sector):
+    r = client.post("/ubicaciones/crear", data={
+        "nombre_ubicacion": "Playón", "sector_id": str(sector.sector_id),
+    })
+    assert r.status_code == 302
+    assert r.headers["Location"].endswith("/ubicaciones")
+    assert Ubicacion.query.filter_by(nombre_ubicacion="Playón").one().sector_id == sector.sector_id
+
+
+def test_ubicacion_sin_sector(client):
+    r = client.post("/ubicaciones/crear", data={"nombre_ubicacion": "Suelta", "sector_id": ""})
+    assert r.status_code == 302
+    u = Ubicacion.query.filter_by(nombre_ubicacion="Suelta").one()
+    assert u.sector_id is None
+    assert client.get(f"/ubicaciones/{u.ubicacion_id}").status_code == 200
+    assert "None" not in client.get("/ubicaciones").get_data(as_text=True)
+
+
+def test_detalle_vuelve_al_sector_y_tiene_historial(client, ubicacion, sector):
+    html = client.get(f"/ubicaciones/{ubicacion.ubicacion_id}").get_data(as_text=True)
+    assert f'href="/sectores/{sector.sector_id}?seccion=ubicaciones"' in html
+    assert "Volver a sector" in html
+    assert "Historial" in html

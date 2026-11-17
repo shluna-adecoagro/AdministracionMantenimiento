@@ -48,6 +48,20 @@ class FieldSpec:
     max_length: int | None = None
     unique: bool = False
 
+    # Acceso tipo dict (cfg.get("label"), cfg["fk_model"]), para que la capa core
+    # y las plantillas acepten indistintamente un FieldSpec o un dict de metamodelo.
+    def get(self, clave, default=None):
+        return getattr(self, clave, default)
+
+    def __getitem__(self, clave):
+        try:
+            return getattr(self, clave)
+        except AttributeError:
+            raise KeyError(clave) from None
+
+    def __contains__(self, clave):
+        return hasattr(self, clave)
+
     @classmethod
     def claves_override(cls) -> frozenset[str]:
         """Claves que se pueden sobrescribir desde un override de campo."""

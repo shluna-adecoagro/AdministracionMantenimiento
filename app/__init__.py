@@ -14,8 +14,6 @@ from app.routes.api.auditoria_routes import audit_bp
 from app.routes.api.sectores_routes import sectores_bp
 
 ## Web
-from app.routes.web.sectores_web import sectores_web_bp
-from app.routes.web.cuentas_web import cuentas_bp
 from app.routes.web.index_web import index_web_bp
 from app.routes.web.motivos_web import motivos_web
 from app.routes.web.marcas_modelos_web import marcas_modelos_web_bp
@@ -99,9 +97,7 @@ def create_app(env="development"):
     # Registrar frontend
     # ============================
     app.register_blueprint(index_web_bp)
-    app.register_blueprint(sectores_web_bp)
     app.register_blueprint(motivos_web)
-    app.register_blueprint(cuentas_bp)
     app.register_blueprint(marcas_modelos_web_bp)
     app.register_blueprint(recursos_web_bp)
     app.register_blueprint(activos_web_bp)
@@ -109,6 +105,20 @@ def create_app(env="development"):
     app.register_blueprint(insumos_web_bp)
     app.register_blueprint(unidades_medida_web_bp)
     app.register_blueprint(bom_web_bp)
+
+    # Pantallas CRUD generadas desde el registry (entidades migradas)
+    from app.crud.metamodelos import REGISTRY
+    from app.crud.web.views import registrar_web
+
+    registrar_web(app, REGISTRY)
+
+    # ============================
+    # Filtros de plantilla
+    # ============================
+    @app.template_filter("mostrar")
+    def mostrar(valor):
+        """Valor para mostrar en una celda: None (dato vacío) se ve como un guion."""
+        return "—" if valor is None or valor == "" else valor
 
     # ============================
     # Manejo de errores JSON
