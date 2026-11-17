@@ -125,36 +125,45 @@ Diseño:
 - Tests: config `testing` (base en memoria). Un test verifica que las migraciones generen
   exactamente el esquema de los modelos (avisa si falta una migración).
 
-## Carga de datos (Fase 6, a definir)
+## Carga de datos (Fase 6)
 
-Necesidades:
+Hecho:
 
-1. **Carga inicial en producción** de los datos reales, que hoy están en SharePoint
-   (exportables a CSV).
-2. **Datos de prueba** reutilizables para tests y para probar la app a mano.
-3. **Catálogos** (estados, motivos, tipos): hoy en `app/utils/seed.py` (`flask seed`).
+- `flask importar <entidad> archivo.csv [--simular]` y `flask exportar <entidad> archivo.csv`
+  (`app/crud/intercambio/csv_entidades.py`). Usan el mismo servicio que la web y la API:
+  validación, auditoría (usuario «importación», motivo = nombre del archivo) y reglas de
+  integridad.
+- **Clave natural** por entidad (`clave_natural` en el override): `nombre_sector`;
+  `nombre_ubicacion` + `sector_id`; `numero_cuenta`. Reimportar actualiza en lugar de
+  duplicar, y las filas sin cambios no se tocan (el historial no se ensucia).
+- Ubicaciones: restricción única (nombre, sector) en la base (segunda migración).
+- **FK por nombre** en el CSV («Activo», «Taller»); por ID solo con la columna `*_id`.
+- **Alias de columnas** por campo (`"fields": {"nombre_sector": {"alias": ["name"]}}`)
+  para los nombres de columna de SharePoint.
+- **Todo o nada**: se informan todos los errores con su fila y no se guarda nada.
+- Lee CSV con `,` `;` o tabulación, en UTF-8 (con o sin BOM) o Windows-1252.
 
-Propuesta:
+Decisiones del usuario:
 
-- Comando `flask importar <entidad> archivo.csv` que use el registry y el **mismo
-  servicio** que la web y la API: misma validación, mensajes por fila y campo, y
-  auditoría con usuario "importación" y el nombre del archivo como motivo.
-- Modo **simulación** (`--simular`): valida todo el archivo y muestra los errores sin
-  guardar nada. Si una fila falla, no se guarda ninguna (todo o nada).
-- **Claves foráneas por nombre**: en el CSV, `estado_sector` = "Activo" en lugar del ID
-  (los IDs de SharePoint no coinciden con los de la base).
-- **Clave natural** por entidad (ej: `nombre_sector`) para que reimportar actualice en
-  lugar de duplicar.
-- Orden de carga según dependencias (sectores antes que ubicaciones).
-- Los mismos CSV, más chicos, sirven como datos de prueba.
-- `src/sync` (Excel → API) se puede rehacer sobre esta base o reemplazar por este comando.
+- Columna identificadora en SharePoint: en general `name` (único en sectores y activos;
+  en ubicaciones, nombre + sector). Declarar `alias: ["name"]` cuando se conozcan los
+  nombres reales de las columnas.
+- Catálogos: estados, motivos y tipos de cambio de auditoría siguen en `seed.py`; tipos y
+  categorías de materiales vienen de SharePoint (se importan cuando esas entidades pasen
+  al registry, Fase 7).
+- Interés en **mantener sincronizadas** la base local y SharePoint, como respaldo mutuo.
+  Leer SharePoint directo queda como última fase (9).
 
-Para decidir antes de implementar:
+**Pendiente de decidir: dirección de la sincronización (Fase 9).**
 
-- ¿La carga desde SharePoint es única (migración inicial) o periódica (sincronización)?
-- ¿Qué columna identifica cada registro en SharePoint (clave natural)?
-- ¿Se podría leer SharePoint directo (Microsoft Graph) en lugar de exportar CSV?
-- ¿Los catálogos (estados, motivos) también vienen de SharePoint o quedan en `seed.py`?
+| Opción | Cómo funciona | Riesgo |
+|---|---|---|
+| A. La app es la fuente; SharePoint es una copia | Se carga y edita en la app; se exporta periódicamente a SharePoint | Bajo. SharePoint queda de solo lectura |
+| B. SharePoint es la fuente; la app es una copia | Se edita en SharePoint; se importa periódicamente | Bajo, pero la app no se usaría para cargar |
+| C. Bidireccional | Se edita en ambos lados y se concilian los cambios | Alto: conflictos (mismo registro editado en los dos lados), bajas que hay que propagar, renombres que cambian la clave natural |
+
+Para el objetivo de respaldo, la recomendación es **A más copias de seguridad de la base**
+(el archivo SQLite se copia entero), y no C.
 
 ## Arquitectura objetivo
 
@@ -200,9 +209,10 @@ la API generada respeta ese contrato.
 | **3. Web generada** | Vistas genéricas y navegación por registry (`app/crud/web/views.py`). Se eliminan `sectores_web.py` y `cuentas_web.py`. Las rutas especiales (`bom_final`, `compatibilidad_final`) se resuelven al migrar activos e insumos (Fase 7). | ✅ Hecha |
 | **4. API generada** | Generador de JSON Schema, endpoints REST genéricos con paginación y errores JSON, especificación OpenAPI (3.0 y 2.0 para Power Apps) y página `/api/docs`. Reemplaza `sectores_routes.py`; se elimina `activos_routes.py`. | ✅ Hecha |
 | **5. Base de datos** | Quitar el respaldo automático y `sync-db`. Flask-Migrate (Alembic) y fuera `create_all` de `before_request`. Configuración por `.env`. Comandos de consola a `app/cli.py`. | ✅ Hecha |
-| **6. Carga de datos** | Importar los datos reales desde CSV exportados de SharePoint, y datos de prueba reutilizables. Ver «Carga de datos» más abajo. | Pendiente |
+| **6. Carga de datos** | `flask importar` / `flask exportar` en CSV, con clave natural, FK por nombre, simulación y todo o nada. Ver «Carga de datos» más abajo. | ✅ Hecha |
 | **7. Migrar el resto** | Tras revisar su diseño: activos, medidores, lecturas, insumos, stock, unidades, marcas, modelos, recursos, BOM. | Pendiente |
 | **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. | Pendiente |
+| **9. Sincronización con SharePoint** | Según la dirección que se decida (ver «Carga de datos»). Al final, leer y escribir SharePoint directo (Microsoft Graph) en lugar de exportar CSV. | Pendiente |
 
 ## Cómo agregar o modificar una entidad (desde la Fase 1)
 

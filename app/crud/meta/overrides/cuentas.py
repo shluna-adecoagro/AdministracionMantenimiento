@@ -9,5 +9,6 @@ OVERRIDES = {
         "genero": "f",
         "sidebar": True,
         "orden": 70,
+        "clave_natural": ["numero_cuenta"],
     },
 }

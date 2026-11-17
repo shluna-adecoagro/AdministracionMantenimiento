@@ -53,6 +53,7 @@ CLAVES_ENTIDAD = frozenset({
     "auditoria",          # True/False (por defecto: si el modelo usa AuditMixin)
     "auditoria_ignorar",  # columnas que no se registran en el historial
     "tabs_extra",         # pestañas adicionales en el detalle
+    "clave_natural",      # [campo, ...] identifica el registro al importar (ej: nombre)
 })
 
 # Tipos de widget que por defecto aparecen en listado y filtros.
@@ -90,6 +91,8 @@ def _field_spec(nombre: str, inferido: dict, override: dict, model) -> FieldSpec
     datos.update(override)
     if "options" in datos:
         datos["options"] = tuple(dict(o) for o in datos["options"])
+    if "alias" in datos:
+        datos["alias"] = tuple(datos["alias"])
 
     col = _columna(model, nombre)
     if col is not None:
@@ -186,6 +189,12 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
             if padre.fk not in campos:
                 errores.append(f"{pref} padre.fk: '{padre.fk}' no es un campo de la entidad.{_sugerir(padre.fk, campos)}")
 
+    # --- clave natural ---------------------------------------------------
+    clave_natural = tuple(ov.get("clave_natural", ()))
+    for c in clave_natural:
+        if c not in campos:
+            errores.append(f"{pref} clave_natural: '{c}' no es un campo de la entidad.{_sugerir(c, campos)}")
+
     # --- textos ----------------------------------------------------------
     label_plural = ov.get("label_plural", nombre.replace("_", " "))
     genero = ov.get("genero", "m")
@@ -208,6 +217,7 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
         sidebar=bool(ov.get("sidebar", False)),
         orden=ov.get("orden", 999),
         tabs_extra=tuple(ov.get("tabs_extra", ())),
+        clave_natural=clave_natural,
     )
     return spec, errores
 

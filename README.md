@@ -92,6 +92,29 @@ Comandos útiles (`flask --app run <comando>`):
 | `seed` | Carga los catálogos iniciales (estados, motivos, tipos…) en tablas vacías |
 | `reset-db` | Borra la base, la recrea y carga los catálogos (pide confirmación) |
 | `inspect-db` | Muestra tablas, columnas, claves primarias y foráneas |
+| `importar <entidad> <archivo.csv>` | Carga datos desde CSV (`--simular` para revisar sin guardar) |
+| `exportar <entidad> <archivo.csv>` | Descarga los datos de una entidad a CSV |
+
+### Importar y exportar datos (CSV)
+
+```bash
+flask --app run importar sectores sectores.csv --simular   # revisa sin guardar
+flask --app run importar sectores sectores.csv             # guarda
+flask --app run exportar sectores sectores.csv             # descarga a CSV
+```
+
+- Las columnas se reconocen por el nombre del campo o por su etiqueta («Nombre del
+  Sector»), sin importar mayúsculas ni tildes. Las columnas desconocidas (como las que
+  agrega SharePoint) se ignoran.
+- Las referencias a otras tablas van **por nombre** («Activo», «Taller»), no por ID.
+- Cada fila se busca por la **clave natural** de la entidad (ej: el nombre del sector, o
+  nombre de ubicación + sector): si existe se actualiza, si no se crea, y si no cambió no
+  se toca.
+- **Todo o nada**: si alguna fila tiene errores se listan todos (con número de fila) y no
+  se guarda nada. Cada cambio queda en la auditoría con el nombre del archivo.
+- El CSV exportado usa `;` y UTF-8 con BOM (se abre bien en Excel) y se puede volver a
+  importar.
+- Importar entidades en orden de dependencia: sectores antes que ubicaciones.
 
 ### Cambios en el esquema (migraciones)
 
