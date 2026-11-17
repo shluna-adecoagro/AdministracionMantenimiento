@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from "crud/partials/_valor.html" import valor %}
 
 {% block content %}
 
@@ -70,7 +71,7 @@
                             {% endif %}
 
                         {% else %}
-                            {{ modelo.get(campo) | mostrar }}
+                            {{ valor(modelo.get(campo), cfg) }}
                         {% endif %}
                     </td>
                 </tr>

@@ -828,3 +828,37 @@ table {
   padding: 0.75rem 1rem;
   margin: 1rem 0;
 }
+
+/* Muestra de un color (campos tipo "color", ej: color de un estado) */
+.muestra-color {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 4px;
+  border: 1px solid #cbd5e1;
+  vertical-align: middle;
+}
+
+/* Menú lateral: grupo plegable (catálogos) y entrada activa */
+.sidebar-grupo {
+  margin-top: 1.5rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid #e2e8f0;
+}
+.sidebar-grupo summary {
+  cursor: pointer;
+  list-style: none;
+}
+.sidebar-grupo summary::-webkit-details-marker { display: none; }
+.sidebar-grupo summary h3 { display: inline; }
+.sidebar-grupo summary::after {
+  content: "▸";
+  float: right;
+  color: #64748b;
+}
+.sidebar-grupo[open] summary::after { content: "▾"; }
+.sidebar-grupo ul { margin-top: 1.2rem; }
+.sidebar a.activo {
+  color: #1e3a8a;
+  font-weight: 700;
+}

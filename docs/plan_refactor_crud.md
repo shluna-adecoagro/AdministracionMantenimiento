@@ -268,6 +268,21 @@ Pendientes:
   con `flask importar`.
 - **Pedidos** (modelo, servicio y rutas sin registrar) queda para una fase posterior.
 
+## Menú: datos maestros y catálogos
+
+El menú lateral tiene dos secciones (`"grupo"` en el override; ver `GRUPOS` en
+`app/crud/meta/spec.py`):
+
+- **Datos maestros** (por defecto): activos, materiales, empleados, proveedores,
+  sectores, cuentas, marcas.
+- **Catálogos** (plegable): estados de activo, sector, cuenta y recurso; tipos de activo
+  (con sus categorías); categorías de material (con sus tipos); unidades de medida; tipos
+  de unidad; motivos de operación. Antes la mayoría solo se cargaba desde `seed.py`; ahora
+  se editan desde la app (un valor en uso no se puede borrar). No se auditan.
+
+Widget `color` (inferido para columnas `color*`): selector de color en el formulario y
+muestra en listados. Los campos `select` se muestran con su texto (Sí/No, Alta...).
+
 ## Próximo: órdenes de trabajo (OT)
 
 Idea inicial (a diseñar): cada OT tiene una o más **operaciones**; a cada operación se

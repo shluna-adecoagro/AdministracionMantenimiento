@@ -40,6 +40,8 @@ def test_todas_las_entidades_estan_en_el_registry():
         "materiales", "stock_material", "categorias_material", "tipos_material",
         "marcas", "modelos", "unidades_medida",
         "empleados", "proveedores", "contactos_proveedor",
+        "estados_activo", "tipos_activo", "categorias_activo", "tipos_unidad",
+        "estados_sector", "estados_cuenta", "estados_recurso", "motivos_operacion",
     }
 
 

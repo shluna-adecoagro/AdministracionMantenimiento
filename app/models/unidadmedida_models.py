@@ -10,7 +10,7 @@ class TipoUnidad(db.Model, ModelMixin):
     __label_field__ = "nombre_tipo"
 
     tipo_unidad_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    nombre_tipo = db.Column(db.String(100), nullable=False, unique=True)
+    nombre_tipo = db.Column(db.String(100), nullable=False, unique=True, info={"label": "Nombre"})
 
 
 class UnidadMedida(db.Model, ModelMixin, AuditMixin):

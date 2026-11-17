@@ -40,6 +40,9 @@ REGLA_ESTADO = True
 PREFIJO_ESTADO = "Estado"
 REGLA_FOTO = True
 PREFIJO_FOTO = "foto"
+#  - Columna String cuyo nombre empieza con "color"       -> widget "color" (selector de color).
+REGLA_COLOR = True
+PREFIJO_COLOR = "color"
 SUBCARPETA_FOTOS = "fotos"
 
 # String(n) con n >= TEXTAREA_DESDE se infiere como textarea.
@@ -213,6 +216,10 @@ def _inferir_campo(key: str, col, mapper) -> dict:
         tipo, extras = "file", {"subcarpeta": SUBCARPETA_FOTOS}
         if not info.get("label"):
             etiqueta = "Foto"
+    if REGLA_COLOR and key.startswith(PREFIJO_COLOR) and isinstance(col.type, T.String):
+        tipo, extras = "color", {}
+        if not info.get("label"):
+            etiqueta = "Color"
     campo = {"label": etiqueta, "tipo": tipo, "required": requerido}
     campo.update(extras)
     return campo

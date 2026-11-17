@@ -1,0 +1,11 @@
+{# Valor de un campo para mostrar (listados, detalle, confirmación de baja). #}
+{% macro valor(v, cfg) -%}
+    {%- if cfg.tipo == "color" and v -%}
+        <span class="muestra-color" style="background-color: {{ v }}"></span> {{ v }}
+    {%- elif cfg.tipo == "select" and v is not none -%}
+        {%- set opcion = cfg.options | selectattr("value", "equalto", v) | first -%}
+        {{ (opcion.label if opcion else v) | mostrar }}
+    {%- else -%}
+        {{ v | mostrar }}
+    {%- endif -%}
+{%- endmacro %}

@@ -16,7 +16,7 @@ class EstadoActivo(db.Model, ModelMixin):
         db.String(36), default=lambda: str(uuid.uuid4()), unique=True, nullable=False
     )
 
-    nombre_estado = db.Column(db.String(50), nullable=False)
+    nombre_estado = db.Column(db.String(50), nullable=False, info={"label": "Nombre"})
     color_badge = db.Column(db.String(20), nullable=False)
 
 
@@ -25,19 +25,20 @@ class TipoActivo(db.Model, ModelMixin):
     __label_field__ = "nombre_tipo"
 
     tipo_activo_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    nombre_tipo = db.Column(db.String(50), nullable=False, unique=True)
+    nombre_tipo = db.Column(db.String(50), nullable=False, unique=True, info={"label": "Nombre"})
 
 
-class CategoriaActivo(db.Model, ModelMixin, AuditMixin):
+class CategoriaActivo(db.Model, ModelMixin):
     __tablename__ = "categorias_activo"
     __label_field__ = "nombre_categoria"
 
     categoria_activo_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    nombre_categoria = db.Column(db.String(100), nullable=False)
+    nombre_categoria = db.Column(db.String(100), nullable=False, info={"label": "Nombre"})
 
-    # FK → TipoActivo
+    # FK → TipoActivo. Sin backref: un tipo con categorías no se puede borrar.
     tipo_activo_id = db.Column(
-        db.Integer, db.ForeignKey("tipos_activo.tipo_activo_id"), nullable=False
+        db.Integer, db.ForeignKey("tipos_activo.tipo_activo_id"), nullable=False,
+        info={"label": "Tipo de activo"},
     )
     tipo_activo = db.relationship("TipoActivo", lazy="joined")
 

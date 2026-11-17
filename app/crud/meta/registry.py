@@ -29,6 +29,7 @@ from app.crud.introspect import columnas_hacia, fk_apunta_a, inferir_entidad
 from app.crud.meta.spec import (
     AUDITORIA_IGNORAR_DEFAULT,
     GENEROS,
+    GRUPOS,
     TIPOS_CAMPO,
     EntitySpec,
     FieldSpec,
@@ -51,6 +52,7 @@ CLAVES_ENTIDAD = frozenset({
     "padre",              # {"entidad": "sectores", "fk": "sector_id"} → subentidad
                           # (o una lista, si cuelga de varias entidades)
     "sidebar",            # True para mostrarla en el menú lateral
+    "grupo",              # "maestros" (por defecto) o "catalogos": sección del menú
     "orden",              # posición en el menú lateral
     "auditoria",          # True/False (por defecto: si el modelo usa AuditMixin)
     "auditoria_ignorar",  # columnas que no se registran en el historial
@@ -59,7 +61,7 @@ CLAVES_ENTIDAD = frozenset({
 })
 
 # Tipos de widget que por defecto aparecen en listado y filtros.
-_TIPOS_LISTADO = {"text", "number", "date", "fk", "select", "datalist"}
+_TIPOS_LISTADO = {"text", "number", "date", "fk", "select", "datalist", "color"}
 _TIPOS_FILTRO = {"text", "textarea", "fk", "select", "datalist"}
 
 
@@ -255,6 +257,10 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
     if genero not in GENEROS:
         errores.append(f"{pref} genero '{genero}' inválido (válidos: {sorted(GENEROS)})")
 
+    grupo = ov.get("grupo", "maestros")
+    if grupo not in GRUPOS:
+        errores.append(f"{pref} grupo '{grupo}' inválido (válidos: {sorted(GRUPOS)}).{_sugerir(grupo, GRUPOS)}")
+
     spec = EntitySpec(
         name=nombre,
         model=model,
@@ -269,6 +275,7 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
         auditoria_ignorar=tuple(ov.get("auditoria_ignorar", AUDITORIA_IGNORAR_DEFAULT)),
         padres=tuple(padres),
         sidebar=bool(ov.get("sidebar", False)),
+        grupo=grupo,
         orden=ov.get("orden", 999),
         tabs_extra=tuple(tabs),
         clave_natural=clave_natural,

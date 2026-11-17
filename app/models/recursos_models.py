@@ -10,7 +10,7 @@ class EstadoRecurso(ModelMixin, db.Model):
     estado_recurso_id = db.Column(db.Integer, primary_key=True)
     uuid = db.Column(db.String(36), default=lambda: str(uuid.uuid4()), unique=True, nullable=False)
 
-    nombre_estado_recurso = db.Column(db.String(50), nullable=False)
+    nombre_estado_recurso = db.Column(db.String(50), nullable=False, info={"label": "Nombre"})
     color_badge = db.Column(db.String(20), nullable=False)
 
 class Recurso(ModelMixin, AuditMixin, db.Model):
