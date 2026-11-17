@@ -204,7 +204,7 @@ def test_editar_conserva_campos_que_no_vienen_en_el_formulario(client, sector):
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def activo_en(db):
+def activo_en(db, categorias_activo):
     """Crea un activo asignado a un sector y/o ubicación."""
     from app.models.activos_models import Activo, CategoriaActivo, EstadoActivo
 

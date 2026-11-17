@@ -2,8 +2,9 @@
 Catálogos: listas de valores que usan los datos maestros (estados, tipos,
 categorías, unidades, motivos). Van en la sección «Catálogos» del menú.
 
-Los valores iniciales se cargan con app/utils/seed.py; desde acá se pueden
-agregar, renombrar o cambiar de color. Un valor en uso no se puede borrar.
+Los valores iniciales se cargan con app/utils/seed.py (salvo los tipos y
+categorías de activo, que los carga el usuario con su cuenta); desde acá se
+pueden agregar, renombrar o cambiar de color. Un valor en uso no se puede borrar.
 """
 from app.models.activos_models import CategoriaActivo, EstadoActivo, TipoActivo
 from app.models.cuentas_models import EstadoCuenta
@@ -37,9 +38,7 @@ OVERRIDES = {
         "sidebar": True,
         "grupo": "catalogos",
         "orden": 120,
-        # Cada tipo se imputa a una cuenta: obligatoria al cargar o editar.
-        "fields": {"cuenta_id": {"required": True}},
-        # También aparece como pestaña de la cuenta («qué tipos se imputan acá»).
+        # Cada tipo se imputa a una cuenta (obligatoria). También aparece como pestaña de la cuenta («qué tipos se imputan acá»).
         "padre": {"entidad": "cuentas", "fk": "cuenta_id"},
         "clave_natural": ["nombre_tipo"],
     },

@@ -25,7 +25,7 @@ def test_color_del_estado(client):
     assert 'class="muestra-color"' in client.get("/estados_sector").get_data(as_text=True)
 
 
-def test_tipo_de_activo_muestra_sus_categorias(client):
+def test_tipo_de_activo_muestra_sus_categorias(client, categorias_activo):
     from app.models.activos_models import TipoActivo
 
     tipo = TipoActivo.query.filter_by(nombre_tipo="Maquinaria").one()

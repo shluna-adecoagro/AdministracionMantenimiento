@@ -32,10 +32,8 @@ class TipoActivo(db.Model, ModelMixin):
     nombre_tipo = db.Column(db.String(50), nullable=False, unique=True, info={"label": "Nombre"})
 
     # Cuenta a la que se imputan los gastos de los activos de este tipo.
-    # Obligatoria en la app (formulario, API, importación); la columna admite
-    # vacío para que los tipos precargados existan hasta que se les asigne una.
     # Sin backref: una cuenta usada por un tipo no se puede borrar.
-    cuenta_id = db.Column(db.Integer, db.ForeignKey("cuentas.cuenta_id"), nullable=True,
+    cuenta_id = db.Column(db.Integer, db.ForeignKey("cuentas.cuenta_id"), nullable=False,
                           info={"label": "Cuenta de imputación"})
     cuenta = db.relationship("Cuenta")
 

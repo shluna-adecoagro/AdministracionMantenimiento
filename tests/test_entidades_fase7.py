@@ -22,6 +22,10 @@ from app.models.unidadmedida_models import TipoUnidad, UnidadMedida
 # Datos
 # ---------------------------------------------------------------------------
 
+@pytest.fixture(autouse=True)
+def _catalogo_de_activos(categorias_activo):
+    """Todos los tests de este módulo usan tipos y categorías de activo."""
+
 def _guardar(db, *objetos):
     db.session.add_all(objetos)
     db.session.commit()
@@ -489,6 +493,7 @@ def test_cambiar_de_categoria_cambia_el_tipo(client, activo):
 def test_tipo_de_activo_pide_cuenta(client, cuenta):
     r = client.post("/tipos_activo/crear", data={"nombre_tipo": "Rodado"})
     assert r.status_code == 400 and "Cuenta de imputación es obligatorio" in r.get_data(as_text=True)
+    assert REGISTRY["tipos_activo"].fields["cuenta_id"].required  # del modelo (NOT NULL)
 
     r = client.post(f"/tipos_activo/crear?cuenta_id={cuenta.cuenta_id}", data={"nombre_tipo": "Rodado"})
     assert r.status_code == 302

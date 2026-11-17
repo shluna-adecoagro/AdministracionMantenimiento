@@ -236,7 +236,7 @@ def test_eliminar_en_cascada_con_motivo(client, sector, ubicacion, auditoria):
     assert auditoria("ubicaciones")[-1].TipoDeCambio == "DELETE"
 
 
-def test_eliminar_en_uso_da_409(client, ubicacion, db):
+def test_eliminar_en_uso_da_409(client, ubicacion, db, categorias_activo):
     from app.models.activos_models import Activo, CategoriaActivo, EstadoActivo
 
     cat = CategoriaActivo.query.first()

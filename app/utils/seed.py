@@ -9,11 +9,7 @@ from app.models.motivos_models import MotivoOperacion
 from app.models.cuentas_models import EstadoCuenta
 from app.models.recursos_models import EstadoRecurso
 
-from app.models.activos_models import (
-    TipoActivo,
-    CategoriaActivo,
-    EstadoActivo,
-)
+from app.models.activos_models import EstadoActivo
 
 from app.models.materiales_models import CategoriaMaterial, TipoMaterial
 from app.models.unidadmedida_models import TipoUnidad
@@ -132,51 +128,8 @@ def seed_data():
         )
         print("✔ Estados de activo precargados.")
 
-    # ============================================================
-    # TIPOS DE ACTIVO
-    # ============================================================
-    tipo_objs = {}
-    if TipoActivo.query.count() == 0:
-        tipos = ["Maquinaria", "Vehículo", "Instalación"]
-
-        for nombre in tipos:
-            obj = TipoActivo(nombre_tipo=nombre)
-            db.session.add(obj)
-            tipo_objs[nombre] = obj
-
-        print("✔ Tipos de activo precargados.")
-    else:
-        # Si ya existen, igual necesitamos el dict
-        for obj in TipoActivo.query.all():
-            tipo_objs[obj.nombre_tipo] = obj
-
-    # ============================================================
-    # CATEGORÍAS DE ACTIVO
-    # ============================================================
-    if CategoriaActivo.query.count() == 0:
-        categorias = [
-            ("Tractor", "Maquinaria"),
-            ("Pala cargadora", "Maquinaria"),
-            ("Retroexcavadora", "Maquinaria"),
-            ("Motoguadaña", "Maquinaria"),
-            ("Pickup", "Vehículo"),
-            ("Moto", "Vehículo"),
-            ("Galpón", "Instalación"),
-            ("Taller", "Instalación"),
-            ("Depósito", "Instalación"),
-        ]
-
-        db.session.add_all(
-            [
-                CategoriaActivo(
-                    nombre_categoria=nombre_categoria,
-                    tipo_activo_id=tipo_objs[tipo_nombre].tipo_activo_id,
-                )
-                for nombre_categoria, tipo_nombre in categorias
-            ]
-        )
-
-        print("✔ Categorías de activo precargadas.")
+    # Tipos y categorías de activo: no se precargan. Cada tipo necesita su
+    # cuenta de imputación, así que los carga el usuario (Catálogos → Tipos de activo).
 
     # ============================================================
     # CATEGORÍAS DE MATERIAL
