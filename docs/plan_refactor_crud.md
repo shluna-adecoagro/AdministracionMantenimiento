@@ -15,7 +15,7 @@ Overrides (solo lo no inferible) ──────┘                       └
 | Tema | Decisión |
 |---|---|
 | Base de datos | **SQLite**. Se quita el respaldo automático MariaDB → SQLite y el comando `sync-db`. El código se mantiene portable (sin SQL específico de SQLite) por si más adelante se usa MariaDB. |
-| API | Sin autenticación por ahora. Hoy la consume `src/sync`; más adelante, Power Apps y otras apps web. Por eso: contrato REST estable, errores JSON uniformes, paginación, CORS configurable y una **especificación OpenAPI** (los conectores personalizados de Power Apps se crean a partir de ella). La autenticación se diseña como un punto de extensión para agregarla después sin rehacer nada. |
+| API | Sin autenticación por ahora. La consumirán Power Apps y otras apps web. Por eso: contrato REST estable, errores JSON uniformes, paginación, CORS configurable y una **especificación OpenAPI** (los conectores personalizados de Power Apps se crean a partir de ella). La autenticación se diseña como un punto de extensión para agregarla después sin rehacer nada. |
 | Entidades piloto | **Sectores, ubicaciones y cuentas**. El resto sigue con el framework actual hasta revisar su diseño, y después se migra. |
 | Forma de trabajo | Una rama y un *pull request* por fase; cada fase deja la app funcionando y con los tests en verde. |
 
@@ -264,9 +264,9 @@ Pendientes:
 - **Migraciones unificadas** en una sola («esquema inicial»): el proyecto todavía no tiene
   datos reales. Una base local anterior avisa que hay que recrearla: `flask reset-db`.
 - Los archivos subidos (`app/static/uploads/`) ya no se versionan en git.
-- Quedan sin tocar, a decidir: **pedidos** (modelo, servicio y rutas sin registrar; la ruta
-  importa una clase que no existe) y **`src/sync`** (carga desde Excel; con la opción A de
-  sincronización y la importación CSV probablemente sobra).
+- Se borró **`src/sync`** (carga desde planillas Excel): los datos se cargan en la app o
+  con `flask importar`.
+- **Pedidos** (modelo, servicio y rutas sin registrar) queda para una fase posterior.
 
 ## Próximo: órdenes de trabajo (OT)
 
@@ -305,8 +305,7 @@ Principio central: **web y API comparten el mismo servicio y el mismo JSON Schem
 formulario web se convierte a un dict tipado, se valida con el schema de la API y recién
 entonces se guarda. Las reglas se escriben una sola vez.
 
-Compatibilidad: `src/sync/backend_client.py` usa `GET/POST {url}` y `PUT/DELETE {url}/{id}`;
-la API generada respeta ese contrato.
+La API generada usa `GET/POST {url}` y `PUT/PATCH/DELETE {url}/{id}`.
 
 ## Fases
 
