@@ -76,8 +76,8 @@ Diseño:
   | Relación | Regla | Decidido |
   |---|---|---|
   | Sector → ubicaciones | Cascada | ✅ |
-  | Sector / ubicación → activos, empleados, stock | Bloqueo | Provisorio: revisar en Fase 6 |
-  | Resto de las entidades | — | **Revisar al migrar cada una (Fase 6)** |
+  | Sector / ubicación → activos, empleados, stock | Bloqueo | Provisorio: revisar en Fase 7 |
+  | Resto de las entidades | — | **Revisar al migrar cada una (Fase 7)** |
 
 - Al reemplazar un archivo subido, el anterior queda en disco (pendiente de definir).
 
@@ -92,7 +92,7 @@ Diseño:
 - Los valores vacíos se muestran como "—" (filtro `mostrar`).
 - Las subentidades no migradas (medidores, lecturas, stock, modelos, contactos) siguen
   dando error 500 si se abren sin el padre; se corrige al migrarlas.
-- Código sin uso para borrar en la Fase 7: `app/templates/sectores/`,
+- Código sin uso para borrar en la Fase 8: `app/templates/sectores/`,
   `app/services/sectores_service.py`, `app/routes/api/cuentas_routes.py`.
 
 ## Notas de la Fase 4
@@ -106,8 +106,55 @@ Diseño:
 - **`src/sync` necesita ajustes** (no se tocó): `config.py` apunta a `/sectores` (la página
   web) en lugar de `/api/sectores`, y `sync_engine.py` envía `estado_sector`, que no existe
   (debe ser `estado_sector_id`).
-- Código sin uso para borrar en la Fase 7: `app/utils/auditoria_decorator.py` y
+- Código sin uso para borrar en la Fase 8: `app/utils/auditoria_decorator.py` y
   `validar_sector` en `app/utils/json_validator.py`.
+
+## Notas de la Fase 5
+
+- **Migraciones**: el esquema está en `migrations/versions/` (Flask-Migrate / Alembic). La
+  primera migración (`esquema inicial`) crea las 30 tablas de los modelos.
+- Las restricciones (FK, únicos) tienen nombres predecibles (`CONVENCION_NOMBRES` en
+  `app/core/db.py`); sin eso, SQLite no permite modificarlas en migraciones futuras.
+- **Desarrollo** (`AUTO_MIGRATE`): el primer acceso aplica migraciones pendientes y carga
+  catálogos. **Producción**: `flask db upgrade` como paso del despliegue.
+- Una base creada antes de las migraciones (con `create_all`) se adopta sola si su esquema
+  coincide con los modelos; si no, la app avisa y sugiere `flask reset-db`.
+- La base por defecto pasó de `instance/fallback.db` a `instance/mantenimiento.db`.
+- Se quitaron el respaldo MariaDB → SQLite, `sync-db` y `create-db` (lo reemplaza
+  `flask db upgrade`).
+- Tests: config `testing` (base en memoria). Un test verifica que las migraciones generen
+  exactamente el esquema de los modelos (avisa si falta una migración).
+
+## Carga de datos (Fase 6, a definir)
+
+Necesidades:
+
+1. **Carga inicial en producción** de los datos reales, que hoy están en SharePoint
+   (exportables a CSV).
+2. **Datos de prueba** reutilizables para tests y para probar la app a mano.
+3. **Catálogos** (estados, motivos, tipos): hoy en `app/utils/seed.py` (`flask seed`).
+
+Propuesta:
+
+- Comando `flask importar <entidad> archivo.csv` que use el registry y el **mismo
+  servicio** que la web y la API: misma validación, mensajes por fila y campo, y
+  auditoría con usuario "importación" y el nombre del archivo como motivo.
+- Modo **simulación** (`--simular`): valida todo el archivo y muestra los errores sin
+  guardar nada. Si una fila falla, no se guarda ninguna (todo o nada).
+- **Claves foráneas por nombre**: en el CSV, `estado_sector` = "Activo" en lugar del ID
+  (los IDs de SharePoint no coinciden con los de la base).
+- **Clave natural** por entidad (ej: `nombre_sector`) para que reimportar actualice en
+  lugar de duplicar.
+- Orden de carga según dependencias (sectores antes que ubicaciones).
+- Los mismos CSV, más chicos, sirven como datos de prueba.
+- `src/sync` (Excel → API) se puede rehacer sobre esta base o reemplazar por este comando.
+
+Para decidir antes de implementar:
+
+- ¿La carga desde SharePoint es única (migración inicial) o periódica (sincronización)?
+- ¿Qué columna identifica cada registro en SharePoint (clave natural)?
+- ¿Se podría leer SharePoint directo (Microsoft Graph) en lugar de exportar CSV?
+- ¿Los catálogos (estados, motivos) también vienen de SharePoint o quedan en `seed.py`?
 
 ## Arquitectura objetivo
 
@@ -150,11 +197,12 @@ la API generada respeta ese contrato.
 | **0. Red de seguridad** | Tests con pytest para sectores, ubicaciones y cuentas (web y API). Errores conocidos marcados como `xfail`. README. `.gitignore` permite `requirements*.txt`. | ✅ Hecha |
 | **1. Metamodelo tipado** | `EntitySpec`/`FieldSpec`, registry (inferido + overrides) y un adaptador para que los dicts actuales sigan funcionando. Overrides de las 3 entidades piloto. `shadow_diff` pasa a ser validación al arrancar. | ✅ Hecha |
 | **2. Capa core** | Coerción, FK, repositorio, servicio (transacción + auditoría) y archivos. `framework.py` delega en ellos. Validación en servidor y manejo de `IntegrityError`. | ✅ Hecha |
-| **3. Web generada** | Vistas genéricas y navegación por registry (`app/crud/web/views.py`). Se eliminan `sectores_web.py` y `cuentas_web.py`. Las rutas especiales (`bom_final`, `compatibilidad_final`) se resuelven al migrar activos e insumos (Fase 6). | ✅ Hecha |
+| **3. Web generada** | Vistas genéricas y navegación por registry (`app/crud/web/views.py`). Se eliminan `sectores_web.py` y `cuentas_web.py`. Las rutas especiales (`bom_final`, `compatibilidad_final`) se resuelven al migrar activos e insumos (Fase 7). | ✅ Hecha |
 | **4. API generada** | Generador de JSON Schema, endpoints REST genéricos con paginación y errores JSON, especificación OpenAPI (3.0 y 2.0 para Power Apps) y página `/api/docs`. Reemplaza `sectores_routes.py`; se elimina `activos_routes.py`. | ✅ Hecha |
-| **5. Base de datos** | Quitar el respaldo automático y `sync-db`. Flask-Migrate (Alembic) y fuera `create_all` de `before_request`. Configuración por `.env`. | Pendiente |
-| **6. Migrar el resto** | Tras revisar su diseño: activos, medidores, lecturas, insumos, stock, unidades, marcas, modelos, recursos, BOM. | Pendiente |
-| **7. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados, y separar `app/__init__.py` (comandos CLI a `cli.py`). | Pendiente |
+| **5. Base de datos** | Quitar el respaldo automático y `sync-db`. Flask-Migrate (Alembic) y fuera `create_all` de `before_request`. Configuración por `.env`. Comandos de consola a `app/cli.py`. | ✅ Hecha |
+| **6. Carga de datos** | Importar los datos reales desde CSV exportados de SharePoint, y datos de prueba reutilizables. Ver «Carga de datos» más abajo. | Pendiente |
+| **7. Migrar el resto** | Tras revisar su diseño: activos, medidores, lecturas, insumos, stock, unidades, marcas, modelos, recursos, BOM. | Pendiente |
+| **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. | Pendiente |
 
 ## Cómo agregar o modificar una entidad (desde la Fase 1)
 

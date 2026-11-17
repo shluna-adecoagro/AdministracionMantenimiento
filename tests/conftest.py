@@ -2,26 +2,22 @@
 Fixtures comunes de la suite.
 
 Cada test corre contra una base SQLite en memoria, recién creada y con los datos
-iniciales (seed). Así los tests no tocan la base real (instance/fallback.db) ni
+iniciales (seed). Así los tests no tocan la base real (instance/mantenimiento.db) ni
 dependen unos de otros.
 """
-import os
+import pytest
 
-# La URI se lee al importar app.core.config, así que tiene que definirse ANTES de
-# importar la aplicación.
-os.environ["DATABASE_URL"] = "sqlite://"
-
-import pytest  # noqa: E402
-
-from app import create_app  # noqa: E402
-from app.core.db import db as _db  # noqa: E402
-from app.utils.seed import seed_data  # noqa: E402
+from app import create_app
+from app.core.db import db as _db
+from app.utils.seed import seed_data
 
 
 @pytest.fixture
 def app():
-    app = create_app("development")
-    app.config.update(TESTING=True)
+    # Config "testing": base en memoria y sin migraciones automáticas. El esquema
+    # se crea directo desde los modelos (rápido); test_migraciones.py verifica
+    # que las migraciones generen exactamente ese mismo esquema.
+    app = create_app("testing")
 
     with app.app_context():
         _db.drop_all()
