@@ -7,7 +7,7 @@ from datetime import datetime
 import pytest
 
 from app.crud.metamodelos import REGISTRY
-from app.models.activos_models import Activo, CategoriaActivo, EstadoActivo, TipoActivo
+from app.models.activos_models import Activo, CategoriaActivo, EstadoActivo
 from app.models.bom_activo_models import BOMActivo
 from app.models.bom_modelo_models import BOMModelo
 from app.models.insumos_models import CategoriaInsumo, Insumo, StockInsumo
@@ -36,11 +36,10 @@ def modelo(db):
 
 @pytest.fixture
 def activo(db, modelo, sector):
-    tipo = TipoActivo.query.filter_by(nombre_tipo="Maquinaria").one()
     categoria = CategoriaActivo.query.filter_by(nombre_categoria="Tractor").one()
     return _guardar(db, Activo(
-        descripcion="Tractor 1", patente="AB123CD",
-        tipo_activo_id=tipo.tipo_activo_id, categoria_activo_id=categoria.categoria_activo_id,
+        numero_activo="AB123CD", descripcion="Tractor 1",
+        categoria_activo_id=categoria.categoria_activo_id,
         marca_id=modelo.marca_id, modelo_id=modelo.modelo_id, sector_id=sector.sector_id,
         estado_activo_id=EstadoActivo.query.first().estado_activo_id,
     ))
@@ -118,10 +117,9 @@ def test_crear_activo_con_usuario_asignado_libre(client, sector, empleado):
     form = client.get("/activos/crear").get_data(as_text=True)
     assert '<option value="Ana Pérez">' in form  # sugerencias de empleados
 
-    tipo = TipoActivo.query.filter_by(nombre_tipo="Vehículo").one()
     cat = CategoriaActivo.query.filter_by(nombre_categoria="Pickup").one()
     r = client.post("/activos/crear", data={
-        "descripcion": "Hilux", "tipo_activo_id": tipo.tipo_activo_id,
+        "numero_activo": "AC456", "descripcion": "Hilux",
         "categoria_activo_id": cat.categoria_activo_id, "estado_activo_id": 1,
         "usuario_asignado": "Contratista externo", "año": "2020",
     })
@@ -354,3 +352,92 @@ def test_importar_insumos_por_nombre(app, db):
     resultado = importar(REGISTRY["insumos"], exportar(REGISTRY["insumos"]))
     assert resultado.ok and resultado.sin_cambios == 1
     assert "Stock total" in resultado.columnas_ignoradas
+
+
+# ---------------------------------------------------------------------------
+# Selects dependientes: modelo ↔ marca, ubicación ↔ sector
+# ---------------------------------------------------------------------------
+
+def test_dependencias_inferidas_del_modelo():
+    campos = REGISTRY["activos"].fields
+    assert (campos["modelo_id"].depende_de, campos["modelo_id"].depende_fk) == ("marca_id", "marca_id")
+    assert campos["ubicacion_id"].depende_de == "sector_id"
+    assert REGISTRY["insumos"].fields["tipo_insumo_id"].depende_de == "categoria_insumo_id"
+
+
+def test_ubicaciones_repetidas_se_distinguen_por_sector(client, db, ubicacion, estado_sector_activo):
+    from app.models.sectores_models import Sector
+    from app.models.ubicaciones_models import Ubicacion
+
+    otro = _guardar(db, Sector(nombre_sector="Depósito", centro_costo="CC-2",
+                               estado_sector_id=estado_sector_activo.estado_sector_id))
+    _guardar(db, Ubicacion(nombre_ubicacion="Galpón 1", sector_id=otro.sector_id))
+    form = client.get("/activos/crear").get_data(as_text=True)
+    assert "Galpón 1 (Taller)" in form and "Galpón 1 (Depósito)" in form
+    assert f'data-extra="sector_id"' in form
+
+
+def _datos_activo(**extra):
+    cat = CategoriaActivo.query.first()
+    return {"numero_activo": "N-1", "descripcion": "Equipo", "categoria_activo_id": cat.categoria_activo_id,
+            "estado_activo_id": 1, **extra}
+
+
+def test_marca_y_sector_se_completan_solos(client, modelo, ubicacion):
+    r = client.post("/activos/crear", data=_datos_activo(
+        modelo_id=modelo.modelo_id, ubicacion_id=ubicacion.ubicacion_id))
+    assert r.status_code == 302
+    a = Activo.query.filter_by(numero_activo="N-1").one()
+    assert (a.marca_id, a.sector_id) == (modelo.marca_id, ubicacion.sector_id)
+
+
+def test_modelo_de_otra_marca_se_rechaza(client, db, modelo):
+    otra = _guardar(db, Marca(nombre_marca="Massey"))
+    r = client.post("/activos/crear", data=_datos_activo(marca_id=otra.marca_id, modelo_id=modelo.modelo_id))
+    assert r.status_code == 400
+    assert "«6110J» no pertenece a «Massey» (marca)" in r.get_data(as_text=True)
+
+
+def test_api_cambiar_solo_el_sector_choca_con_la_ubicacion(client, db, activo, ubicacion, estado_sector_activo):
+    from app.models.sectores_models import Sector
+
+    activo.ubicacion_id = ubicacion.ubicacion_id
+    db.session.commit()
+    otro = _guardar(db, Sector(nombre_sector="Depósito", centro_costo="CC-2",
+                               estado_sector_id=estado_sector_activo.estado_sector_id))
+    r = client.patch(f"/api/activos/{activo.activo_id}", json={"sector_id": otro.sector_id})
+    assert r.status_code == 400
+    assert "ubicacion_id" in r.get_json()["errors"]
+
+    # Cambiando los dos juntos (o sacando la ubicación) sí se puede.
+    r = client.patch(f"/api/activos/{activo.activo_id}", json={"sector_id": otro.sector_id, "ubicacion_id": None})
+    assert r.status_code == 200
+
+
+def test_numeros_de_serie_y_motor_unicos(client, activo):
+    activo.numero_serie = "S-1"
+    from app.core.db import db
+    db.session.commit()
+    r = client.post("/activos/crear", data=_datos_activo(numero_serie="S-1"))
+    assert r.status_code == 400
+    assert "Número de serie" in r.get_data(as_text=True)
+    # Vacío no cuenta como repetido.
+    assert client.post("/activos/crear", data=_datos_activo(numero_serie="", numero_motor="")).status_code == 302
+
+
+def test_importar_activos_por_numero(app, db, modelo):
+    from app.crud.intercambio.csv_entidades import importar
+
+    csv = ("Número de activo;Descripción;Categoría;Modelo;Estado\n"
+           "T-01;Tractor;Tractor;6110J;Activo\n").encode()
+    resultado = importar(REGISTRY["activos"], csv)
+    assert resultado.ok, resultado.resumen()
+    assert Activo.query.filter_by(numero_activo="T-01").one().marca_id == modelo.marca_id
+
+    otra = _guardar(db, Marca(nombre_marca="Massey"))
+    csv = ("Número de activo;Descripción;Categoría;Marca;Modelo;Estado\n"
+           "T-02;Tractor;Tractor;Massey;6110J;Activo\n").encode()
+    resultado = importar(REGISTRY["activos"], csv)
+    assert not resultado.ok and resultado.errores[0][1] == "modelo_id"
+    assert Activo.query.filter_by(numero_activo="T-02").count() == 0
+    assert otra

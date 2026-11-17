@@ -111,15 +111,15 @@ def compatibilidad_final(insumo) -> dict:
         }
         for a in Activo.query.filter(Activo.modelo_id.in_(modelos)).order_by(Activo.descripcion):
             if a.activo_id not in reemplazado_en:
-                filas[a.activo_id] = [a.descripcion, a.patente, a.modelo.nombre_modelo, "BOM del modelo"]
+                filas[a.activo_id] = [a.descripcion, a.numero_activo, a.modelo.nombre_modelo, "BOM del modelo"]
 
     for b in BOMActivo.query.filter_by(insumo_id=insumo.insumo_id):
         a = b.activo
         modelo = a.modelo.nombre_modelo if a.modelo else None
-        filas[a.activo_id] = [a.descripcion, a.patente, modelo, "BOM del activo"]
+        filas[a.activo_id] = [a.descripcion, a.numero_activo, modelo, "BOM del activo"]
 
     return {
-        "columnas": ["Activo", "Patente", "Modelo", "Según"],
+        "columnas": ["Activo", "Número de activo", "Modelo", "Según"],
         "filas": sorted(filas.values(), key=lambda f: f[0] or ""),
         "vacio": "El insumo no figura en el BOM de ningún modelo ni activo.",
     }

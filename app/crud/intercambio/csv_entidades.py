@@ -270,6 +270,8 @@ def importar(spec: EntitySpec, contenido: bytes, nombre_archivo: str = "archivo.
             tocados.add(getattr(registro, pk))
     except ErrorIntegridad as e:
         resultado.errores.append((numero, e.campo or "_base", e.mensaje))
+    except ErroresValidacion as e:
+        resultado.errores.extend((numero, c, m) for c, m in e.errores.items())
 
     if resultado.errores or simular:
         db.session.rollback()

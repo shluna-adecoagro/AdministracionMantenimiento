@@ -126,3 +126,51 @@ def test_fase_7_conserva_los_datos(app_archivo):
         downgrade(revision="2e78b97a2c67")
         with db.engine.connect() as c:
             assert c.execute(text("SELECT sector_id FROM stock_insumo")).scalar_one() == 1
+
+
+_ACTIVOS_BASE = [
+    "INSERT INTO tipos_activo VALUES (1, 'Vehículo')",
+    "INSERT INTO categorias_activo (categoria_activo_id, nombre_categoria, tipo_activo_id) VALUES (1, 'Pickup', 1)",
+    "INSERT INTO estados_activo VALUES (1, 'e', 'Activo', '#000')",
+]
+
+
+def _activo(id_, patente, serie=None, brescia=None):
+    valores = ", ".join("NULL" if v is None else f"'{v}'" for v in (patente, serie, brescia))
+    return ("INSERT INTO activos (activo_id, uuid, tipo_activo_id, categoria_activo_id, estado_activo_id, "
+            f"descripcion, patente, nro_serie_chasis, codigo_brescia) VALUES ({id_}, 'u{id_}', 1, 1, 1, 'X', {valores})")
+
+
+def test_activos_nuevo_diseno_conserva_los_datos(app_archivo):
+    from sqlalchemy import text
+
+    with app_archivo().app_context():
+        upgrade(revision="9ad78721c603")
+        with db.engine.begin() as c:
+            for s in _ACTIVOS_BASE + [_activo(1, "AB123CD", "S-1", "G-77"), _activo(2, None), _activo(3, "", "")]:
+                c.execute(text(s))
+        upgrade()
+        with db.engine.connect() as c:
+            filas = c.execute(text(
+                "SELECT activo_id, numero_activo, numero_serie, codigo_carga_gasoil FROM activos ORDER BY activo_id"
+            )).all()
+        assert filas == [(1, "AB123CD", "S-1", "G-77"), (2, "ACT-2", None, None), (3, "ACT-3", None, None)]
+
+        downgrade(revision="9ad78721c603")
+        with db.engine.connect() as c:
+            assert c.execute(text("SELECT patente, tipo_activo_id FROM activos WHERE activo_id = 1")).one() == ("AB123CD", 1)
+
+
+def test_activos_repetidos_frenan_la_migracion(app_archivo):
+    from sqlalchemy import text
+
+    with app_archivo().app_context():
+        upgrade(revision="9ad78721c603")
+        with db.engine.begin() as c:
+            for s in _ACTIVOS_BASE + [_activo(1, "AB123CD"), _activo(2, "AB123CD")]:
+                c.execute(text(s))
+        # Flask-Migrate informa el error («AB123CD» (2 activos)) y termina.
+        with pytest.raises(SystemExit):
+            upgrade()
+        with db.engine.connect() as c:
+            assert c.execute(text("SELECT count(*) FROM activos WHERE patente = 'AB123CD'")).scalar_one() == 2

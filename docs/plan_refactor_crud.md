@@ -214,14 +214,44 @@ Framework (lo nuevo que se puede usar en cualquier entidad):
   verifican al final que no quede ninguna referencia rota (antes una migración que
   tocara una tabla referenciada, como `modelos`, fallaba con datos).
 
+**Nuevo diseño de activos** (decidido por el usuario):
+
+| Campo | Notas |
+|---|---|
+| `numero_activo` | Identifica al activo: obligatorio, único y clave natural. Era `patente` |
+| `descripcion`, `observaciones`, `año` | `observaciones` era `observacion` |
+| `categoria_activo_id` | El tipo de activo es el de la categoría (se quitó `tipo_activo_id`) |
+| `marca_id`, `modelo_id` | El modelo debe ser de la marca; si falta la marca, se completa |
+| `numero_serie`, `numero_motor` | Únicos cuando están cargados. Eran `nro_serie_chasis` y `nro_motor` |
+| `sector_id`, `ubicacion_id` | La ubicación debe ser del sector; si falta el sector, se completa |
+| `usuario_asignado` | Texto libre con los empleados como sugerencias |
+| `codigo_carga_gasoil` | Era `codigo_brescia` |
+| `estado_activo_id`, `foto_path`, `detalles_tecnicos` | Sin cambios |
+
+La migración renombra sin perder datos; los activos sin patente reciben `ACT-<id>`. Si
+hay números de activo, serie o motor repetidos, se detiene y los lista.
+
+**Selects dependientes** (genérico, `FieldSpec.depende_de`). Se infieren del modelo: si
+un campo apunta a un modelo que a su vez apunta a otro campo de la entidad, quedan
+vinculados (modelo → marca, ubicación → sector, tipo de insumo → categoría). Se guarda
+también el «padre» porque puede existir sin el hijo (marca sin modelo conocido, sector
+sin ubicación precisa). Entonces:
+
+- en el formulario, el hijo muestra solo las opciones del padre elegido; sin padre,
+  muestra todas con el padre entre paréntesis («Galpón 1 (Taller)») y al elegir una se
+  completa el padre;
+- al guardar (web, API o importación) se verifica que coincidan, o se completa el padre;
+- un override `{"depende_de": None}` lo desactiva.
+
+**SharePoint** será un reflejo de la base: las columnas se definen acá, no hace falta
+mapear nombres de SharePoint.
+
 Pendientes:
 
-- **Clave natural de activos**: sin definir, así que todavía no se pueden importar
-  activos. Falta saber qué columna de SharePoint los identifica (¿`name` = descripción?).
 - Claves naturales provisorias: empleados (apellido + nombre), proveedores (razón social),
-  unidades (nombre). Ajustar cuando se conozcan las columnas de SharePoint.
-- `app/schemas/activos/` (detalles técnicos por tipo de activo, columna JSON) no se usa:
-  decidir en la Fase 8 si se implementa o se borra.
+  unidades (nombre).
+- `app/schemas/activos/` (detalles técnicos por tipo de activo, columna JSON): la columna
+  se conserva; falta decidir cómo se cargan (Fase 8 o una fase propia).
 - Código sin uso para borrar en la Fase 8: `app/routes/api/insumos_routes.py`,
   `app/services/stock_service.py`, los `.txt` de `app/crud/metamodelos/`, `ENTIDADES` y
   `to_legacy()`.

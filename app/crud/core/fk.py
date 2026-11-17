@@ -50,26 +50,28 @@ def destino(registro, campo: str, cfg: dict):
 
 def opciones(cfg: dict) -> list[dict]:
     """
-    Opciones de un <select> de FK. `extra_field`/`extra_value` permiten filtrar
-    selects dependientes en el navegador (ej: modelos según la marca elegida).
+    Opciones de un <select> de FK.
+
+    En un select dependiente (cfg.depende_de, ej: modelo según la marca), cada
+    opción lleva el campo del que depende (`extra_field`), el valor que le
+    corresponde (`extra_value`, el ID de su marca) y el texto de ese valor
+    (`grupo`, el nombre de la marca) para distinguir nombres repetidos.
     """
     fk_model = cfg["fk_model"]
     pk = fk_model.__mapper__.primary_key[0].name
-    padres = [
-        c.name for c in fk_model.__table__.columns
-        if c.name.endswith("_id") and c.name != pk
-    ]
-    extra = padres[0] if padres else None
+    depende_de, columna = cfg.get("depende_de"), cfg.get("depende_fk")
+    rel_padre = relacion(fk_model, columna, {}) if columna else None
 
-    return [
-        {
-            "value": getattr(obj, pk),
-            "label": etiqueta(obj, cfg),
-            "extra_value": getattr(obj, extra) if extra else None,
-            "extra_field": extra,
-        }
-        for obj in fk_model.query.all()
-    ]
+    resultado = []
+    for obj in fk_model.query.all():
+        opcion = {"value": getattr(obj, pk), "label": etiqueta(obj, cfg),
+                  "extra_field": None, "extra_value": None, "grupo": None}
+        if depende_de:
+            padre = getattr(obj, rel_padre) if rel_padre else None
+            opcion.update(extra_field=depende_de, extra_value=getattr(obj, columna),
+                          grupo=etiqueta(padre, {}) if padre is not None else None)
+        resultado.append(opcion)
+    return sorted(resultado, key=lambda o: (str(o["grupo"] or ""), str(o["label"] or "")))
 
 
 def opciones_de(fields: dict) -> dict[str, list[dict]]:

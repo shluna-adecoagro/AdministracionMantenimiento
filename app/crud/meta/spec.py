@@ -38,6 +38,13 @@ class FieldSpec:
     fk_label: str | None = None    # atributo del destino que se muestra
     relacion: str | None = None    # relationship del modelo que lleva al destino
     es_estado: bool = False        # se muestra como badge de color
+    # Select dependiente: este campo depende de otro de la misma entidad (ej:
+    # modelo_id depende de marca_id). `depende_fk` es la columna del destino que
+    # apunta al otro (Modelo.marca_id). El formulario filtra las opciones y al
+    # guardar se verifica que coincidan (o se completa el otro si está vacío).
+    # Lo infiere el registry; un override {"depende_de": None} lo desactiva.
+    depende_de: str | None = None
+    depende_fk: str | None = None
 
     # Presentación
     oculto: bool = False           # no se muestra en el formulario

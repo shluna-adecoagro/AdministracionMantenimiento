@@ -19,6 +19,7 @@ from sqlalchemy.exc import IntegrityError
 from app.audit.registrar import registrar_cambio
 from app.core.db import db
 from app.crud.core import dependencias, fk
+from app.crud.core.coercion import ErroresValidacion
 from app.crud.core.repository import valores
 
 
@@ -117,13 +118,59 @@ class ServicioCRUD:
         self.confirmar = confirmar
 
     # ------------------------------------------------------------------
+    def completar_dependencias(self, datos: dict, registro=None) -> dict:
+        """
+        Selects dependientes (ej: modelo_id depende de marca_id): verifica que el
+        modelo sea de la marca elegida y, si no se eligió marca, la completa con
+        la del modelo. Devuelve los datos con lo completado; lanza
+        ErroresValidacion si no coinciden.
+
+        Con `registro` (edición), los campos que no vienen en `datos` conservan
+        su valor actual.
+        """
+        from app.core.db import db
+
+        def valor(campo):
+            if campo in datos:
+                return datos[campo]
+            return getattr(registro, campo) if registro is not None else None
+
+        resultado, errores = dict(datos), {}
+        for campo, cfg in self.fields.items():
+            padre = cfg.get("depende_de")
+            if not padre or valor(campo) is None:
+                continue
+            if campo not in datos and padre not in datos:
+                continue  # no cambió ninguno de los dos
+            hijo = db.session.get(cfg["fk_model"], valor(campo))
+            if hijo is None:
+                continue  # la FK inexistente la informa validar_existencia
+            correcto = getattr(hijo, cfg["depende_fk"])
+            elegido = valor(padre)
+            if elegido is None:
+                resultado[padre] = correcto
+            elif correcto != elegido:
+                cfg_padre = self.fields[padre]
+                obj_padre = db.session.get(cfg_padre["fk_model"], elegido)
+                nombre_padre = fk.etiqueta(obj_padre, cfg_padre) if obj_padre is not None else elegido
+                errores[campo] = (
+                    f"{cfg.get('label', campo)}: «{fk.etiqueta(hijo, cfg)}» no pertenece a "
+                    f"«{nombre_padre}» ({cfg_padre.get('label', padre).lower()})."
+                )
+        if errores:
+            raise ErroresValidacion(errores)
+        return resultado
+
+    # ------------------------------------------------------------------
     def crear(self, datos: dict, motivo: str | None = None, usuario: str = "sistema"):
+        datos = self.completar_dependencias(datos)
         registro = self.model(**datos)
         db.session.add(registro)
         self._confirmar("INSERT", registro, None, motivo, usuario)
         return registro
 
     def actualizar(self, registro, datos: dict, motivo: str | None = None, usuario: str = "sistema"):
+        datos = self.completar_dependencias(datos, registro)
         anterior = self._estado(registro)
         for campo, valor in datos.items():
             setattr(registro, campo, valor)

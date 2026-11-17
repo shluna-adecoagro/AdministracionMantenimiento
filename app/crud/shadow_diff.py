@@ -34,7 +34,7 @@ OBLIGATORIAS = {"model", "pk", "label_singular", "label_plural", "genero", "bp_n
 
 CLAVES_CAMPO = {
     "label", "tipo", "fk_model", "fk_label", "relacion", "required",
-    "es_estado", "oculto", "virtual", "solo_lectura", "options", "subcarpeta",
+    "es_estado", "oculto", "virtual", "solo_lectura", "depende_de", "depende_fk", "options", "subcarpeta",
 }
 TIPOS_VALIDOS = {"text", "number", "textarea", "date", "fk", "datalist", "file", "select"}
 NO_INFERIBLES_CAMPO = ("es_estado", "oculto", "subcarpeta")

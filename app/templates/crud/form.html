@@ -61,10 +61,14 @@
                             {% if not cfg.required %}<option value="">—</option>{% endif %}
                             {% for opt in fk_data[campo] %}
                                 <option value="{{ opt.value }}"
+                                        {% if opt.extra_field %}
                                         data-extra="{{ opt.extra_field }}"
                                         data-extra-value="{{ opt.extra_value }}"
+                                        data-grupo="{{ opt.grupo or '' }}"
+                                        data-label="{{ opt.label }}"
+                                        {% endif %}
                                         {% if modelo.get(campo)|string == opt.value|string %}selected{% endif %}>
-                                    {{ opt.label }}
+                                    {{ opt.label }}{% if opt.grupo %} ({{ opt.grupo }}){% endif %}
                                 </option>
                             {% endfor %}
                         </select>
@@ -126,48 +130,60 @@
         </div>
 
         <script>
+        /*
+         * Selects dependientes (ej: modelo según la marca, ubicación según el sector).
+         * Cada opción del select hijo lleva data-extra (id del select padre) y
+         * data-extra-value (valor del padre al que pertenece).
+         *  - Con un padre elegido, el hijo muestra solo sus opciones.
+         *  - Sin padre, muestra todas, con el padre entre paréntesis; al elegir
+         *    una, el padre se completa solo.
+         */
         document.addEventListener("DOMContentLoaded", function () {
-
-            const selects = Array.from(document.querySelectorAll("select"));
-
-            const opcionesOriginales = {};
+            const form = document.getElementById("form-entidad");
+            const selects = Array.from(form.querySelectorAll("select"));
+            const originales = {};
             selects.forEach(sel => {
-                opcionesOriginales[sel.id] = Array.from(sel.options);
+                originales[sel.id] = Array.from(sel.options).map(o => o.cloneNode(true));
             });
 
-            function filtrarDependientes(selectPadre) {
-                const padreId = selectPadre.value;
-                const nombrePadre = selectPadre.id;
-
-                selects.forEach(selectHijo => {
-
-                    if (selectHijo === selectPadre) return;
-
-                    const opcionesHijo = opcionesOriginales[selectHijo.id];
-
-                    const dependeDelPadre = opcionesHijo.some(opt => {
-                        return opt.getAttribute("data-extra") === nombrePadre;
-                    });
-
-                    if (!dependeDelPadre) return;
-
-                    const filtradas = opcionesHijo.filter(opt => {
-                        return opt.getAttribute("data-extra-value") == padreId;
-                    });
-
-                    const opcionesFinales = filtradas.length > 0 ? filtradas : opcionesHijo;
-
-                    selectHijo.innerHTML = "";
-                    opcionesFinales.forEach(opt => selectHijo.appendChild(opt.cloneNode(true)));
-                });
+            function padreDe(hijo) {
+                const conPadre = originales[hijo.id].find(o => o.dataset.extra);
+                return conPadre ? document.getElementById(conPadre.dataset.extra) : null;
             }
 
-            selects.forEach(selectPadre => {
-                selectPadre.addEventListener("change", function () {
-                    filtrarDependientes(selectPadre);
+            function filtrar(hijo, padre) {
+                const valorPadre = padre.value;
+                const actual = hijo.value;
+                hijo.innerHTML = "";
+                originales[hijo.id].forEach(o => {
+                    const esVacia = !o.dataset.extra;
+                    if (!esVacia && valorPadre && o.dataset.extraValue !== valorPadre) return;
+                    const copia = o.cloneNode(true);
+                    if (!esVacia) {
+                        copia.textContent = (!valorPadre && o.dataset.grupo)
+                            ? `${o.dataset.label} (${o.dataset.grupo})`
+                            : o.dataset.label;
+                    }
+                    hijo.appendChild(copia);
+                });
+                const sigue = Array.from(hijo.options).some(o => o.value === actual);
+                if (sigue) { hijo.value = actual; } else { hijo.selectedIndex = 0; }
+            }
+
+            selects.forEach(hijo => {
+                const padre = padreDe(hijo);
+                if (!padre) return;
+
+                filtrar(hijo, padre);
+                padre.addEventListener("change", () => filtrar(hijo, padre));
+                hijo.addEventListener("change", () => {
+                    const elegida = hijo.options[hijo.selectedIndex];
+                    if (!padre.value && elegida && elegida.dataset.extraValue) {
+                        padre.value = elegida.dataset.extraValue;
+                        padre.dispatchEvent(new Event("change"));
+                    }
                 });
             });
-
         });
         </script>
 

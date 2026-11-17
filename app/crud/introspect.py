@@ -131,6 +131,16 @@ def _clase_por_tabla(mapper, tabla):
     return None
 
 
+def columnas_hacia(model, destino) -> list[str]:
+    """Columnas de `model` que son FK hacia alguna tabla de `destino`."""
+    tablas = set(sa_inspect(destino).tables)
+    return [
+        attr.key for attr in sa_inspect(model).column_attrs
+        if isinstance(attr.columns[0], Column)
+        and any(fk.column.table in tablas for fk in attr.columns[0].foreign_keys)
+    ]
+
+
 def fk_apunta_a(hijo, columna: str, padre) -> bool:
     """¿`hijo.columna` es una FK hacia alguna de las tablas de `padre`?"""
     try:

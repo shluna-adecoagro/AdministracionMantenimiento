@@ -25,7 +25,7 @@ from dataclasses import replace
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.exc import NoInspectionAvailable
 
-from app.crud.introspect import fk_apunta_a, inferir_entidad
+from app.crud.introspect import columnas_hacia, fk_apunta_a, inferir_entidad
 from app.crud.meta.spec import (
     AUDITORIA_IGNORAR_DEFAULT,
     GENEROS,
@@ -104,6 +104,41 @@ def _field_spec(nombre: str, inferido: dict, override: dict, model) -> FieldSpec
     return FieldSpec(name=nombre, **datos)
 
 
+def _dependencias(campos: dict, overrides_campos: dict, pref: str, errores: list) -> dict:
+    """
+    Completa depende_de / depende_fk de cada FK.
+
+    Inferido: el campo X (FK a M) depende del campo Y (FK a P) si M tiene una
+    única columna hacia P. Ej: en activos, modelo_id → Modelo, que tiene
+    marca_id → Marca, y el activo también tiene marca_id → modelo_id depende de marca_id.
+    """
+    resultado = dict(campos)
+    for c, f in campos.items():
+        if f.tipo != "fk" or f.fk_model is None:
+            continue
+        declarado = "depende_de" in overrides_campos.get(c, {})
+        if declarado and f.depende_de is None:
+            continue  # desactivado a propósito
+        candidatos = []
+        for otro, g in campos.items():
+            if otro == c or g.tipo != "fk" or g.fk_model is None:
+                continue
+            if declarado and otro != f.depende_de:
+                continue
+            columnas = columnas_hacia(f.fk_model, g.fk_model)
+            if len(columnas) == 1:
+                candidatos.append((otro, columnas[0]))
+        if declarado and not candidatos:
+            errores.append(
+                f"{pref} fields.{c}: depende_de '{f.depende_de}' no es un campo FK hacia una "
+                f"tabla a la que apunte {f.fk_model.__name__}.{_sugerir(f.depende_de, campos)}"
+            )
+        elif len(candidatos) == 1:
+            otro, columna = candidatos[0]
+            resultado[c] = replace(f, depende_de=otro, depende_fk=columna)
+    return resultado
+
+
 # ---------------------------------------------------------------------------
 # Construcción de una entidad
 # ---------------------------------------------------------------------------
@@ -169,6 +204,9 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
         if f.tipo == "datalist" and not (f.options or f.fk_model):
             errores.append(f"{pref} fields.{c}: tipo 'datalist' sin 'options' ni 'fk_model'")
         campos[c] = f
+
+    # --- selects dependientes (ej: modelo según la marca) -----------------
+    campos = _dependencias(campos, overrides_campos, pref, errores)
 
     # --- listado y filtros ----------------------------------------------
     listado = tuple(ov.get("listado") or [
