@@ -78,7 +78,7 @@ def test_subentidad_y_padre():
     assert u.es_subentidad
     assert (u.padre.entidad, u.padre.fk) == ("sectores", "sector_id")
     assert REGISTRY["sectores"].hijos == ("ubicaciones",)
-    assert REGISTRY["cuentas"].hijos == ()
+    assert REGISTRY["cuentas"].hijos == ("tipos_activo",)
 
 
 def test_cuentas_labels_desde_el_modelo():

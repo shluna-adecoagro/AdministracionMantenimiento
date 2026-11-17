@@ -37,6 +37,10 @@ OVERRIDES = {
         "sidebar": True,
         "grupo": "catalogos",
         "orden": 120,
+        # Cada tipo se imputa a una cuenta: obligatoria al cargar o editar.
+        "fields": {"cuenta_id": {"required": True}},
+        # También aparece como pestaña de la cuenta («qué tipos se imputan acá»).
+        "padre": {"entidad": "cuentas", "fk": "cuenta_id"},
         "clave_natural": ["nombre_tipo"],
     },
     "categorias_activo": {

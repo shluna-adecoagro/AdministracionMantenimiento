@@ -40,8 +40,16 @@ def etiqueta(obj, cfg: dict) -> str:
 
 
 def destino(registro, campo: str, cfg: dict):
+    """Registro al que apunta la FK (por la relación del modelo o, si no hay, por su ID)."""
     rel = relacion(type(registro), campo, cfg)
-    return getattr(registro, rel) if rel else None
+    if rel:
+        return getattr(registro, rel)
+    valor = getattr(registro, campo, None)
+    if valor is None or cfg.get("fk_model") is None:
+        return None
+    from app.core.db import db
+
+    return db.session.get(cfg["fk_model"], valor)
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +163,8 @@ def para_auditoria(registro, fields: dict) -> dict:
 
     d = valores(registro, calculados=False)
     for campo, cfg in campos_fk(fields).items():
+        if cfg.get("solo_lectura"):
+            continue  # calculado (ej: tipo de activo): no es un dato propio del registro
         obj = destino(registro, campo, cfg)
         if obj is None:
             continue

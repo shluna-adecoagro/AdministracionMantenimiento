@@ -441,3 +441,59 @@ def test_importar_activos_por_numero(app, db, modelo):
     assert not resultado.ok and resultado.errores[0][1] == "modelo_id"
     assert Activo.query.filter_by(numero_activo="T-02").count() == 0
     assert otra
+
+
+# ---------------------------------------------------------------------------
+# Tipo de activo: calculado de la categoría y filtro en el formulario
+# ---------------------------------------------------------------------------
+
+def test_tipo_de_activo_se_infiere_como_fk_calculada():
+    from app.models.activos_models import TipoActivo
+
+    campos = REGISTRY["activos"].fields
+    tipo = campos["tipo_activo_id"]
+    assert (tipo.tipo, tipo.fk_model, tipo.solo_lectura) == ("fk", TipoActivo, True)
+    assert campos["categoria_activo_id"].depende_de == "tipo_activo_id"
+    orden = list(campos)
+    assert orden.index("tipo_activo_id") == orden.index("categoria_activo_id") - 1
+
+
+def test_tipo_de_activo_filtra_las_categorias_sin_guardarse(client, activo):
+    form = client.get("/activos/crear").get_data(as_text=True)
+    assert 'id="tipo_activo_id"' in form
+    assert 'name="tipo_activo_id"' not in form  # no se envía
+    assert 'data-extra="tipo_activo_id"' in form  # las categorías se filtran por tipo
+
+    # Al editar viene con el tipo de la categoría actual.
+    form = client.get(f"/activos/{activo.activo_id}/editar").get_data(as_text=True)
+    tipo_id = activo.categoria_activo.tipo_activo_id
+    assert f'<option value="{tipo_id}"' in form.split('id="tipo_activo_id"')[1].split("</select>")[0]
+
+
+def test_tipo_de_activo_en_listado_api_y_filtro(client, activo):
+    tipo = activo.categoria_activo.tipo_activo
+    assert tipo.nombre_tipo in client.get("/activos").get_data(as_text=True)
+    assert client.get(f"/api/activos/{activo.activo_id}").get_json()["tipo_activo_id_label"] == tipo.nombre_tipo
+    assert len(client.get(f"/api/activos?tipo_activo_id={tipo.tipo_activo_id}").get_json()) == 1
+    r = client.get(f"/activos?campo=tipo_activo_id&valor_fk={tipo.tipo_activo_id + 99}")
+    assert "Tractor 1" not in r.get_data(as_text=True)
+
+
+def test_cambiar_de_categoria_cambia_el_tipo(client, activo):
+    pickup = CategoriaActivo.query.filter_by(nombre_categoria="Pickup").one()
+    r = client.patch(f"/api/activos/{activo.activo_id}", json={"categoria_activo_id": pickup.categoria_activo_id})
+    assert r.status_code == 200
+    assert r.get_json()["tipo_activo_id_label"] == "Vehículo"
+
+
+def test_tipo_de_activo_pide_cuenta(client, cuenta):
+    r = client.post("/tipos_activo/crear", data={"nombre_tipo": "Rodado"})
+    assert r.status_code == 400 and "Cuenta de imputación es obligatorio" in r.get_data(as_text=True)
+
+    r = client.post(f"/tipos_activo/crear?cuenta_id={cuenta.cuenta_id}", data={"nombre_tipo": "Rodado"})
+    assert r.status_code == 302
+    html = client.get(f"/cuentas/{cuenta.cuenta_id}?seccion=tipos_activo").get_data(as_text=True)
+    assert "Rodado" in html
+
+    # Una cuenta usada por un tipo de activo no se puede borrar.
+    assert client.post(f"/cuentas/{cuenta.cuenta_id}/confirmar_eliminar").status_code == 409

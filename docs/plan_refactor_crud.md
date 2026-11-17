@@ -228,6 +228,15 @@ Framework (lo nuevo que se puede usar en cualquier entidad):
 | `codigo_carga_gasoil` | Era `codigo_brescia` |
 | `estado_activo_id`, `foto_path`, `detalles_tecnicos` | Sin cambios |
 
+**Tipo de activo**: no se guarda en el activo; se calcula de la categoría (un
+`column_property` que trae una FK se infiere como FK de solo lectura). En el formulario
+aparece como **filtro** de las categorías (sin `name`, no se envía); si se elige primero
+la categoría, el tipo se completa. Se ve en listado, detalle, filtros y API.
+
+**Cuenta de imputación**: cada tipo de activo tiene una cuenta (`tipos_activo.cuenta_id`),
+obligatoria en la app; la columna admite vacío para los tipos precargados hasta que se
+les asigne. Los tipos aparecen como pestaña de la cuenta, y una cuenta en uso no se borra.
+
 La migración renombra sin perder datos; los activos sin patente reciben `ACT-<id>`. Si
 hay números de activo, serie o motor repetidos, se detiene y los lista.
 

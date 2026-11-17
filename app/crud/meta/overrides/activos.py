@@ -17,12 +17,12 @@ OVERRIDES = {
             "usuario_asignado": {"tipo": "datalist", "fk_model": Empleado, "fk_label": "nombre_completo"},
         },
         "listado": [
-            "numero_activo", "descripcion", "categoria_activo_id", "marca_id", "modelo_id",
-            "sector_id", "ubicacion_id", "estado_activo_id",
+            "numero_activo", "descripcion", "tipo_activo_id", "categoria_activo_id", "marca_id",
+            "modelo_id", "sector_id", "ubicacion_id", "estado_activo_id",
         ],
         "filtros": [
             "numero_activo", "descripcion", "numero_serie", "numero_motor", "usuario_asignado",
-            "codigo_carga_gasoil", "categoria_activo_id", "marca_id", "modelo_id",
+            "codigo_carga_gasoil", "tipo_activo_id", "categoria_activo_id", "marca_id", "modelo_id",
             "sector_id", "ubicacion_id", "estado_activo_id",
         ],
         "clave_natural": ["numero_activo"],

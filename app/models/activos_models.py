@@ -2,6 +2,10 @@
 
 from app.core.db import db
 from datetime import datetime
+
+from sqlalchemy import select
+from sqlalchemy.orm import column_property
+
 from app.crud.audit_mixin import AuditMixin
 from app.crud.model_mixin import ModelMixin
 import uuid
@@ -26,6 +30,14 @@ class TipoActivo(db.Model, ModelMixin):
 
     tipo_activo_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     nombre_tipo = db.Column(db.String(50), nullable=False, unique=True, info={"label": "Nombre"})
+
+    # Cuenta a la que se imputan los gastos de los activos de este tipo.
+    # Obligatoria en la app (formulario, API, importación); la columna admite
+    # vacío para que los tipos precargados existan hasta que se les asigne una.
+    # Sin backref: una cuenta usada por un tipo no se puede borrar.
+    cuenta_id = db.Column(db.Integer, db.ForeignKey("cuentas.cuenta_id"), nullable=True,
+                          info={"label": "Cuenta de imputación"})
+    cuenta = db.relationship("Cuenta")
 
 
 class CategoriaActivo(db.Model, ModelMixin):
@@ -74,6 +86,16 @@ class Activo(db.Model, ModelMixin, AuditMixin):
         info={"label": "Categoría"},
     )
     categoria_activo = db.relationship("CategoriaActivo", lazy="joined")
+
+    # Tipo de activo: el de la categoría (se calcula, no se guarda). En el
+    # formulario aparece como filtro de las categorías.
+    tipo_activo_id = column_property(
+        select(CategoriaActivo.tipo_activo_id)
+        .where(CategoriaActivo.categoria_activo_id == categoria_activo_id)
+        .correlate_except(CategoriaActivo)
+        .scalar_subquery(),
+        info={"label": "Tipo de activo"},
+    )
 
     observaciones = db.Column(db.String(300), nullable=True)
 

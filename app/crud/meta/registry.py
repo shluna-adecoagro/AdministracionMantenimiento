@@ -141,6 +141,21 @@ def _dependencias(campos: dict, overrides_campos: dict, pref: str, errores: list
     return resultado
 
 
+def _filtros_antes_de_su_hijo(campos: dict) -> dict:
+    """
+    Un campo de solo lectura del que depende otro (ej: el tipo de activo, del
+    que depende la categoría) es un filtro en el formulario: se ubica justo
+    antes del campo que filtra.
+    """
+    orden = list(campos)
+    for c, f in campos.items():
+        padre = f.depende_de
+        if padre and campos[padre].solo_lectura and orden.index(padre) > orden.index(c):
+            orden.remove(padre)
+            orden.insert(orden.index(c), padre)
+    return {c: campos[c] for c in orden}
+
+
 # ---------------------------------------------------------------------------
 # Construcción de una entidad
 # ---------------------------------------------------------------------------
@@ -209,6 +224,7 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
 
     # --- selects dependientes (ej: modelo según la marca) -----------------
     campos = _dependencias(campos, overrides_campos, pref, errores)
+    campos = _filtros_antes_de_su_hijo(campos)
 
     # --- listado y filtros ----------------------------------------------
     listado = tuple(ov.get("listado") or [
