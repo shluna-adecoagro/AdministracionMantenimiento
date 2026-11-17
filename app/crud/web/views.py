@@ -181,6 +181,11 @@ class VistasEntidad:
             elif f.required and not parcial:
                 errores[campo] = f"{f.label} es obligatorio."
 
+        try:
+            fk.validar_existencia(self.fields, datos)
+        except ErroresValidacion as e:
+            errores.update(e.errores)
+
         if errores:
             raise ErroresValidacion(errores)
         return datos

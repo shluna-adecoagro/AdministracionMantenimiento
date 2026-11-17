@@ -91,6 +91,29 @@ Comandos útiles (`flask --app run <comando>`):
 | `reset-db` | Borra la base, la recrea y carga los datos iniciales |
 | `inspect-db` | Muestra tablas, columnas, claves primarias y foráneas |
 
+## API
+
+Cada entidad migrada al registry tiene una API REST en `/api/<entidad>`:
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| `GET` | `/api/sectores` | Lista (array JSON). Filtros: `?q=texto`, `?<campo>=valor`, `?limit=&offset=`; el total va en el encabezado `X-Total-Count` |
+| `POST` | `/api/sectores` | Alta (devuelve 201 y el registro creado) |
+| `GET` | `/api/sectores/<id>` | Un registro |
+| `PUT` | `/api/sectores/<id>` | Reemplazo completo |
+| `PATCH` | `/api/sectores/<id>` | Cambio parcial (solo los campos enviados) |
+| `DELETE` | `/api/sectores/<id>?motivo=...` | Baja |
+
+Los datos se validan con JSON Schema y los errores vuelven en JSON, con un mensaje por
+campo. El encabezado `X-Usuario` indica quién hizo el cambio en la auditoría.
+
+Documentación generada automáticamente:
+
+- `/api/docs`: página para explorar y probar la API desde el navegador.
+- `/api/openapi.json`: OpenAPI 3.0 (clientes estándar, acciones de ChatGPT).
+- `/api/swagger.json`: OpenAPI 2.0, para crear un **conector personalizado de
+  Power Apps / Power Automate** (Importar → "Importar desde URL").
+
 ## Tests
 
 ```bash

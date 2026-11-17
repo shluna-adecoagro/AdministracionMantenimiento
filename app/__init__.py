@@ -11,7 +11,6 @@ from app.core.db import db
 # Blueprints
 ## API
 from app.routes.api.auditoria_routes import audit_bp
-from app.routes.api.sectores_routes import sectores_bp
 
 ## Web
 from app.routes.web.index_web import index_web_bp
@@ -90,7 +89,6 @@ def create_app(env="development"):
     # ============================
     # Registrar API REST
     # ============================
-    app.register_blueprint(sectores_bp, url_prefix="/api/sectores")
     app.register_blueprint(audit_bp, url_prefix="/api/auditoria")
 
     # ============================
@@ -111,6 +109,11 @@ def create_app(env="development"):
     from app.crud.web.views import registrar_web
 
     registrar_web(app, REGISTRY)
+
+    # API REST generada desde el registry: /api/<entidad>, /api/docs
+    from app.crud.api.views import registrar_api
+
+    registrar_api(app, REGISTRY)
 
     # ============================
     # Filtros de plantilla
