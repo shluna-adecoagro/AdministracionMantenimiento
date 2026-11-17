@@ -89,12 +89,21 @@ class VistasEntidad:
         return None, None
 
     def _padre_de(self, registro) -> tuple[ParentSpec | None, int | None]:
-        """Padre activo para un registro: el de la URL o, si no hay, el principal."""
+        """
+        Padre activo para un registro (define a dónde vuelve cada pantalla):
+          * el de la URL, si se llegó desde un padre (?sector_id=3);
+          * si no, ninguno cuando la entidad tiene entrada propia en el menú
+            (ej: un tipo de activo abierto desde Catálogos vuelve a su listado,
+            no a la cuenta);
+          * si no, el principal (ej: una ubicación vuelve a su sector).
+        """
         p, padre_id = self._padre_desde_url()
         if p is not None:
             return p, getattr(registro, p.fk) or padre_id
         p = self.spec.padre
-        return (p, getattr(registro, p.fk)) if p else (None, None)
+        if p is None or self.spec.sidebar:
+            return None, None
+        return p, getattr(registro, p.fk)
 
     def _url_volver(self, padre: ParentSpec | None, padre_id):
         """Pestaña de esta entidad en el detalle del padre, o el listado propio."""

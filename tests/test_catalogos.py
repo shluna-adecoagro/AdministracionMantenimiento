@@ -59,3 +59,36 @@ def test_booleanos_se_ven_como_si_no(client, db):
     db.session.commit()
     html = client.get("/bom_modelo").get_data(as_text=True)
     assert "Sí" in html and "True" not in html
+
+
+# ---------------------------------------------------------------------------
+# Navegación: «Volver» lleva a donde se vino
+# ---------------------------------------------------------------------------
+
+def _volver(client, url):
+    import re
+
+    html = client.get(url).get_data(as_text=True)
+    return re.search(r'href="([^"]*)" class="btn-secondary">\s*Volver', html).group(1)
+
+
+def test_tipo_de_activo_desde_el_menu_vuelve_al_listado(client, categorias_activo):
+    tipo = categorias_activo["Pickup"].tipo_activo_id
+    assert _volver(client, f"/tipos_activo/{tipo}") == "/tipos_activo"
+
+    # Alta de una categoría desde el tipo: vuelve al tipo, y el tipo a su listado.
+    r = client.post(f"/categorias_activo/crear?tipo_activo_id={tipo}", data={"nombre_categoria": "Furgón"})
+    assert r.headers["Location"] == f"/tipos_activo/{tipo}?seccion=categorias_activo"
+    assert _volver(client, r.headers["Location"]) == "/tipos_activo"
+
+
+def test_tipo_de_activo_desde_la_cuenta_vuelve_a_la_cuenta(client, categorias_activo, cuenta):
+    tipo = categorias_activo["Pickup"].tipo_activo_id
+    url = f"/tipos_activo/{tipo}?cuenta_id={cuenta.cuenta_id}"
+    assert _volver(client, url) == f"/cuentas/{cuenta.cuenta_id}?seccion=tipos_activo"
+
+
+def test_categoria_vuelve_a_su_tipo(client, categorias_activo):
+    cat = categorias_activo["Pickup"]
+    url = f"/categorias_activo/{cat.categoria_activo_id}"  # sin entrada en el menú: vuelve al padre
+    assert _volver(client, url) == f"/tipos_activo/{cat.tipo_activo_id}?seccion=categorias_activo"
