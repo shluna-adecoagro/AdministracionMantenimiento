@@ -43,11 +43,11 @@
                                 <em>—</em>
                             {% endif %}
                         {% else %}
-                            {{ fk_labels[campo] | default('') }}
+                            {{ fk_labels[campo] | mostrar }}
                         {% endif %}
 
                     {% else %}
-                        {{ modelo.get(campo) | default('') }}
+                        {{ modelo.get(campo) | mostrar }}
                     {% endif %}
                 </td>
             </tr>
@@ -63,7 +63,11 @@
                Si es entidad → volver al listado
                ============================================================ #}
 
-            {% if es_subentidad %}
+            {% if url_cancelar is defined %}
+                <a href="{{ url_cancelar }}" class="btn-secondary">
+                    Cancelar
+                </a>
+            {% elif es_subentidad %}
                 <a href="{{ url_for(entidad_padre_endpoint, id=padre_id) }}"
                    class="btn-secondary">
                     Cancelar

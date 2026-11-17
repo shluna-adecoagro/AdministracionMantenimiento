@@ -292,5 +292,14 @@ def test_eliminar_ubicacion_en_uso_se_bloquea(client, ubicacion, activo_en):
     assert Ubicacion.query.get(ubicacion.ubicacion_id) is not None
 
 
+def test_pestana_ubicaciones_permite_crear_desde_el_sector(client, sector):
+    html = client.get(f"/sectores/{sector.sector_id}?seccion=ubicaciones").get_data(as_text=True)
+    assert f"/ubicaciones/crear?sector_id={sector.sector_id}" in html
+
+
+def test_seccion_inexistente_muestra_datos(client, sector):
+    assert client.get(f"/sectores/{sector.sector_id}?seccion=nada").status_code == 200
+
+
 def test_campo_de_busqueda_no_permitido_se_ignora(client, sector):
     assert client.get("/sectores?campo=uuid&q=abc").status_code == 200

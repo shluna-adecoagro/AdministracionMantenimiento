@@ -81,6 +81,20 @@ Diseño:
 
 - Al reemplazar un archivo subido, el anterior queda en disco (pendiente de definir).
 
+## Notas de la Fase 3
+
+- Todas las entidades migradas comparten el blueprint `crud`; las URLs no cambiaron
+  (`/sectores`, `/ubicaciones/crear?sector_id=3`, ...).
+- Las subentidades funcionan en dos contextos: desde la pestaña del padre (al guardar
+  se vuelve a esa pestaña) o por su cuenta (`/ubicaciones` lista todas, con el padre
+  como columna y filtro).
+- El detalle de una subentidad ahora también muestra su historial de auditoría.
+- Los valores vacíos se muestran como "—" (filtro `mostrar`).
+- Las subentidades no migradas (medidores, lecturas, stock, modelos, contactos) siguen
+  dando error 500 si se abren sin el padre; se corrige al migrarlas.
+- Código sin uso para borrar en la Fase 7: `app/templates/sectores/`,
+  `app/services/sectores_service.py`, `app/routes/api/cuentas_routes.py`.
+
 ## Arquitectura objetivo
 
 ```
@@ -122,7 +136,7 @@ la API generada respeta ese contrato.
 | **0. Red de seguridad** | Tests con pytest para sectores, ubicaciones y cuentas (web y API). Errores conocidos marcados como `xfail`. README. `.gitignore` permite `requirements*.txt`. | ✅ Hecha |
 | **1. Metamodelo tipado** | `EntitySpec`/`FieldSpec`, registry (inferido + overrides) y un adaptador para que los dicts actuales sigan funcionando. Overrides de las 3 entidades piloto. `shadow_diff` pasa a ser validación al arrancar. | ✅ Hecha |
 | **2. Capa core** | Coerción, FK, repositorio, servicio (transacción + auditoría) y archivos. `framework.py` delega en ellos. Validación en servidor y manejo de `IntegrityError`. | ✅ Hecha |
-| **3. Web generada** | Vistas genéricas y navegación por registry. Rutas especiales (`bom_final`, `compatibilidad_final`) como vistas extra declaradas en overrides. Se eliminan los `*_web.py` triviales de las entidades migradas. | Pendiente |
+| **3. Web generada** | Vistas genéricas y navegación por registry (`app/crud/web/views.py`). Se eliminan `sectores_web.py` y `cuentas_web.py`. Las rutas especiales (`bom_final`, `compatibilidad_final`) se resuelven al migrar activos e insumos (Fase 6). | ✅ Hecha |
 | **4. API generada** | Generador de JSON Schema, endpoints REST genéricos con paginación y errores JSON, especificación OpenAPI. Reemplaza `sectores_routes.py`; se elimina `activos_routes.py`. | Pendiente |
 | **5. Base de datos** | Quitar el respaldo automático y `sync-db`. Flask-Migrate (Alembic) y fuera `create_all` de `before_request`. Configuración por `.env`. | Pendiente |
 | **6. Migrar el resto** | Tras revisar su diseño: activos, medidores, lecturas, insumos, stock, unidades, marcas, modelos, recursos, BOM. | Pendiente |
@@ -135,9 +149,9 @@ la API generada respeta ese contrato.
 2. **Override** (`app/crud/meta/overrides/<modulo>.py`): solo lo que no se deduce del
    modelo. Lo mínimo es `{"model": MiModelo}`; las claves posibles están documentadas en
    `app/crud/meta/overrides/__init__.py`.
-3. Mientras exista `framework.py`, indicar el blueprint en `_BLUEPRINTS`
-   (`app/crud/metamodelos/__init__.py`) y registrar el `CRUDResource` en
-   `app/routes/web/` (ambos pasos desaparecen en la Fase 3).
+3. Nada más: las pantallas (listado, alta, detalle, edición y baja) se generan solas.
+   Si la entidad migrada estaba en `app/crud/metamodelos/`, borrar su dict y su
+   `CRUDResource` de `app/routes/web/`.
 
 Si algo no cierra (un campo mal escrito, un padre inexistente, una FK que no apunta al
 padre), la app **no arranca** y el error dice qué corregir, con una sugerencia.

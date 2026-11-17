@@ -21,7 +21,7 @@
                 {% if cfg.tipo == "fk" %}
                     {{ modelo.get(campo ~ "_label") or modelo.get(campo) }}
                 {% else %}
-                    {{ modelo.get(campo) | default('') }}
+                    {{ modelo.get(campo) | mostrar }}
                 {% endif %}
             </td>
         </tr>

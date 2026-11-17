@@ -26,14 +26,6 @@ from .bom_activos import ENTIDAD_BOM_ACTIVOS
 # Specs tipadas (EntitySpec) de las entidades migradas.
 REGISTRY = construir_desde_overrides()
 
-# Blueprint donde app/routes/web/ registra cada entidad migrada. Lo necesita
-# framework.py para armar URLs; desaparece cuando las rutas se generen solas (Fase 3).
-_BLUEPRINTS = {
-    "sectores": "sectores_web",
-    "ubicaciones": "sectores_web",
-    "cuentas": "cuentas",
-}
-
 ENTIDADES = {
     "activos": ENTIDAD_ACTIVOS,
     "medidores": ENTIDAD_MEDIDORES,
@@ -52,4 +44,6 @@ ENTIDADES = {
 }
 
 for _nombre, _spec in REGISTRY.items():
-    ENTIDADES[_nombre] = _spec.to_legacy(REGISTRY, bp_name=_BLUEPRINTS[_nombre])
+    # Sus pantallas las genera app/crud/web (blueprint "crud"); el dict legacy
+    # se mantiene para el menú lateral, sync-db y las entidades no migradas.
+    ENTIDADES[_nombre] = _spec.to_legacy(REGISTRY, bp_name="crud")

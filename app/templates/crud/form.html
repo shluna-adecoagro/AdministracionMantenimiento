@@ -114,7 +114,9 @@
                 {% endif %}
             </button>
 
-            {% if es_subentidad %}
+            {% if url_cancelar is defined %}
+                <a href="{{ url_cancelar }}" class="btn-secondary">Cancelar</a>
+            {% elif es_subentidad %}
                 <a href="{{ url_for(entidad_padre_endpoint, id=padre_id) }}"
                    class="btn-secondary">Cancelar</a>
             {% else %}

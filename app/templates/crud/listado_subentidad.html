@@ -33,9 +33,9 @@
                             {% if campo != fk %}
                                 <td>
                                     {% if cfg.tipo == "fk" %}
-                                        {{ item[campo ~ "_label"] if item[campo ~ "_label"] else item[campo] }}
+                                        {{ (item[campo ~ "_label"] if item[campo ~ "_label"] else item[campo]) | mostrar }}
                                     {% else %}
-                                        {{ item[campo] }}
+                                        {{ item[campo] | mostrar }}
                                     {% endif %}
                                 </td>
                             {% endif %}
