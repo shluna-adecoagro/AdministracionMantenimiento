@@ -152,9 +152,9 @@ Decisiones del usuario:
   categorías de materiales vienen de SharePoint (se importan cuando esas entidades pasen
   al registry, Fase 7).
 - Interés en **mantener sincronizadas** la base local y SharePoint, como respaldo mutuo.
-  Leer SharePoint directo queda como última fase (9).
+  Leer SharePoint directo queda como última fase (12).
 
-**Dirección de la sincronización (Fase 9): decidida la opción A.** La app es la fuente de
+**Dirección de la sincronización (Fase 12): decidida la opción A.** La app es la fuente de
 verdad, donde se gestionan los datos; SharePoint es una copia para mostrar, que se
 actualiza exportando desde la app. El respaldo se completa con copias periódicas del
 archivo de la base.
@@ -228,6 +228,16 @@ Framework (lo nuevo que se puede usar en cualquier entidad):
 | `codigo_carga_gasoil` | Era `codigo_brescia` |
 | `estado_activo_id`, `foto_path`, `detalles_tecnicos` | Sin cambios |
 
+**Tipo de activo**: no se guarda en el activo; se calcula de la categoría (un
+`column_property` que trae una FK se infiere como FK de solo lectura). En el formulario
+aparece como **filtro** de las categorías (sin `name`, no se envía); si se elige primero
+la categoría, el tipo se completa. Se ve en listado, detalle, filtros y API.
+
+**Cuenta de imputación**: cada tipo de activo tiene una cuenta (`tipos_activo.cuenta_id`,
+obligatoria). Los tipos y categorías de activo **ya no se precargan**: los carga el
+usuario, cada tipo con su cuenta. Los tipos aparecen como pestaña de la cuenta, y una
+cuenta en uso no se borra.
+
 La migración renombra sin perder datos; los activos sin patente reciben `ACT-<id>`. Si
 hay números de activo, serie o motor repetidos, se detiene y los lista.
 
@@ -270,8 +280,9 @@ Pendientes:
 
 ## Menú: datos maestros y catálogos
 
-El menú lateral tiene dos secciones (`"grupo"` en el override; ver `GRUPOS` en
-`app/crud/meta/spec.py`):
+El menú lateral tiene secciones (`"grupo"` en el override; ver `GRUPOS` en
+`app/crud/meta/spec.py`). **Operaciones** (`"operativos"`) ya está declarada para las
+fases 9 a 11; no se muestra mientras no tenga entidades.
 
 - **Datos maestros** (por defecto): activos, materiales, empleados, proveedores,
   sectores, cuentas, marcas.
@@ -283,11 +294,66 @@ El menú lateral tiene dos secciones (`"grupo"` en el override; ver `GRUPOS` en
 Widget `color` (inferido para columnas `color*`): selector de color en el formulario y
 muestra en listados. Los campos `select` se muestran con su texto (Sí/No, Alta...).
 
-## Próximo: órdenes de trabajo (OT)
+## Fases operativas (9 a 11): diseño inicial
 
-Idea inicial (a diseñar): cada OT tiene una o más **operaciones**; a cada operación se
-le asignan **recursos** (empleados o proveedores, vía la tabla común `recursos`) y
-**materiales**.
+Tercera sección del menú, **Operaciones**, para los datos del día a día: OT, pedidos,
+solicitudes de OC y documentos de proveedores. Se apoyan en los datos maestros (activos,
+recursos, materiales) y en los catálogos. Cada fase empieza revisando este diseño con el
+usuario.
+
+### Fase 9: órdenes de trabajo (OT)
+
+```
+OT (activo, tipo, prioridad, estado, fechas, solicitante)
+ └── operaciones (descripción, orden, estado, horas estimadas / reales)
+      ├── recursos asignados   (recurso: empleado o proveedor; horas, costo)
+      └── materiales usados    (material, cantidad; descuenta stock de una ubicación)
+```
+
+- Los recursos se eligen de la tabla común `recursos`. Se le agrega un `nombre_recurso`
+  **calculado** (nombre completo o razón social, no guardado dos veces), y el selector
+  muestra «Ana Pérez (Interno)» / «Repuestos SA (Externo)», con filtro Interno/Externo.
+- A definir: estados y transiciones de la OT, si el consumo de materiales mueve el stock
+  (y cómo se registran los movimientos), y la relación con medidores (OT preventiva por
+  horas de uso).
+
+### Fase 10: pedidos y solicitudes de orden de compra (OC)
+
+- Pedidos (hoy hay un modelo `Pedido`/`PedidoDetalle` y rutas sin registrar, a revisar):
+  quién pide qué materiales, para qué activo u OT.
+- Solicitud de OC: agrupa materiales a comprar; es lo que se cotiza a los proveedores.
+- A definir: estados, aprobaciones y si un pedido genera la solicitud de OC.
+
+### Fase 11: documentos de proveedores
+
+Carga (y más adelante procesamiento automático) de presupuestos, remitos y facturas.
+
+```
+documentos_proveedor          (cabecera)
+  proveedor, tipo (presupuesto / remito / factura), número, fecha, moneda,
+  total, archivo (PDF), solicitud de OC relacionada (opcional), estado
+ └── documento_proveedor_detalle   (ítems)
+       material (FK, opcional al cargar), descripción y código del proveedor,
+       cantidad, unidad, precio unitario, descuento, subtotal
+```
+
+Objetivos:
+
+1. **Ofertas comerciales por pedido**: los presupuestos de cada solicitud de OC, para
+   comparar proveedores.
+2. **Lista de precios de materiales**: se propone **calcularla** a partir de los ítems
+   (último precio por material y proveedor, con fecha y documento de origen) en lugar de
+   mantener otra tabla a mano; así cada precio tiene respaldo.
+
+A definir:
+
+- **Equivalencias de códigos**: tabla `material_proveedor` (material, proveedor, código
+  y descripción del proveedor) para que los ítems de un documento se asocien solos al
+  material, y los que no coinciden queden «a revisar».
+- **Procesamiento automático**: extraer cabecera e ítems del PDF (con un modelo de IA),
+  mostrarlos para revisión y recién entonces guardar. El framework ya permite adjuntar
+  PDF y tiene cabecera/detalle como entidad y subentidad.
+- Monedas y tipo de cambio; si el remito actualiza el stock al recibir.
 
 ## Arquitectura objetivo
 
@@ -335,7 +401,10 @@ La API generada usa `GET/POST {url}` y `PUT/PATCH/DELETE {url}/{id}`.
 | **6. Carga de datos** | `flask importar` / `flask exportar` en CSV, con clave natural, FK por nombre, simulación y todo o nada. Ver «Carga de datos» más abajo. | ✅ Hecha |
 | **7. Migrar el resto** | Tras revisar su diseño: activos, medidores, lecturas, insumos, stock, unidades, marcas, modelos, recursos, BOM. Ver «Notas de la Fase 7». | ✅ Hecha |
 | **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. Ver «Notas de la Fase 8». | ✅ Hecha |
-| **9. Sincronización con SharePoint** | Opción A: exportar periódicamente de la app a SharePoint, más copias de seguridad automáticas de la base. Al final, escribir en SharePoint directo (Microsoft Graph) en lugar de pasar por CSV. | Pendiente |
+| **9. Órdenes de trabajo** | OT → operaciones → recursos y materiales. Ver «Fases operativas». | Pendiente |
+| **10. Pedidos y solicitudes de OC** | Qué se pide, para qué activo u OT, y qué se cotiza a proveedores. | Pendiente |
+| **11. Documentos de proveedores** | Presupuestos, remitos y facturas (cabecera + ítems): ofertas por solicitud de OC y lista de precios de materiales. Procesamiento automático de PDF a definir. | Pendiente |
+| **12. Sincronización con SharePoint** | Opción A: exportar periódicamente de la app a SharePoint, más copias de seguridad automáticas de la base. Al final, escribir en SharePoint directo (Microsoft Graph) en lugar de pasar por CSV. | Pendiente |
 
 ## Cómo agregar o modificar una entidad (desde la Fase 1)
 

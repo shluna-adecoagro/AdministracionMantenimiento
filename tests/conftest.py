@@ -107,3 +107,29 @@ def auditoria():
         )
 
     return _logs
+
+
+@pytest.fixture
+def categorias_activo(db, cuenta):
+    """
+    Tipos y categorías de activo (ya no los precarga el seed: cada tipo necesita
+    su cuenta). Devuelve {nombre de categoría: CategoriaActivo}.
+    """
+    from app.models.activos_models import CategoriaActivo, TipoActivo
+
+    categorias = {
+        "Maquinaria": ["Tractor", "Pala cargadora"],
+        "Vehículo": ["Pickup", "Moto"],
+        "Instalación": ["Galpón"],
+    }
+    resultado = {}
+    for tipo, nombres in categorias.items():
+        t = TipoActivo(nombre_tipo=tipo, cuenta_id=cuenta.cuenta_id)
+        db.session.add(t)
+        db.session.flush()
+        for n in nombres:
+            c = CategoriaActivo(nombre_categoria=n, tipo_activo_id=t.tipo_activo_id)
+            db.session.add(c)
+            resultado[n] = c
+    db.session.commit()
+    return resultado

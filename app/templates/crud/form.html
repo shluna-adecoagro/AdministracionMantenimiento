@@ -26,7 +26,11 @@
     <form method="POST" id="form-entidad" enctype="multipart/form-data">
 
         {% for campo, cfg in fields.items() %}
-            {% if not cfg.get("virtual") and not cfg.get("solo_lectura") %}
+            {# Un campo de solo lectura del que depende otro (ej: tipo de activo → categoría)
+               se muestra como filtro: sin name, así no se envía ni se guarda. #}
+            {% set es_filtro = cfg.get("solo_lectura") and cfg.tipo == "fk"
+                               and (fields.values() | selectattr("depende_de", "equalto", campo) | list) %}
+            {% if not cfg.get("virtual") and (not cfg.get("solo_lectura") or es_filtro) %}
 
                 <div class="form-group {% if errores and errores.get(campo) %}form-group--error{% endif %}">
                     <label for="{{ campo }}">{{ cfg.label }}</label>
@@ -57,7 +61,8 @@
                         </select>
 
                     {% elif cfg.tipo == "fk" %}
-                        <select name="{{ campo }}" id="{{ campo }}" {% if cfg.required %}required{% endif %}>
+                        <select {% if not es_filtro %}name="{{ campo }}"{% endif %} id="{{ campo }}"
+                                {% if cfg.required %}required{% endif %}>
                             {% if not cfg.required %}<option value="">—</option>{% endif %}
                             {% for opt in fk_data[campo] %}
                                 <option value="{{ opt.value }}"
@@ -102,6 +107,10 @@
                         value="{{ modelo.get(campo) if modelo.get(campo) is not none else '' }}"
                         {% if cfg.required %}required{% endif %}>
 
+                    {% endif %}
+
+                    {% if es_filtro %}
+                        <small class="form-ayuda">Filtra la lista siguiente; se deduce de ella.</small>
                     {% endif %}
 
                     {% if errores and errores.get(campo) %}

@@ -172,13 +172,41 @@ def es_calculado(prop) -> bool:
     return not isinstance(prop.columns[0], Column)
 
 
-def _inferir_calculado(key: str, prop) -> dict:
+def _columna_seleccionada(expresion):
+    """
+    Si el calculado es `select(Otra.columna)...scalar_subquery()`, devuelve esa
+    columna (para saber si trae una FK); si no, None.
+    """
+    e = getattr(expresion, "element", None)       # Label → ScalarSelect
+    e = getattr(e, "element", None)                # ScalarSelect → Select
+    columnas = list(getattr(e, "selected_columns", ()) or ())
+    if len(columnas) == 1 and isinstance(columnas[0], Column):
+        return columnas[0]
+    return None
+
+
+def _inferir_calculado(key: str, prop, mapper) -> dict:
     info = info_de(prop)
+    etiqueta = info.get("label") or humanizar(key)
+
+    # Calculado que trae una FK (ej: el tipo de activo, a través de la
+    # categoría): se trata como FK de solo lectura. Muestra el nombre del
+    # destino y, en el formulario, sirve de filtro para los selects que dependen de él.
+    origen = _columna_seleccionada(prop.columns[0])
+    fks = list(origen.foreign_keys) if origen is not None else []
+    if fks:
+        destino = _clase_por_tabla(mapper, fks[0].column.table)
+        if destino is not None:
+            campo = {"label": etiqueta, "tipo": "fk", "fk_model": destino,
+                     "required": False, "solo_lectura": True}
+            if getattr(destino, "__label_field__", None):
+                campo["fk_label"] = destino.__label_field__
+            return campo
+
     tipo, extras = tipo_widget(prop.columns[0])
     if tipo in ("select", "textarea"):
         tipo, extras = "text", {}
-    return {"label": info.get("label") or humanizar(key), "tipo": tipo,
-            "required": False, "solo_lectura": True}
+    return {"label": etiqueta, "tipo": tipo, "required": False, "solo_lectura": True}
 
 
 def _inferir_campo(key: str, col, mapper) -> dict:
@@ -257,7 +285,7 @@ def inferir_entidad(model) -> dict:
             avisos.append((key, "info['label'] debe ser un texto no vacío"))
 
         if es_calculado(prop):
-            campos[key] = _inferir_calculado(key, prop)
+            campos[key] = _inferir_calculado(key, prop, mapper)
             continue
         if getattr(col, "primary_key", False):
             continue

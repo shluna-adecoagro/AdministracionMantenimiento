@@ -19,7 +19,8 @@ TIPOS_CAMPO = frozenset(
 
 # Grupos del menú lateral, en el orden en que se muestran.
 GRUPOS = {
-    "maestros": "Datos maestros",   # lo que se gestiona a diario
+    "operativos": "Operaciones",    # el día a día: OT, pedidos, solicitudes de OC, documentos
+    "maestros": "Datos maestros",   # activos, recursos, materiales, sectores...
     "catalogos": "Catálogos",       # listas de valores: estados, tipos, categorías...
 }
 GENEROS = frozenset({"m", "f"})

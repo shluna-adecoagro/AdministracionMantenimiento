@@ -140,6 +140,8 @@ class ServicioCRUD:
             padre = cfg.get("depende_de")
             if not padre or valor(campo) is None:
                 continue
+            if self.fields[padre].get("solo_lectura"):
+                continue  # el padre se calcula del hijo (ej: tipo según la categoría)
             if campo not in datos and padre not in datos:
                 continue  # no cambió ninguno de los dos
             hijo = db.session.get(cfg["fk_model"], valor(campo))
