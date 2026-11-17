@@ -119,7 +119,7 @@ def _alias(spec: EntitySpec) -> dict[str, tuple[str, str]]:
     """
     candidatos: dict[str, set] = {}
     for campo, f in spec.fields.items():
-        if f.tipo == "file":
+        if f.tipo == "file" or f.solo_lectura:
             continue
         if f.tipo == "fk":
             pares = [(campo, "id"), (f.label, "texto"), (campo.removesuffix("_id"), "texto")]

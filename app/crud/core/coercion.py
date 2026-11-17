@@ -139,7 +139,7 @@ def datos_de_entrada(model, fields: dict, entrada, *, parcial: bool = False) -> 
              True (edición): solo se procesan los campos presentes en `entrada`;
              los ausentes conservan su valor actual.
 
-    Los campos tipo "file" y "virtual" no se procesan acá.
+    Los campos tipo "file", "virtual" y de solo lectura no se procesan acá.
     Devuelve {campo: valor_convertido}; lanza ErroresValidacion con todos los
     errores juntos.
     """
@@ -148,7 +148,7 @@ def datos_de_entrada(model, fields: dict, entrada, *, parcial: bool = False) -> 
     errores: dict[str, str] = {}
 
     for campo, cfg in fields.items():
-        if cfg.get("virtual") or cfg.get("tipo") == "file":
+        if cfg.get("virtual") or cfg.get("solo_lectura") or cfg.get("tipo") == "file":
             continue
         if parcial and campo not in entrada:
             continue

@@ -10,7 +10,8 @@ Hay tres variantes de entrada y una de salida:
     modificar   PATCH  ningún campo es obligatorio; solo se cambia lo enviado
     registro    respuesta: lo que devuelve la API (incluye id, uuid, fechas y etiquetas)
 
-Los campos de tipo "file" no se reciben por la API (las fotos se suben desde la web).
+Los campos de tipo "file" no se reciben por la API (las fotos se suben desde la web),
+ni los de solo lectura (calculados, como el stock total de un insumo).
 """
 from __future__ import annotations
 
@@ -92,7 +93,7 @@ def _admite_nulo(esquema: dict) -> dict:
 
 def campos_api(spec: EntitySpec) -> list[str]:
     """Campos que se pueden enviar por la API."""
-    return [c for c, f in spec.fields.items() if f.tipo != "file"]
+    return [c for c, f in spec.fields.items() if f.tipo != "file" and not f.solo_lectura]
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +141,8 @@ def esquema_registro(spec: EntitySpec) -> dict:
         esquema = esquema_campo(spec, campo)
         if f.tipo == "file":
             esquema = {"title": f.label, "type": "string", "description": "Ruta pública del archivo"}
+        if f.solo_lectura:
+            esquema["readOnly"] = True
         propiedades[campo] = _admite_nulo(esquema) if not f.required else esquema
         if f.tipo == "fk":
             propiedades[f"{campo}_label"] = {

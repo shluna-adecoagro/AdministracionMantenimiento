@@ -19,6 +19,7 @@ from __future__ import annotations
 import re
 import unicodedata
 
+from sqlalchemy import Column
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import types as T
 from sqlalchemy.orm import configure_mappers
@@ -139,6 +140,31 @@ def fk_apunta_a(hijo, columna: str, padre) -> bool:
 # Inferencia
 # ---------------------------------------------------------------------------
 
+def info_de(prop) -> dict:
+    """
+    `info` de un atributo: el de la columna (Column(..., info=...)) o, para un
+    valor calculado, el de column_property(..., info=...).
+    """
+    col = prop.columns[0]
+    if isinstance(col, Column):
+        return col.info or {}
+    return prop.info or {}
+
+
+def es_calculado(prop) -> bool:
+    """column_property con una expresión (ej: una suma), no una columna de la tabla."""
+    return not isinstance(prop.columns[0], Column)
+
+
+def _inferir_calculado(key: str, prop) -> dict:
+    info = info_de(prop)
+    tipo, extras = tipo_widget(prop.columns[0])
+    if tipo in ("select", "textarea"):
+        tipo, extras = "text", {}
+    return {"label": info.get("label") or humanizar(key), "tipo": tipo,
+            "required": False, "solo_lectura": True}
+
+
 def _inferir_campo(key: str, col, mapper) -> dict:
     info = getattr(col, "info", None) or {}
     etiqueta = info.get("label") or humanizar(key)
@@ -203,13 +229,16 @@ def inferir_entidad(model) -> dict:
         col = prop.columns[0]
 
         # Validar `info` antes de cualquier `continue`: un typo no debe pasar en silencio.
-        info = getattr(col, "info", None) or {}
+        info = info_de(prop)
         desconocidas = sorted(set(info) - CLAVES_INFO)
         if desconocidas:
             avisos.append((key, f"info con claves desconocidas {desconocidas} (¿typo? válidas: {sorted(CLAVES_INFO)})"))
         if "label" in info and not (isinstance(info["label"], str) and info["label"].strip()):
             avisos.append((key, "info['label'] debe ser un texto no vacío"))
 
+        if es_calculado(prop):
+            campos[key] = _inferir_calculado(key, prop)
+            continue
         if getattr(col, "primary_key", False):
             continue
         if key in COLUMNAS_OCULTAS:

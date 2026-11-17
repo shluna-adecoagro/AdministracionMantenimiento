@@ -19,6 +19,7 @@ from sqlalchemy.exc import IntegrityError
 from app.audit.registrar import registrar_cambio
 from app.core.db import db
 from app.crud.core import dependencias, fk
+from app.crud.core.repository import valores
 
 
 class ErrorIntegridad(Exception):
@@ -167,7 +168,7 @@ class ServicioCRUD:
             tabla=hijo.__tablename__,
             registro_uuid=hijo.uuid,
             tipo="DELETE",
-            estado_anterior=hijo.to_dict(),
+            estado_anterior=valores(hijo, calculados=False),
             estado_actual=None,
             motivo_operacion=motivo,
             usuario=usuario,

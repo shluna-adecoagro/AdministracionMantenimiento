@@ -4,7 +4,8 @@ Consultas de lectura: búsqueda, filtros y carga de registros.
 """
 from __future__ import annotations
 
-from sqlalchemy import String, cast, or_
+from sqlalchemy import Column, String, cast, or_
+from sqlalchemy import inspect as sa_inspect
 
 from app.core.db import db
 from app.crud.core import fk
@@ -12,6 +13,21 @@ from app.crud.core import fk
 
 def obtener_o_404(model, id_):
     return db.get_or_404(model, id_)
+
+
+def valores(registro, *, calculados: bool = True) -> dict:
+    """
+    {atributo: valor} de todas las columnas del registro (también las heredadas,
+    en modelos con herencia). Con calculados=False se omiten los column_property
+    calculados (ej: stock total), que no son datos propios del registro.
+
+    Reemplaza a los to_dict() de cada modelo, que no siempre son serializables.
+    """
+    return {
+        attr.key: getattr(registro, attr.key)
+        for attr in sa_inspect(type(registro)).column_attrs
+        if calculados or isinstance(attr.columns[0], Column)
+    }
 
 
 def _columna(model, campo):

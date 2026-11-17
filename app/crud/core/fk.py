@@ -76,6 +76,23 @@ def opciones_de(fields: dict) -> dict[str, list[dict]]:
     return {c: opciones(cfg) for c, cfg in campos_fk(fields).items()}
 
 
+def sugerencias_de(fields: dict) -> dict[str, list[str]]:
+    """
+    Sugerencias de los campos "datalist" (texto libre con lista de ayuda): las
+    opciones fijas o, si tiene fk_model, los nombres de ese modelo (ej: empleados).
+    """
+    resultado = {}
+    for c, cfg in fields.items():
+        if cfg.get("tipo") != "datalist":
+            continue
+        if cfg.get("fk_model") is not None:
+            textos = {str(etiqueta(o, cfg)) for o in cfg["fk_model"].query.all()}
+        else:
+            textos = {str(o["label"]) for o in cfg.get("options") or ()}
+        resultado[c] = sorted(t for t in textos if t)
+    return resultado
+
+
 def validar_existencia(fields: dict, datos: dict) -> None:
     """
     Verifica que cada FK de `datos` apunte a un registro existente.
@@ -132,7 +149,9 @@ def para_auditoria(registro, fields: dict) -> dict:
     Dict del registro con las FK expandidas a texto (ej: estado_sector='Activo'),
     para que el historial muestre nombres en lugar de IDs.
     """
-    d = registro.to_dict()
+    from app.crud.core.repository import valores
+
+    d = valores(registro, calculados=False)
     for campo, cfg in campos_fk(fields).items():
         obj = destino(registro, campo, cfg)
         if obj is None:

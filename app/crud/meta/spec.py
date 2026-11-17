@@ -41,7 +41,12 @@ class FieldSpec:
 
     # Presentación
     oculto: bool = False           # no se muestra en el formulario
-    options: tuple = ()            # para tipo "select": ({"value":..., "label":...}, ...)
+    # Calculado (column_property) o mantenido por el sistema: se muestra en el
+    # listado y el detalle, pero no se edita ni se recibe por la API o el CSV.
+    solo_lectura: bool = False
+    # "select": ({"value":..., "label":...}, ...). "datalist": sugerencias fijas
+    # (o, con fk_model, los nombres de ese modelo; el valor sigue siendo texto libre).
+    options: tuple = ()
     subcarpeta: str | None = None  # para tipo "file"
 
     # Otros nombres de columna que se aceptan al importar un CSV, además del
@@ -83,6 +88,8 @@ class FieldSpec:
             d["es_estado"] = True
         if self.oculto:
             d["oculto"] = True
+        if self.solo_lectura:
+            d["solo_lectura"] = True
         if self.options:
             d["options"] = [dict(o) for o in self.options]
         if self.subcarpeta:
@@ -99,6 +106,19 @@ class ParentSpec:
 
 
 @dataclass(frozen=True)
+class TabSpec:
+    """
+    Pestaña extra del detalle, con una tabla de solo lectura calculada.
+    `funcion(registro)` devuelve {"columnas": [...], "filas": [[...], ...]} y
+    opcionalmente "vacio" (texto si no hay filas) y "nota".
+    """
+
+    id: str
+    label: str
+    funcion: object
+
+
+@dataclass(frozen=True)
 class EntitySpec:
     name: str
     model: type
@@ -111,19 +131,30 @@ class EntitySpec:
     filtros: tuple[str, ...]
     auditoria: bool
     auditoria_ignorar: tuple[str, ...] = AUDITORIA_IGNORAR_DEFAULT
-    padre: ParentSpec | None = None
-    hijos: tuple[str, ...] = ()        # lo completa el registry a partir de `padre`
+    # Subentidades: padres de los que cuelga (ej: el BOM de un modelo cuelga del
+    # modelo y también del insumo). El primero es el principal.
+    padres: tuple[ParentSpec, ...] = ()
+    hijos: tuple[str, ...] = ()        # lo completa el registry a partir de `padres`
     sidebar: bool = False
     orden: int = 999
-    tabs_extra: tuple = ()
+    tabs_extra: tuple[TabSpec, ...] = ()
     # Campos que identifican un registro fuera de la base (ej: en SharePoint),
     # donde los IDs no coinciden. Los usa la importación para actualizar en vez
     # de duplicar. Ej: ("nombre_sector",) o ("nombre_ubicacion", "sector_id").
     clave_natural: tuple[str, ...] = ()
 
     @property
+    def padre(self) -> ParentSpec | None:
+        """Padre principal (el primero declarado)."""
+        return self.padres[0] if self.padres else None
+
+    @property
     def es_subentidad(self) -> bool:
-        return self.padre is not None
+        return bool(self.padres)
+
+    def padre_de_tipo(self, entidad: str) -> ParentSpec | None:
+        """Relación con un padre concreto (ej: "insumos" → fk "insumo_id")."""
+        return next((p for p in self.padres if p.entidad == entidad), None)
 
     @property
     def tabla(self) -> str:
@@ -168,11 +199,9 @@ class EntitySpec:
                     "label": specs[h].label_plural.capitalize(),
                     "label_singular": specs[h].label_singular,
                     "label_plural": specs[h].label_plural,
-                    "fk": specs[h].padre.fk,
+                    "fk": specs[h].padre_de_tipo(self.name).fk,
                     "template_listado": "crud/listado_subentidad.html",
                 }
                 for h in self.hijos
             ]
-        if self.tabs_extra:
-            d["tabs_extra"] = [dict(t) for t in self.tabs_extra]
         return d
