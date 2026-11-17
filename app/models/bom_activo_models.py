@@ -25,11 +25,11 @@ class BOMActivo(db.Model, ModelMixin, AuditMixin):
         "Activo", lazy="joined", backref=db.backref("bom", cascade="all, delete")
     )
 
-    # FK → Insumo. Sin backref: un insumo que figura en un BOM no se puede borrar.
-    insumo_id = db.Column(
-        db.Integer, db.ForeignKey("insumos.insumo_id"), nullable=False
+    # FK → Material. Sin backref: un material que figura en un BOM no se puede borrar.
+    material_id = db.Column(
+        db.Integer, db.ForeignKey("materiales.material_id"), nullable=False
     )
-    insumo = db.relationship("Insumo", lazy="joined", foreign_keys=[insumo_id])
+    material = db.relationship("Material", lazy="joined", foreign_keys=[material_id])
 
     # Cantidad requerida en el BOM del activo
     cantidad = db.Column(db.Float, nullable=True)
@@ -40,13 +40,13 @@ class BOMActivo(db.Model, ModelMixin, AuditMixin):
     nota_equivalencia = db.Column(db.String(300), nullable=True, info={"label": "Nota de equivalencia"})
     origen_equivalencia = db.Column(db.String(100), nullable=True, info={"label": "Origen de equivalencia"})
 
-    # Reemplazo de insumo original del modelo
-    reemplaza_insumo_modelo_id = db.Column(
-        db.Integer, db.ForeignKey("insumos.insumo_id"), nullable=True,
-        info={"label": "Reemplaza al insumo del modelo"},
+    # Reemplazo de material original del modelo
+    reemplaza_material_modelo_id = db.Column(
+        db.Integer, db.ForeignKey("materiales.material_id"), nullable=True,
+        info={"label": "Reemplaza al material del modelo"},
     )
-    reemplaza_insumo_modelo = db.relationship(
-        "Insumo", lazy="joined", foreign_keys=[reemplaza_insumo_modelo_id]
+    reemplaza_material_modelo = db.relationship(
+        "Material", lazy="joined", foreign_keys=[reemplaza_material_modelo_id]
     )
 
     creado_en = db.Column(db.DateTime, default=datetime.utcnow)

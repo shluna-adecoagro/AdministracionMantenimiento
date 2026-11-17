@@ -1,8 +1,11 @@
 """esquema inicial
 
-Revision ID: 6f816639f11f
+Todas las tablas de los modelos. Reemplaza a las migraciones anteriores, que se
+unificaron en noviembre de 2026 (todavía no había datos reales que conservar).
+
+Revision ID: 81e1851d317c
 Revises: 
-Create Date: 2026-11-17 00:25:48.243225
+Create Date: 2026-11-17 14:40:12.643150
 
 """
 from alembic import op
@@ -10,7 +13,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '6f816639f11f'
+revision = '81e1851d317c'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -33,11 +36,11 @@ def upgrade():
     sa.Column('motivo_operacion', sa.String(length=500), nullable=True),
     sa.PrimaryKeyConstraint('LogID', name=op.f('pk_audit_log'))
     )
-    op.create_table('categorias_insumo',
-    sa.Column('categoria_insumo_id', sa.Integer(), autoincrement=True, nullable=False),
+    op.create_table('categorias_material',
+    sa.Column('categoria_material_id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('nombre_categoria', sa.String(length=100), nullable=False),
-    sa.PrimaryKeyConstraint('categoria_insumo_id', name=op.f('pk_categorias_insumo')),
-    sa.UniqueConstraint('nombre_categoria', name=op.f('uq_categorias_insumo_nombre_categoria'))
+    sa.PrimaryKeyConstraint('categoria_material_id', name=op.f('pk_categorias_material')),
+    sa.UniqueConstraint('nombre_categoria', name=op.f('uq_categorias_material_nombre_categoria'))
     )
     op.create_table('estados_activo',
     sa.Column('estado_activo_id', sa.Integer(), autoincrement=True, nullable=False),
@@ -123,6 +126,7 @@ def upgrade():
     sa.Column('estado_cuenta_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['estado_cuenta_id'], ['estados_cuenta.estado_cuenta_id'], name=op.f('fk_cuentas_estado_cuenta_id_estados_cuenta')),
     sa.PrimaryKeyConstraint('cuenta_id', name=op.f('pk_cuentas')),
+    sa.UniqueConstraint('numero_cuenta', name=op.f('uq_cuentas_numero_cuenta')),
     sa.UniqueConstraint('uuid', name=op.f('uq_cuentas_uuid'))
     )
     op.create_table('modelos',
@@ -132,6 +136,7 @@ def upgrade():
     sa.Column('marca_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['marca_id'], ['marcas.marca_id'], name=op.f('fk_modelos_marca_id_marcas')),
     sa.PrimaryKeyConstraint('modelo_id', name=op.f('pk_modelos')),
+    sa.UniqueConstraint('nombre_modelo', 'marca_id', name=op.f('uq_modelos_nombre_modelo')),
     sa.UniqueConstraint('uuid', name=op.f('uq_modelos_uuid'))
     )
     op.create_table('pedido_detalle',
@@ -165,13 +170,13 @@ def upgrade():
     sa.UniqueConstraint('nombre_sector', name=op.f('uq_sectores_nombre_sector')),
     sa.UniqueConstraint('uuid', name=op.f('uq_sectores_uuid'))
     )
-    op.create_table('tipos_insumo',
-    sa.Column('tipo_insumo_id', sa.Integer(), autoincrement=True, nullable=False),
+    op.create_table('tipos_material',
+    sa.Column('tipo_material_id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('nombre_tipo', sa.String(length=100), nullable=False),
-    sa.Column('categoria_insumo_id', sa.Integer(), nullable=False),
-    sa.ForeignKeyConstraint(['categoria_insumo_id'], ['categorias_insumo.categoria_insumo_id'], name=op.f('fk_tipos_insumo_categoria_insumo_id_categorias_insumo')),
-    sa.PrimaryKeyConstraint('tipo_insumo_id', name=op.f('pk_tipos_insumo')),
-    sa.UniqueConstraint('nombre_tipo', name=op.f('uq_tipos_insumo_nombre_tipo'))
+    sa.Column('categoria_material_id', sa.Integer(), nullable=False),
+    sa.ForeignKeyConstraint(['categoria_material_id'], ['categorias_material.categoria_material_id'], name=op.f('fk_tipos_material_categoria_material_id_categorias_material')),
+    sa.PrimaryKeyConstraint('tipo_material_id', name=op.f('pk_tipos_material')),
+    sa.UniqueConstraint('nombre_tipo', name=op.f('uq_tipos_material_nombre_tipo'))
     )
     op.create_table('unidades_medida',
     sa.Column('unidad_medida_id', sa.Integer(), nullable=False),
@@ -195,14 +200,14 @@ def upgrade():
     sa.ForeignKeyConstraint(['sector_id'], ['sectores.sector_id'], name=op.f('fk_empleados_sector_id_sectores')),
     sa.PrimaryKeyConstraint('recurso_id', name=op.f('pk_empleados'))
     )
-    op.create_table('insumos',
-    sa.Column('insumo_id', sa.Integer(), autoincrement=True, nullable=False),
+    op.create_table('materiales',
+    sa.Column('material_id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('uuid', sa.String(length=36), nullable=True),
     sa.Column('codigo', sa.String(length=50), nullable=False),
     sa.Column('descripcion', sa.String(length=200), nullable=False),
     sa.Column('marca_id', sa.Integer(), nullable=True),
-    sa.Column('categoria_insumo_id', sa.Integer(), nullable=False),
-    sa.Column('tipo_insumo_id', sa.Integer(), nullable=True),
+    sa.Column('categoria_material_id', sa.Integer(), nullable=False),
+    sa.Column('tipo_material_id', sa.Integer(), nullable=True),
     sa.Column('presentacion_cantidad', sa.Float(), nullable=True),
     sa.Column('unidad_medida_id', sa.Integer(), nullable=True),
     sa.Column('cantidad_minima', sa.Float(), nullable=True),
@@ -211,13 +216,13 @@ def upgrade():
     sa.Column('foto', sa.String(length=300), nullable=True),
     sa.Column('creado_en', sa.DateTime(), nullable=True),
     sa.Column('actualizado_en', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['categoria_insumo_id'], ['categorias_insumo.categoria_insumo_id'], name=op.f('fk_insumos_categoria_insumo_id_categorias_insumo')),
-    sa.ForeignKeyConstraint(['marca_id'], ['marcas.marca_id'], name=op.f('fk_insumos_marca_id_marcas')),
-    sa.ForeignKeyConstraint(['tipo_insumo_id'], ['tipos_insumo.tipo_insumo_id'], name=op.f('fk_insumos_tipo_insumo_id_tipos_insumo')),
-    sa.ForeignKeyConstraint(['unidad_medida_id'], ['unidades_medida.unidad_medida_id'], name=op.f('fk_insumos_unidad_medida_id_unidades_medida')),
-    sa.PrimaryKeyConstraint('insumo_id', name=op.f('pk_insumos')),
-    sa.UniqueConstraint('codigo', name=op.f('uq_insumos_codigo')),
-    sa.UniqueConstraint('uuid', name=op.f('uq_insumos_uuid'))
+    sa.ForeignKeyConstraint(['categoria_material_id'], ['categorias_material.categoria_material_id'], name=op.f('fk_materiales_categoria_material_id_categorias_material')),
+    sa.ForeignKeyConstraint(['marca_id'], ['marcas.marca_id'], name=op.f('fk_materiales_marca_id_marcas')),
+    sa.ForeignKeyConstraint(['tipo_material_id'], ['tipos_material.tipo_material_id'], name=op.f('fk_materiales_tipo_material_id_tipos_material')),
+    sa.ForeignKeyConstraint(['unidad_medida_id'], ['unidades_medida.unidad_medida_id'], name=op.f('fk_materiales_unidad_medida_id_unidades_medida')),
+    sa.PrimaryKeyConstraint('material_id', name=op.f('pk_materiales')),
+    sa.UniqueConstraint('codigo', name=op.f('uq_materiales_codigo')),
+    sa.UniqueConstraint('uuid', name=op.f('uq_materiales_uuid'))
     )
     op.create_table('proveedores',
     sa.Column('recurso_id', sa.Integer(), nullable=False),
@@ -236,25 +241,25 @@ def upgrade():
     sa.Column('actualizado_en', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['sector_id'], ['sectores.sector_id'], name=op.f('fk_ubicaciones_sector_id_sectores')),
     sa.PrimaryKeyConstraint('ubicacion_id', name=op.f('pk_ubicaciones')),
+    sa.UniqueConstraint('nombre_ubicacion', 'sector_id', name=op.f('uq_ubicaciones_nombre_ubicacion')),
     sa.UniqueConstraint('uuid', name=op.f('uq_ubicaciones_uuid'))
     )
     op.create_table('activos',
     sa.Column('activo_id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('uuid', sa.String(length=36), nullable=False),
-    sa.Column('tipo_activo_id', sa.Integer(), nullable=False),
+    sa.Column('numero_activo', sa.String(length=50), nullable=False),
+    sa.Column('descripcion', sa.String(length=200), nullable=False),
     sa.Column('categoria_activo_id', sa.Integer(), nullable=False),
+    sa.Column('observaciones', sa.String(length=300), nullable=True),
     sa.Column('marca_id', sa.Integer(), nullable=True),
     sa.Column('modelo_id', sa.Integer(), nullable=True),
-    sa.Column('patente', sa.String(length=50), nullable=True),
-    sa.Column('descripcion', sa.String(length=200), nullable=False),
-    sa.Column('nro_serie_chasis', sa.String(length=100), nullable=True),
-    sa.Column('nro_motor', sa.String(length=100), nullable=True),
+    sa.Column('numero_serie', sa.String(length=100), nullable=True),
+    sa.Column('numero_motor', sa.String(length=100), nullable=True),
     sa.Column('año', sa.Integer(), nullable=True),
-    sa.Column('observacion', sa.String(length=300), nullable=True),
-    sa.Column('codigo_brescia', sa.String(length=50), nullable=True),
     sa.Column('sector_id', sa.Integer(), nullable=True),
-    sa.Column('usuario_asignado', sa.String(length=150), nullable=True),
     sa.Column('ubicacion_id', sa.Integer(), nullable=True),
+    sa.Column('usuario_asignado', sa.String(length=150), nullable=True),
+    sa.Column('codigo_carga_gasoil', sa.String(length=50), nullable=True),
     sa.Column('estado_activo_id', sa.Integer(), nullable=False),
     sa.Column('foto_path', sa.String(length=300), nullable=True),
     sa.Column('detalles_tecnicos', sa.JSON(), nullable=True),
@@ -265,23 +270,25 @@ def upgrade():
     sa.ForeignKeyConstraint(['marca_id'], ['marcas.marca_id'], name=op.f('fk_activos_marca_id_marcas')),
     sa.ForeignKeyConstraint(['modelo_id'], ['modelos.modelo_id'], name=op.f('fk_activos_modelo_id_modelos')),
     sa.ForeignKeyConstraint(['sector_id'], ['sectores.sector_id'], name=op.f('fk_activos_sector_id_sectores')),
-    sa.ForeignKeyConstraint(['tipo_activo_id'], ['tipos_activo.tipo_activo_id'], name=op.f('fk_activos_tipo_activo_id_tipos_activo')),
     sa.ForeignKeyConstraint(['ubicacion_id'], ['ubicaciones.ubicacion_id'], name=op.f('fk_activos_ubicacion_id_ubicaciones')),
     sa.PrimaryKeyConstraint('activo_id', name=op.f('pk_activos')),
+    sa.UniqueConstraint('numero_activo', name=op.f('uq_activos_numero_activo')),
+    sa.UniqueConstraint('numero_motor', name=op.f('uq_activos_numero_motor')),
+    sa.UniqueConstraint('numero_serie', name=op.f('uq_activos_numero_serie')),
     sa.UniqueConstraint('uuid', name=op.f('uq_activos_uuid'))
     )
     op.create_table('bom_modelo',
     sa.Column('bom_modelo_id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('uuid', sa.String(length=36), nullable=False),
-    sa.Column('insumo_id', sa.Integer(), nullable=False),
+    sa.Column('material_id', sa.Integer(), nullable=False),
     sa.Column('modelo_id', sa.Integer(), nullable=False),
     sa.Column('cantidad', sa.Float(), nullable=True),
-    sa.Column('es_equivalencia', sa.Boolean(), nullable=True),
+    sa.Column('es_equivalencia', sa.Boolean(), nullable=False),
     sa.Column('nota_equivalencia', sa.String(length=300), nullable=True),
     sa.Column('origen_equivalencia', sa.String(length=100), nullable=True),
     sa.Column('creado_en', sa.DateTime(), nullable=True),
     sa.Column('actualizado_en', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['insumo_id'], ['insumos.insumo_id'], name=op.f('fk_bom_modelo_insumo_id_insumos')),
+    sa.ForeignKeyConstraint(['material_id'], ['materiales.material_id'], name=op.f('fk_bom_modelo_material_id_materiales')),
     sa.ForeignKeyConstraint(['modelo_id'], ['modelos.modelo_id'], name=op.f('fk_bom_modelo_modelo_id_modelos')),
     sa.PrimaryKeyConstraint('bom_modelo_id', name=op.f('pk_bom_modelo')),
     sa.UniqueConstraint('uuid', name=op.f('uq_bom_modelo_uuid'))
@@ -298,35 +305,34 @@ def upgrade():
     sa.PrimaryKeyConstraint('contacto_id', name=op.f('pk_contactos_proveedor')),
     sa.UniqueConstraint('uuid', name=op.f('uq_contactos_proveedor_uuid'))
     )
-    op.create_table('stock_insumo',
-    sa.Column('stock_insumo_id', sa.Integer(), autoincrement=True, nullable=False),
+    op.create_table('stock_material',
+    sa.Column('stock_material_id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('uuid', sa.String(length=36), nullable=False),
-    sa.Column('insumo_id', sa.Integer(), nullable=False),
-    sa.Column('sector_id', sa.Integer(), nullable=True),
+    sa.Column('material_id', sa.Integer(), nullable=False),
     sa.Column('ubicacion_id', sa.Integer(), nullable=False),
     sa.Column('cantidad', sa.Float(), nullable=False),
     sa.Column('fecha_actualizacion', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['insumo_id'], ['insumos.insumo_id'], name=op.f('fk_stock_insumo_insumo_id_insumos')),
-    sa.ForeignKeyConstraint(['sector_id'], ['sectores.sector_id'], name=op.f('fk_stock_insumo_sector_id_sectores')),
-    sa.ForeignKeyConstraint(['ubicacion_id'], ['ubicaciones.ubicacion_id'], name=op.f('fk_stock_insumo_ubicacion_id_ubicaciones')),
-    sa.PrimaryKeyConstraint('stock_insumo_id', name=op.f('pk_stock_insumo')),
-    sa.UniqueConstraint('uuid', name=op.f('uq_stock_insumo_uuid'))
+    sa.ForeignKeyConstraint(['material_id'], ['materiales.material_id'], name=op.f('fk_stock_material_material_id_materiales')),
+    sa.ForeignKeyConstraint(['ubicacion_id'], ['ubicaciones.ubicacion_id'], name=op.f('fk_stock_material_ubicacion_id_ubicaciones')),
+    sa.PrimaryKeyConstraint('stock_material_id', name=op.f('pk_stock_material')),
+    sa.UniqueConstraint('material_id', 'ubicacion_id', name=op.f('uq_stock_material_material_id')),
+    sa.UniqueConstraint('uuid', name=op.f('uq_stock_material_uuid'))
     )
     op.create_table('bom_activo',
     sa.Column('bom_activo_id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('uuid', sa.String(length=36), nullable=False),
     sa.Column('activo_id', sa.Integer(), nullable=False),
-    sa.Column('insumo_id', sa.Integer(), nullable=False),
+    sa.Column('material_id', sa.Integer(), nullable=False),
     sa.Column('cantidad', sa.Float(), nullable=True),
-    sa.Column('es_equivalencia', sa.Boolean(), nullable=True),
+    sa.Column('es_equivalencia', sa.Boolean(), nullable=False),
     sa.Column('nota_equivalencia', sa.String(length=300), nullable=True),
     sa.Column('origen_equivalencia', sa.String(length=100), nullable=True),
-    sa.Column('reemplaza_insumo_modelo_id', sa.Integer(), nullable=True),
+    sa.Column('reemplaza_material_modelo_id', sa.Integer(), nullable=True),
     sa.Column('creado_en', sa.DateTime(), nullable=True),
     sa.Column('actualizado_en', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['activo_id'], ['activos.activo_id'], name=op.f('fk_bom_activo_activo_id_activos')),
-    sa.ForeignKeyConstraint(['insumo_id'], ['insumos.insumo_id'], name=op.f('fk_bom_activo_insumo_id_insumos')),
-    sa.ForeignKeyConstraint(['reemplaza_insumo_modelo_id'], ['insumos.insumo_id'], name=op.f('fk_bom_activo_reemplaza_insumo_modelo_id_insumos')),
+    sa.ForeignKeyConstraint(['material_id'], ['materiales.material_id'], name=op.f('fk_bom_activo_material_id_materiales')),
+    sa.ForeignKeyConstraint(['reemplaza_material_modelo_id'], ['materiales.material_id'], name=op.f('fk_bom_activo_reemplaza_material_modelo_id_materiales')),
     sa.PrimaryKeyConstraint('bom_activo_id', name=op.f('pk_bom_activo')),
     sa.UniqueConstraint('uuid', name=op.f('uq_bom_activo_uuid'))
     )
@@ -337,7 +343,6 @@ def upgrade():
     sa.Column('unidad_medida_id', sa.Integer(), nullable=False),
     sa.Column('activo_id', sa.Integer(), nullable=False),
     sa.Column('valor_inicial', sa.Float(), nullable=True),
-    sa.Column('valor_actual', sa.Float(), nullable=True),
     sa.Column('creado_en', sa.DateTime(), nullable=True),
     sa.Column('actualizado_en', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['activo_id'], ['activos.activo_id'], name=op.f('fk_medidores_activo_id_activos')),
@@ -365,16 +370,16 @@ def downgrade():
     op.drop_table('lecturas_medidor')
     op.drop_table('medidores')
     op.drop_table('bom_activo')
-    op.drop_table('stock_insumo')
+    op.drop_table('stock_material')
     op.drop_table('contactos_proveedor')
     op.drop_table('bom_modelo')
     op.drop_table('activos')
     op.drop_table('ubicaciones')
     op.drop_table('proveedores')
-    op.drop_table('insumos')
+    op.drop_table('materiales')
     op.drop_table('empleados')
     op.drop_table('unidades_medida')
-    op.drop_table('tipos_insumo')
+    op.drop_table('tipos_material')
     op.drop_table('sectores')
     op.drop_table('recursos')
     op.drop_table('pedido_detalle')
@@ -390,6 +395,6 @@ def downgrade():
     op.drop_table('estados_recurso')
     op.drop_table('estados_cuenta')
     op.drop_table('estados_activo')
-    op.drop_table('categorias_insumo')
+    op.drop_table('categorias_material')
     op.drop_table('audit_log')
     # ### end Alembic commands ###

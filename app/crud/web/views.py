@@ -21,8 +21,8 @@ Las subentidades (ej: ubicaciones) funcionan en dos contextos:
     y filtro, y alta eligiendo el padre en el formulario.
 
 Una subentidad puede colgar de varios padres (ej: el BOM de un modelo aparece en
-el modelo y en el insumo). El padre "activo" es el que viene en la URL
-(?insumo_id=7); si no viene ninguno, se usa el principal (el primero declarado).
+el modelo y en el material). El padre "activo" es el que viene en la URL
+(?material_id=7); si no viene ninguno, se usa el principal (el primero declarado).
 """
 from __future__ import annotations
 

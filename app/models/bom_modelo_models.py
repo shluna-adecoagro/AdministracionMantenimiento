@@ -16,12 +16,12 @@ class BOMModelo(db.Model, ModelMixin, AuditMixin):
         db.String(36), default=lambda: str(uuid.uuid4()), unique=True, nullable=False
     )
 
-    # FK → Insumo
-    # Sin backref: un insumo que figura en un BOM no se puede borrar.
-    insumo_id = db.Column(
-        db.Integer, db.ForeignKey("insumos.insumo_id"), nullable=False
+    # FK → Material
+    # Sin backref: un material que figura en un BOM no se puede borrar.
+    material_id = db.Column(
+        db.Integer, db.ForeignKey("materiales.material_id"), nullable=False
     )
-    insumo = db.relationship("Insumo", lazy="joined")
+    material = db.relationship("Material", lazy="joined")
 
     # FK → Modelo. Al borrar el modelo se borra su BOM (cascada).
     modelo_id = db.Column(

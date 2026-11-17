@@ -15,7 +15,7 @@ from app.models.activos_models import (
     EstadoActivo,
 )
 
-from app.models.insumos_models import CategoriaInsumo, TipoInsumo
+from app.models.materiales_models import CategoriaMaterial, TipoMaterial
 from app.models.unidadmedida_models import TipoUnidad
 
 
@@ -179,10 +179,10 @@ def seed_data():
         print("✔ Categorías de activo precargadas.")
 
     # ============================================================
-    # CATEGORÍAS DE INSUMO
+    # CATEGORÍAS DE MATERIAL
     # ============================================================
-    if CategoriaInsumo.query.count() == 0:
-        categorias_insumos = [
+    if CategoriaMaterial.query.count() == 0:
+        categorias_materials = [
             "Lubricantes",
             "Filtros",
             "Rodamientos",
@@ -196,15 +196,15 @@ def seed_data():
         ]
 
         db.session.add_all(
-            [CategoriaInsumo(nombre_categoria=c) for c in categorias_insumos]
+            [CategoriaMaterial(nombre_categoria=c) for c in categorias_materials]
         )
 
-        print("✔ Categorías de insumo precargadas.")
+        print("✔ Categorías de material precargadas.")
 
     # ============================================================
-    # TIPOS DE INSUMO
+    # TIPOS DE MATERIAL
     # ============================================================
-    if TipoInsumo.query.count() == 0:
+    if TipoMaterial.query.count() == 0:
         tipos_por_categoria = {
             "Filtros": [
                 "Filtro de aire",
@@ -221,18 +221,18 @@ def seed_data():
         }
 
         for categoria, tipos in tipos_por_categoria.items():
-            cat = CategoriaInsumo.query.filter_by(nombre_categoria=categoria).first()
+            cat = CategoriaMaterial.query.filter_by(nombre_categoria=categoria).first()
             if not cat:
                 continue
 
             for t in tipos:
                 db.session.add(
-                    TipoInsumo(
-                        nombre_tipo=t, categoria_insumo_id=cat.categoria_insumo_id
+                    TipoMaterial(
+                        nombre_tipo=t, categoria_material_id=cat.categoria_material_id
                     )
                 )
 
-        print("✔ Tipos de insumo precargados.")
+        print("✔ Tipos de material precargados.")
 
     # ============================================================
     # TIPOS DE UNIDAD DE MEDIDA

@@ -117,7 +117,7 @@ class EntitySpec:
     auditoria: bool
     auditoria_ignorar: tuple[str, ...] = AUDITORIA_IGNORAR_DEFAULT
     # Subentidades: padres de los que cuelga (ej: el BOM de un modelo cuelga del
-    # modelo y también del insumo). El primero es el principal.
+    # modelo y también del material). El primero es el principal.
     padres: tuple[ParentSpec, ...] = ()
     hijos: tuple[str, ...] = ()        # lo completa el registry a partir de `padres`
     sidebar: bool = False
@@ -138,7 +138,7 @@ class EntitySpec:
         return bool(self.padres)
 
     def padre_de_tipo(self, entidad: str) -> ParentSpec | None:
-        """Relación con un padre concreto (ej: "insumos" → fk "insumo_id")."""
+        """Relación con un padre concreto (ej: "materiales" → fk "material_id")."""
         return next((p for p in self.padres if p.entidad == entidad), None)
 
     @property

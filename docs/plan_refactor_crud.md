@@ -252,9 +252,27 @@ Pendientes:
   unidades (nombre).
 - `app/schemas/activos/` (detalles técnicos por tipo de activo, columna JSON): la columna
   se conserva; falta decidir cómo se cargan (Fase 8 o una fase propia).
-- Código sin uso para borrar en la Fase 8: `app/routes/api/insumos_routes.py`,
-  `app/services/stock_service.py`, los `.txt` de `app/crud/metamodelos/`, `ENTIDADES` y
-  `to_legacy()`.
+
+## Notas de la Fase 8
+
+- Se borró el framework viejo (`framework.py`, metamodelos escritos a mano, modo sombra,
+  `ENTIDADES`, `to_legacy()`) y el código sin uso listado en las fases anteriores. El
+  registry está en `app/crud/entidades.py`.
+- **Insumos → Materiales** (pedido del usuario): modelos (`Material`, `CategoriaMaterial`,
+  `TipoMaterial`, `StockMaterial`), tablas, columnas (`material_id`,
+  `reemplaza_material_modelo_id` en el BOM), URLs (`/materiales`, `/api/materiales`...) y textos.
+- **Migraciones unificadas** en una sola («esquema inicial»): el proyecto todavía no tiene
+  datos reales. Una base local anterior avisa que hay que recrearla: `flask reset-db`.
+- Los archivos subidos (`app/static/uploads/`) ya no se versionan en git.
+- Quedan sin tocar, a decidir: **pedidos** (modelo, servicio y rutas sin registrar; la ruta
+  importa una clase que no existe) y **`src/sync`** (carga desde Excel; con la opción A de
+  sincronización y la importación CSV probablemente sobra).
+
+## Próximo: órdenes de trabajo (OT)
+
+Idea inicial (a diseñar): cada OT tiene una o más **operaciones**; a cada operación se
+le asignan **recursos** (empleados o proveedores, vía la tabla común `recursos`) y
+**materiales**.
 
 ## Arquitectura objetivo
 
@@ -302,7 +320,7 @@ la API generada respeta ese contrato.
 | **5. Base de datos** | Quitar el respaldo automático y `sync-db`. Flask-Migrate (Alembic) y fuera `create_all` de `before_request`. Configuración por `.env`. Comandos de consola a `app/cli.py`. | ✅ Hecha |
 | **6. Carga de datos** | `flask importar` / `flask exportar` en CSV, con clave natural, FK por nombre, simulación y todo o nada. Ver «Carga de datos» más abajo. | ✅ Hecha |
 | **7. Migrar el resto** | Tras revisar su diseño: activos, medidores, lecturas, insumos, stock, unidades, marcas, modelos, recursos, BOM. Ver «Notas de la Fase 7». | ✅ Hecha |
-| **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. | Pendiente |
+| **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. Ver «Notas de la Fase 8». | ✅ Hecha |
 | **9. Sincronización con SharePoint** | Opción A: exportar periódicamente de la app a SharePoint, más copias de seguridad automáticas de la base. Al final, escribir en SharePoint directo (Microsoft Graph) en lugar de pasar por CSV. | Pendiente |
 
 ## Cómo agregar o modificar una entidad (desde la Fase 1)

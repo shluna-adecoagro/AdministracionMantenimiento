@@ -37,7 +37,7 @@ def test_todas_las_entidades_estan_en_el_registry():
     assert set(REGISTRY) == {
         "sectores", "ubicaciones", "cuentas",
         "activos", "medidores", "lecturas_medidor", "bom_activo", "bom_modelo",
-        "insumos", "stock_insumo", "categorias_insumo", "tipos_insumo",
+        "materiales", "stock_material", "categorias_material", "tipos_material",
         "marcas", "modelos", "unidades_medida",
         "empleados", "proveedores", "contactos_proveedor",
     }

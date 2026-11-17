@@ -11,7 +11,7 @@ Hay tres variantes de entrada y una de salida:
     registro    respuesta: lo que devuelve la API (incluye id, uuid, fechas y etiquetas)
 
 Los campos de tipo "file" no se reciben por la API (las fotos se suben desde la web),
-ni los de solo lectura (calculados, como el stock total de un insumo).
+ni los de solo lectura (calculados, como el stock total de un material).
 """
 from __future__ import annotations
 

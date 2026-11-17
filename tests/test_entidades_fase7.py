@@ -1,6 +1,6 @@
 """
-Entidades migradas en la Fase 7: activos, medidores, lecturas, insumos, stock,
-catálogos de insumo, marcas, modelos, unidades, empleados, proveedores y BOM.
+Entidades migradas en la Fase 7: activos, medidores, lecturas, materiales, stock,
+catálogos de material, marcas, modelos, unidades, empleados, proveedores y BOM.
 """
 from datetime import datetime
 
@@ -10,7 +10,7 @@ from app.crud.entidades import REGISTRY
 from app.models.activos_models import Activo, CategoriaActivo, EstadoActivo
 from app.models.bom_activo_models import BOMActivo
 from app.models.bom_modelo_models import BOMModelo
-from app.models.insumos_models import CategoriaInsumo, Insumo, StockInsumo
+from app.models.materiales_models import CategoriaMaterial, Material, StockMaterial
 from app.models.lecturas_medidores_models import LecturaMedidor
 from app.models.marcas_modelos_models import Marca, Modelo
 from app.models.medidores_models import Medidor
@@ -57,14 +57,14 @@ def medidor(db, activo, unidad):
                                 unidad_medida_id=unidad.unidad_medida_id, valor_inicial=100))
 
 
-def _insumo(db, codigo, descripcion):
-    cat = CategoriaInsumo.query.filter_by(nombre_categoria="Filtros").one()
-    return _guardar(db, Insumo(codigo=codigo, descripcion=descripcion, categoria_insumo_id=cat.categoria_insumo_id))
+def _material(db, codigo, descripcion):
+    cat = CategoriaMaterial.query.filter_by(nombre_categoria="Filtros").one()
+    return _guardar(db, Material(codigo=codigo, descripcion=descripcion, categoria_material_id=cat.categoria_material_id))
 
 
 @pytest.fixture
-def insumo(db):
-    return _insumo(db, "F-001", "Filtro de aceite")
+def material(db):
+    return _material(db, "F-001", "Filtro de aceite")
 
 
 @pytest.fixture
@@ -84,15 +84,15 @@ def test_listado_y_alta_de_cada_entidad(client, entidad):
 
 def test_subentidades_abren_sin_el_padre(client, medidor):
     """Antes daban 500 si se abrían sin el ID del padre (error 3 del diagnóstico)."""
-    for url in ("/medidores", "/lecturas_medidor", "/stock_insumo", "/modelos",
+    for url in ("/medidores", "/lecturas_medidor", "/stock_material", "/modelos",
                 "/contactos_proveedor", "/lecturas_medidor/crear", "/modelos/crear"):
         assert client.get(url).status_code == 200, url
 
 
-def test_detalle_con_todas_sus_pestanas(client, activo, insumo, modelo, medidor):
+def test_detalle_con_todas_sus_pestanas(client, activo, material, modelo, medidor):
     pestanas = {
         f"/activos/{activo.activo_id}": ["datos", "historial", "medidores", "bom_activo", "bom_del_modelo", "bom_final"],
-        f"/insumos/{insumo.insumo_id}": ["stock_insumo", "bom_modelo", "bom_activo", "compatibilidad_final"],
+        f"/materiales/{material.material_id}": ["stock_material", "bom_modelo", "bom_activo", "compatibilidad_final"],
         f"/modelos/{modelo.modelo_id}": ["bom_modelo"],
         f"/medidores/{medidor.medidor_id}": ["lecturas_medidor"],
     }
@@ -103,8 +103,8 @@ def test_detalle_con_todas_sus_pestanas(client, activo, insumo, modelo, medidor)
 
 def test_menu_lateral(client):
     html = client.get("/").get_data(as_text=True)
-    for url in ("/activos", "/insumos", "/empleados", "/proveedores", "/marcas",
-                "/unidades_medida", "/categorias_insumo"):
+    for url in ("/activos", "/materiales", "/empleados", "/proveedores", "/marcas",
+                "/unidades_medida", "/categorias_material"):
         assert f'href="{url}"' in html
     assert 'href="/medidores"' not in html  # subentidad: se llega desde el activo
 
@@ -129,8 +129,8 @@ def test_crear_activo_con_usuario_asignado_libre(client, sector, empleado):
     assert a.año == 2020
 
 
-def test_borrar_activo_borra_su_bom(client, activo, insumo):
-    BOMActivo.query.session.add(BOMActivo(activo_id=activo.activo_id, insumo_id=insumo.insumo_id))
+def test_borrar_activo_borra_su_bom(client, activo, material):
+    BOMActivo.query.session.add(BOMActivo(activo_id=activo.activo_id, material_id=material.material_id))
     BOMActivo.query.session.commit()
 
     html = client.get(f"/activos/{activo.activo_id}/confirmar_eliminar").get_data(as_text=True)
@@ -192,59 +192,59 @@ def test_medidor_con_lecturas_no_se_borra(client, db, medidor):
 
 
 # ---------------------------------------------------------------------------
-# Insumos y stock
+# Materiales y stock
 # ---------------------------------------------------------------------------
 
-def test_stock_total_en_el_listado(client, db, insumo, ubicacion, sector):
+def test_stock_total_en_el_listado(client, db, material, ubicacion, sector):
     from app.models.ubicaciones_models import Ubicacion
 
     otra = _guardar(db, Ubicacion(nombre_ubicacion="Galpón 2", sector_id=sector.sector_id))
-    _guardar(db, StockInsumo(insumo_id=insumo.insumo_id, ubicacion_id=ubicacion.ubicacion_id, cantidad=4),
-             StockInsumo(insumo_id=insumo.insumo_id, ubicacion_id=otra.ubicacion_id, cantidad=6))
+    _guardar(db, StockMaterial(material_id=material.material_id, ubicacion_id=ubicacion.ubicacion_id, cantidad=4),
+             StockMaterial(material_id=material.material_id, ubicacion_id=otra.ubicacion_id, cantidad=6))
     db.session.expire_all()
-    assert db.session.get(Insumo, insumo.insumo_id).stock_total == 10
+    assert db.session.get(Material, material.material_id).stock_total == 10
 
-    html = client.get("/insumos").get_data(as_text=True)
+    html = client.get("/materiales").get_data(as_text=True)
     assert "Stock total" in html and "10.0" in html
 
 
-def test_stock_sin_sector_y_unico_por_ubicacion(client, insumo, ubicacion):
-    assert "sector_id" not in REGISTRY["stock_insumo"].fields
+def test_stock_sin_sector_y_unico_por_ubicacion(client, material, ubicacion):
+    assert "sector_id" not in REGISTRY["stock_material"].fields
 
     datos = {"ubicacion_id": ubicacion.ubicacion_id, "cantidad": "3"}
-    url = f"/stock_insumo/crear?insumo_id={insumo.insumo_id}"
+    url = f"/stock_material/crear?material_id={material.material_id}"
     assert client.post(url, data=datos).status_code == 302
     r = client.post(url, data=datos)
     assert r.status_code == 400
     assert "Ya existe" in r.get_data(as_text=True)
 
 
-def test_insumo_con_stock_no_se_borra(client, db, insumo, ubicacion):
-    _guardar(db, StockInsumo(insumo_id=insumo.insumo_id, ubicacion_id=ubicacion.ubicacion_id, cantidad=1))
-    assert client.post(f"/insumos/{insumo.insumo_id}/confirmar_eliminar").status_code == 409
+def test_material_con_stock_no_se_borra(client, db, material, ubicacion):
+    _guardar(db, StockMaterial(material_id=material.material_id, ubicacion_id=ubicacion.ubicacion_id, cantidad=1))
+    assert client.post(f"/materiales/{material.material_id}/confirmar_eliminar").status_code == 409
 
 
-def test_marca_en_uso_por_insumos_no_se_borra(client, db, insumo):
-    """Antes SQLAlchemy dejaba el insumo sin marca, en silencio."""
+def test_marca_en_uso_por_materiales_no_se_borra(client, db, material):
+    """Antes SQLAlchemy dejaba el material sin marca, en silencio."""
     marca = _guardar(db, Marca(nombre_marca="Fram"))
-    insumo.marca_id = marca.marca_id
+    material.marca_id = marca.marca_id
     db.session.commit()
     assert client.post(f"/marcas/{marca.marca_id}/confirmar_eliminar").status_code == 409
-    assert db.session.get(Insumo, insumo.insumo_id).marca_id == marca.marca_id
+    assert db.session.get(Material, material.material_id).marca_id == marca.marca_id
 
 
 def test_tipos_dependen_de_la_categoria(client):
     """El formulario filtra los tipos según la categoría elegida (data-extra)."""
-    form = client.get("/insumos/crear").get_data(as_text=True)
-    assert 'data-extra="categoria_insumo_id"' in form
+    form = client.get("/materiales/crear").get_data(as_text=True)
+    assert 'data-extra="categoria_material_id"' in form
 
 
 # ---------------------------------------------------------------------------
 # Marcas y modelos
 # ---------------------------------------------------------------------------
 
-def test_borrar_marca_borra_sus_modelos_y_su_bom(client, db, modelo, insumo):
-    _guardar(db, BOMModelo(modelo_id=modelo.modelo_id, insumo_id=insumo.insumo_id))
+def test_borrar_marca_borra_sus_modelos_y_su_bom(client, db, modelo, material):
+    _guardar(db, BOMModelo(modelo_id=modelo.modelo_id, material_id=material.material_id))
     r = client.post(f"/marcas/{modelo.marca_id}/confirmar_eliminar")
     assert r.status_code == 302
     assert Modelo.query.count() == 0 and BOMModelo.query.count() == 0
@@ -263,29 +263,29 @@ def test_modelo_unico_por_marca(client, modelo):
 # BOM
 # ---------------------------------------------------------------------------
 
-def test_bom_desde_el_insumo_vuelve_al_insumo(client, insumo, modelo):
-    """El BOM de modelo cuelga de dos padres: se puede cargar desde el insumo."""
-    form = client.get(f"/bom_modelo/crear?insumo_id={insumo.insumo_id}").get_data(as_text=True)
-    assert f'<option value="{insumo.insumo_id}"' in form
+def test_bom_desde_el_material_vuelve_al_material(client, material, modelo):
+    """El BOM de modelo cuelga de dos padres: se puede cargar desde el material."""
+    form = client.get(f"/bom_modelo/crear?material_id={material.material_id}").get_data(as_text=True)
+    assert f'<option value="{material.material_id}"' in form
 
-    r = client.post(f"/bom_modelo/crear?insumo_id={insumo.insumo_id}", data={
+    r = client.post(f"/bom_modelo/crear?material_id={material.material_id}", data={
         "modelo_id": modelo.modelo_id, "cantidad": "1", "es_equivalencia": "False",
     })
     assert r.status_code == 302
-    assert r.headers["Location"].endswith(f"/insumos/{insumo.insumo_id}?seccion=bom_modelo")
+    assert r.headers["Location"].endswith(f"/materiales/{material.material_id}?seccion=bom_modelo")
     b = BOMModelo.query.one()
-    assert (b.insumo_id, b.es_equivalencia) == (insumo.insumo_id, False)
+    assert (b.material_id, b.es_equivalencia) == (material.material_id, False)
 
 
 def test_bom_final_y_compatibilidad(client, db, activo, modelo):
-    original = _insumo(db, "F-001", "Filtro original")
-    alternativo = _insumo(db, "F-002", "Filtro alternativo")
-    propio = _insumo(db, "F-003", "Filtro extra")
-    _guardar(db, BOMModelo(modelo_id=modelo.modelo_id, insumo_id=original.insumo_id, cantidad=1))
+    original = _material(db, "F-001", "Filtro original")
+    alternativo = _material(db, "F-002", "Filtro alternativo")
+    propio = _material(db, "F-003", "Filtro extra")
+    _guardar(db, BOMModelo(modelo_id=modelo.modelo_id, material_id=original.material_id, cantidad=1))
     _guardar(db,
-             BOMActivo(activo_id=activo.activo_id, insumo_id=alternativo.insumo_id,
-                       reemplaza_insumo_modelo_id=original.insumo_id, es_equivalencia=True),
-             BOMActivo(activo_id=activo.activo_id, insumo_id=propio.insumo_id))
+             BOMActivo(activo_id=activo.activo_id, material_id=alternativo.material_id,
+                       reemplaza_material_modelo_id=original.material_id, es_equivalencia=True),
+             BOMActivo(activo_id=activo.activo_id, material_id=propio.material_id))
 
     html = client.get(f"/activos/{activo.activo_id}?seccion=bom_final").get_data(as_text=True)
     assert "F-002 · Filtro alternativo" in html
@@ -293,9 +293,9 @@ def test_bom_final_y_compatibilidad(client, db, activo, modelo):
     assert "F-003 · Filtro extra" in html
 
     # El original ya no aplica a este activo (lo reemplazó); el alternativo sí.
-    html = client.get(f"/insumos/{original.insumo_id}?seccion=compatibilidad_final").get_data(as_text=True)
+    html = client.get(f"/materiales/{original.material_id}?seccion=compatibilidad_final").get_data(as_text=True)
     assert "Tractor 1" not in html
-    html = client.get(f"/insumos/{alternativo.insumo_id}?seccion=compatibilidad_final").get_data(as_text=True)
+    html = client.get(f"/materiales/{alternativo.material_id}?seccion=compatibilidad_final").get_data(as_text=True)
     assert "Tractor 1" in html and "BOM del activo" in html
 
 
@@ -335,21 +335,21 @@ def test_borrar_proveedor_borra_sus_contactos(client, db):
 # API y CSV
 # ---------------------------------------------------------------------------
 
-def test_api_devuelve_los_calculados(client, medidor, insumo):
+def test_api_devuelve_los_calculados(client, medidor, material):
     assert client.get(f"/api/medidores/{medidor.medidor_id}").get_json()["valor_actual"] == 100
-    assert client.get(f"/api/insumos/{insumo.insumo_id}").get_json()["stock_total"] == 0
+    assert client.get(f"/api/materiales/{material.material_id}").get_json()["stock_total"] == 0
 
 
-def test_importar_insumos_por_nombre(app, db):
+def test_importar_materiales_por_nombre(app, db):
     from app.crud.intercambio.csv_entidades import exportar, importar
 
     csv = "Código;Descripción;Categoría\nF-9;Filtro de aire;Filtros\n".encode()
-    resultado = importar(REGISTRY["insumos"], csv)
+    resultado = importar(REGISTRY["materiales"], csv)
     assert resultado.ok, resultado.resumen()
-    assert Insumo.query.filter_by(codigo="F-9").one().categoria_insumo.nombre_categoria == "Filtros"
+    assert Material.query.filter_by(codigo="F-9").one().categoria_material.nombre_categoria == "Filtros"
 
     # Reimportar lo exportado no cambia nada (el stock total se ignora: es calculado).
-    resultado = importar(REGISTRY["insumos"], exportar(REGISTRY["insumos"]))
+    resultado = importar(REGISTRY["materiales"], exportar(REGISTRY["materiales"]))
     assert resultado.ok and resultado.sin_cambios == 1
     assert "Stock total" in resultado.columnas_ignoradas
 
@@ -362,7 +362,7 @@ def test_dependencias_inferidas_del_modelo():
     campos = REGISTRY["activos"].fields
     assert (campos["modelo_id"].depende_de, campos["modelo_id"].depende_fk) == ("marca_id", "marca_id")
     assert campos["ubicacion_id"].depende_de == "sector_id"
-    assert REGISTRY["insumos"].fields["tipo_insumo_id"].depende_de == "categoria_insumo_id"
+    assert REGISTRY["materiales"].fields["tipo_material_id"].depende_de == "categoria_material_id"
 
 
 def test_ubicaciones_repetidas_se_distinguen_por_sector(client, db, ubicacion, estado_sector_activo):

@@ -1,7 +1,7 @@
 # Administración de Mantenimiento
 
 Sistema para **centralizar los datos del área de mantenimiento** de la empresa: qué activos
-existen, dónde están, qué insumos y repuestos usan, cuánto stock hay, quiénes trabajan en
+existen, dónde están, qué materiales y repuestos usan, cuánto stock hay, quiénes trabajan en
 ellos y qué cambios se hicieron, con trazabilidad completa.
 
 La idea es tener **una única fuente de verdad** consultable desde distintos lugares:
@@ -18,7 +18,7 @@ La idea es tener **una única fuente de verdad** consultable desde distintos lug
 |---|---|
 | Organización | Sectores, ubicaciones, cuentas contables |
 | Activos | Activos (vehículos, equipos fijos, implementos), marcas y modelos, medidores y lecturas |
-| Insumos | Insumos, stock, unidades de medida, listas de materiales (BOM) por modelo y por activo |
+| Materiales | Materiales, stock, unidades de medida, listas de materiales (BOM) por modelo y por activo |
 | Recursos | Empleados, proveedores y sus contactos |
 | Trazabilidad | Auditoría de cada alta, modificación y baja, con versión, motivo y usuario |
 
