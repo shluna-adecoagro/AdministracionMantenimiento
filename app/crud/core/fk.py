@@ -76,6 +76,23 @@ def opciones_de(fields: dict) -> dict[str, list[dict]]:
     return {c: opciones(cfg) for c, cfg in campos_fk(fields).items()}
 
 
+def validar_existencia(fields: dict, datos: dict) -> None:
+    """
+    Verifica que cada FK de `datos` apunte a un registro existente.
+    Lanza ErroresValidacion con un mensaje por campo (ej: "Estado: no existe el ID 99.").
+    """
+    from app.core.db import db
+    from app.crud.core.coercion import ErroresValidacion
+
+    errores = {}
+    for campo, cfg in campos_fk(fields).items():
+        valor = datos.get(campo)
+        if valor is not None and db.session.get(cfg["fk_model"], valor) is None:
+            errores[campo] = f"{cfg.get('label', campo)}: no existe el ID {valor}."
+    if errores:
+        raise ErroresValidacion(errores)
+
+
 # ---------------------------------------------------------------------------
 # Etiquetas de un registro
 # ---------------------------------------------------------------------------

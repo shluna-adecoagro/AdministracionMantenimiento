@@ -95,6 +95,20 @@ Diseño:
 - Código sin uso para borrar en la Fase 7: `app/templates/sectores/`,
   `app/services/sectores_service.py`, `app/routes/api/cuentas_routes.py`.
 
+## Notas de la Fase 4
+
+- `GET /api/<entidad>` sigue devolviendo un array JSON simple (compatible con
+  `src/sync`); la paginación es opcional y el total va en `X-Total-Count`.
+- Validación en dos pasos: JSON Schema (forma y tipos, mensajes por campo) y luego la
+  misma conversión y verificación de FKs que usa la web.
+- Códigos: 400 datos inválidos (incluye FK inexistente), 404, 405, 409 duplicado o
+  registro en uso.
+- **`src/sync` necesita ajustes** (no se tocó): `config.py` apunta a `/sectores` (la página
+  web) en lugar de `/api/sectores`, y `sync_engine.py` envía `estado_sector`, que no existe
+  (debe ser `estado_sector_id`).
+- Código sin uso para borrar en la Fase 7: `app/utils/auditoria_decorator.py` y
+  `validar_sector` en `app/utils/json_validator.py`.
+
 ## Arquitectura objetivo
 
 ```
@@ -137,7 +151,7 @@ la API generada respeta ese contrato.
 | **1. Metamodelo tipado** | `EntitySpec`/`FieldSpec`, registry (inferido + overrides) y un adaptador para que los dicts actuales sigan funcionando. Overrides de las 3 entidades piloto. `shadow_diff` pasa a ser validación al arrancar. | ✅ Hecha |
 | **2. Capa core** | Coerción, FK, repositorio, servicio (transacción + auditoría) y archivos. `framework.py` delega en ellos. Validación en servidor y manejo de `IntegrityError`. | ✅ Hecha |
 | **3. Web generada** | Vistas genéricas y navegación por registry (`app/crud/web/views.py`). Se eliminan `sectores_web.py` y `cuentas_web.py`. Las rutas especiales (`bom_final`, `compatibilidad_final`) se resuelven al migrar activos e insumos (Fase 6). | ✅ Hecha |
-| **4. API generada** | Generador de JSON Schema, endpoints REST genéricos con paginación y errores JSON, especificación OpenAPI. Reemplaza `sectores_routes.py`; se elimina `activos_routes.py`. | Pendiente |
+| **4. API generada** | Generador de JSON Schema, endpoints REST genéricos con paginación y errores JSON, especificación OpenAPI (3.0 y 2.0 para Power Apps) y página `/api/docs`. Reemplaza `sectores_routes.py`; se elimina `activos_routes.py`. | ✅ Hecha |
 | **5. Base de datos** | Quitar el respaldo automático y `sync-db`. Flask-Migrate (Alembic) y fuera `create_all` de `before_request`. Configuración por `.env`. | Pendiente |
 | **6. Migrar el resto** | Tras revisar su diseño: activos, medidores, lecturas, insumos, stock, unidades, marcas, modelos, recursos, BOM. | Pendiente |
 | **7. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados, y separar `app/__init__.py` (comandos CLI a `cli.py`). | Pendiente |
