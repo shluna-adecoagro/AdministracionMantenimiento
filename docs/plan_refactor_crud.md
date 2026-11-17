@@ -134,7 +134,7 @@ Hecho:
   validación, auditoría (usuario «importación», motivo = nombre del archivo) y reglas de
   integridad.
 - **Clave natural** por entidad (`clave_natural` en el override): `nombre_sector`;
-  `nombre_ubicacion` + `sector_id`; `numero_cuenta`. Reimportar actualiza en lugar de
+  `nombre_ubicacion` + `sector_id`; `numero_cuenta` (único en la base, tercera migración). Reimportar actualiza en lugar de
   duplicar, y las filas sin cambios no se tocan (el historial no se ensucia).
 - Ubicaciones: restricción única (nombre, sector) en la base (segunda migración).
 - **FK por nombre** en el CSV («Activo», «Taller»); por ID solo con la columna `*_id`.
@@ -154,7 +154,10 @@ Decisiones del usuario:
 - Interés en **mantener sincronizadas** la base local y SharePoint, como respaldo mutuo.
   Leer SharePoint directo queda como última fase (9).
 
-**Pendiente de decidir: dirección de la sincronización (Fase 9).**
+**Dirección de la sincronización (Fase 9): decidida la opción A.** La app es la fuente de
+verdad, donde se gestionan los datos; SharePoint es una copia para mostrar, que se
+actualiza exportando desde la app. El respaldo se completa con copias periódicas del
+archivo de la base.
 
 | Opción | Cómo funciona | Riesgo |
 |---|---|---|
@@ -162,8 +165,7 @@ Decisiones del usuario:
 | B. SharePoint es la fuente; la app es una copia | Se edita en SharePoint; se importa periódicamente | Bajo, pero la app no se usaría para cargar |
 | C. Bidireccional | Se edita en ambos lados y se concilian los cambios | Alto: conflictos (mismo registro editado en los dos lados), bajas que hay que propagar, renombres que cambian la clave natural |
 
-Para el objetivo de respaldo, la recomendación es **A más copias de seguridad de la base**
-(el archivo SQLite se copia entero), y no C.
+Se eligió **A** (noviembre 2026): «SharePoint es más para mostrar que para gestionar».
 
 ## Arquitectura objetivo
 
@@ -212,7 +214,7 @@ la API generada respeta ese contrato.
 | **6. Carga de datos** | `flask importar` / `flask exportar` en CSV, con clave natural, FK por nombre, simulación y todo o nada. Ver «Carga de datos» más abajo. | ✅ Hecha |
 | **7. Migrar el resto** | Tras revisar su diseño: activos, medidores, lecturas, insumos, stock, unidades, marcas, modelos, recursos, BOM. | Pendiente |
 | **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. | Pendiente |
-| **9. Sincronización con SharePoint** | Según la dirección que se decida (ver «Carga de datos»). Al final, leer y escribir SharePoint directo (Microsoft Graph) en lugar de exportar CSV. | Pendiente |
+| **9. Sincronización con SharePoint** | Opción A: exportar periódicamente de la app a SharePoint, más copias de seguridad automáticas de la base. Al final, escribir en SharePoint directo (Microsoft Graph) en lugar de pasar por CSV. | Pendiente |
 
 ## Cómo agregar o modificar una entidad (desde la Fase 1)
 
