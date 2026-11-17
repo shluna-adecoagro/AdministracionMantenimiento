@@ -44,6 +44,7 @@ class CategoriaActivo(db.Model, ModelMixin, AuditMixin):
 
 class Activo(db.Model, ModelMixin, AuditMixin):
     __tablename__ = "activos"
+    __label_field__ = "descripcion"
 
     activo_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     uuid = db.Column(
@@ -52,7 +53,8 @@ class Activo(db.Model, ModelMixin, AuditMixin):
 
     # FK → TipoActivo
     tipo_activo_id = db.Column(
-        db.Integer, db.ForeignKey("tipos_activo.tipo_activo_id"), nullable=False
+        db.Integer, db.ForeignKey("tipos_activo.tipo_activo_id"), nullable=False,
+        info={"label": "Tipo de activo"},
     )
     tipo_activo = db.relationship("TipoActivo", lazy="joined")
 
@@ -61,6 +63,7 @@ class Activo(db.Model, ModelMixin, AuditMixin):
         db.Integer,
         db.ForeignKey("categorias_activo.categoria_activo_id"),
         nullable=False,
+        info={"label": "Categoría"},
     )
     categoria_activo = db.relationship("CategoriaActivo", lazy="joined")
 
@@ -73,26 +76,30 @@ class Activo(db.Model, ModelMixin, AuditMixin):
     modelo = db.relationship("Modelo", lazy="joined")
 
     patente = db.Column(db.String(50), nullable=True)
-    descripcion = db.Column(db.String(200), nullable=False)
+    descripcion = db.Column(db.String(200), nullable=False, info={"label": "Descripción"})
 
-    nro_serie_chasis = db.Column(db.String(100), nullable=True)
-    nro_motor = db.Column(db.String(100), nullable=True)
+    nro_serie_chasis = db.Column(db.String(100), nullable=True, info={"label": "Nro. serie chasis"})
+    nro_motor = db.Column(db.String(100), nullable=True, info={"label": "Nro. motor"})
 
     año = db.Column(db.Integer, nullable=True)
-    observacion = db.Column(db.String(300), nullable=True)
-    codigo_brescia = db.Column(db.String(50), nullable=True)
+    observacion = db.Column(db.String(300), nullable=True, info={"label": "Observación"})
+    codigo_brescia = db.Column(db.String(50), nullable=True, info={"label": "Código Brescia"})
 
-    # FK → Sector
+    # FK → Sector. Sin backref: un sector con activos no se puede borrar.
     sector_id = db.Column(
-        db.Integer, db.ForeignKey("sectores.sector_id"), nullable=True
+        db.Integer, db.ForeignKey("sectores.sector_id"), nullable=True,
+        info={"label": "Sector asignado"},
     )
     sector = db.relationship("Sector", lazy="joined")
 
+    # Texto libre, con los empleados como sugerencias (puede ser alguien que no
+    # está cargado como empleado).
     usuario_asignado = db.Column(db.String(150), nullable=True)
 
     # FK → Ubicacion
     ubicacion_id = db.Column(
-        db.Integer, db.ForeignKey("ubicaciones.ubicacion_id"), nullable=True
+        db.Integer, db.ForeignKey("ubicaciones.ubicacion_id"), nullable=True,
+        info={"label": "Ubicación"},
     )
     ubicacion = db.relationship("Ubicacion", lazy="joined") 
 

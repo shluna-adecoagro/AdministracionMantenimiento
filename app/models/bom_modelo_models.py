@@ -17,24 +17,28 @@ class BOMModelo(db.Model, ModelMixin, AuditMixin):
     )
 
     # FK → Insumo
+    # Sin backref: un insumo que figura en un BOM no se puede borrar.
     insumo_id = db.Column(
         db.Integer, db.ForeignKey("insumos.insumo_id"), nullable=False
     )
     insumo = db.relationship("Insumo", lazy="joined")
 
-    # FK → Modelo
+    # FK → Modelo. Al borrar el modelo se borra su BOM (cascada).
     modelo_id = db.Column(
         db.Integer, db.ForeignKey("modelos.modelo_id"), nullable=False
     )
-    modelo = db.relationship("Modelo", lazy="joined")
+    modelo = db.relationship(
+        "Modelo", lazy="joined", backref=db.backref("bom", cascade="all, delete")
+    )
 
     # Cantidad requerida en el BOM (opcional)
     cantidad = db.Column(db.Float, nullable=True)
 
     # Equivalencias (cuando el repuesto no es el original del modelo)
-    es_equivalencia = db.Column(db.Boolean, default=False)
-    nota_equivalencia = db.Column(db.String(300), nullable=True)
-    origen_equivalencia = db.Column(db.String(100), nullable=True)
+    es_equivalencia = db.Column(db.Boolean, default=False, nullable=False,
+                                info={"label": "Es equivalencia"})
+    nota_equivalencia = db.Column(db.String(300), nullable=True, info={"label": "Nota de equivalencia"})
+    origen_equivalencia = db.Column(db.String(100), nullable=True, info={"label": "Origen de equivalencia"})
 
     creado_en = db.Column(db.DateTime, default=datetime.utcnow)
     actualizado_en = db.Column(

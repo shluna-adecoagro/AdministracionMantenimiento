@@ -33,7 +33,7 @@ from app.crud.core.coercion import ErroresValidacion
 from app.crud.core.files import ArchivoInvalido, guardar
 from app.crud.core.service import ErrorIntegridad, RegistroEnUso, ServicioCRUD
 from app.crud.meta.spec import EntitySpec, ParentSpec
-from app.crud.web.textos import etiqueta_tabla
+from app.crud.web.textos import etiqueta_tabla, inicial
 
 BLUEPRINT = "crud"
 ACCIONES = ("listar", "crear", "detalle", "editar", "confirmar_eliminar")
@@ -159,7 +159,7 @@ class VistasEntidad:
         return render_template(
             "crud/listado_entidad.html",
             **self._contexto(),
-            nombre_entidad=s.label_plural.capitalize(),
+            nombre_entidad=inicial(s.label_plural),
             registros=registros,
             columns=list(s.listado),
             filtros={"campos": list(s.filtros)},
@@ -174,10 +174,15 @@ class VistasEntidad:
     # Formulario (alta y edición)
     # ------------------------------------------------------------------
 
-    def _leer_formulario(self, parcial):
+    def _leer_formulario(self, parcial, por_defecto=None):
+        """por_defecto: valores para los campos que el formulario no trae (ej: el padre de la URL)."""
+        entrada = request.form.to_dict()
+        for campo, valor in (por_defecto or {}).items():
+            if not entrada.get(campo):
+                entrada[campo] = valor
         datos, errores = {}, {}
         try:
-            datos = coercion.datos_de_entrada(self.spec.model, self.fields, request.form, parcial=parcial)
+            datos = coercion.datos_de_entrada(self.spec.model, self.fields, entrada, parcial=parcial)
         except ErroresValidacion as e:
             errores.update(e.errores)
 
@@ -213,7 +218,7 @@ class VistasEntidad:
         return render_template(
             "crud/form.html",
             **self._contexto(padre, padre_id),
-            nombre_entidad=self.spec.label_singular.capitalize(),
+            nombre_entidad=inicial(self.spec.label_singular),
             modelo=modelo,
             tipo_operacion=tipo_operacion,
             fk_data=fk.opciones_de(self.fields),
@@ -222,10 +227,10 @@ class VistasEntidad:
             url_cancelar=url_cancelar,
         ), status
 
-    def _guardar(self, operacion, tipo_operacion, modelo_actual, padre, url_cancelar):
+    def _guardar(self, operacion, tipo_operacion, modelo_actual, padre, url_cancelar, por_defecto=None):
         enviados = {**modelo_actual, **request.form.to_dict()}
         try:
-            datos = self._leer_formulario(parcial=(tipo_operacion == "UPDATE"))
+            datos = self._leer_formulario(parcial=(tipo_operacion == "UPDATE"), por_defecto=por_defecto)
             return operacion(datos)
         except ErroresValidacion as e:
             errores = e.errores
@@ -246,14 +251,12 @@ class VistasEntidad:
             return self._render_form("INSERT", modelo, (padre, padre_id), url_cancelar)
 
         def operacion(datos):
-            if padre and datos.get(padre.fk) is None:
-                datos[padre.fk] = padre_id
             nuevo = self.servicio.crear(datos, self._motivo())
             # Si se vino desde el padre, volver a su pestaña; si no, al listado.
             return redirect(self._url_volver(padre, getattr(nuevo, padre.fk)) if padre
                             else self._url_volver(None, None))
 
-        return self._guardar(operacion, "INSERT", modelo, (padre, padre_id), url_cancelar)
+        return self._guardar(operacion, "INSERT", modelo, (padre, padre_id), url_cancelar, por_defecto=modelo)
 
     # ------------------------------------------------------------------
     # EDITAR
@@ -298,7 +301,7 @@ class VistasEntidad:
         return render_template(
             "crud/confirmar_eliminar.html",
             **self._contexto(padre, padre_id),
-            nombre_entidad=self.spec.label_singular.capitalize(),
+            nombre_entidad=inicial(self.spec.label_singular),
             modelo=repository.valores(registro),
             fk_labels=fk.etiquetas(registro, self.fields),
             error=error,
@@ -325,7 +328,7 @@ class VistasEntidad:
             secciones.append({"id": "historial", "label": "Historial"})
         # Una pestaña por cada subentidad (hijos declarados con "padre")...
         for nombre_hijo in s.hijos:
-            secciones.append({"id": nombre_hijo, "label": self.registry[nombre_hijo].label_plural.capitalize()})
+            secciones.append({"id": nombre_hijo, "label": inicial(self.registry[nombre_hijo].label_plural)})
         # ...y una por cada pestaña calculada (tabs_extra).
         for tab in s.tabs_extra:
             secciones.append({"id": tab.id, "label": tab.label})
@@ -366,7 +369,7 @@ class VistasEntidad:
             .all()
         )
         return {
-            "label": hijo.label_plural.capitalize(),
+            "label": inicial(hijo.label_plural),
             "label_singular": hijo.label_singular,
             "label_plural": hijo.label_plural,
             "template_listado": "crud/listado_subentidad.html",

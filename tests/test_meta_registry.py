@@ -33,8 +33,14 @@ def errores_de(overrides):
 # Registry real de la app
 # ---------------------------------------------------------------------------
 
-def test_entidades_migradas():
-    assert set(REGISTRY) == {"sectores", "ubicaciones", "cuentas"}
+def test_todas_las_entidades_estan_en_el_registry():
+    assert set(REGISTRY) == {
+        "sectores", "ubicaciones", "cuentas",
+        "activos", "medidores", "lecturas_medidor", "bom_activo", "bom_modelo",
+        "insumos", "stock_insumo", "categorias_insumo", "tipos_insumo",
+        "marcas", "modelos", "unidades_medida",
+        "empleados", "proveedores", "contactos_proveedor",
+    }
 
 
 def test_sectores_inferido_del_modelo():

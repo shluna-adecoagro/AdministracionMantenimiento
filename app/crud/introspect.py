@@ -70,6 +70,11 @@ def normalizar_texto(texto) -> str:
     return re.sub(r"\s+", " ", sin_acentos(texto or "").strip().lower())
 
 
+def inicial(texto: str) -> str:
+    """Mayúscula inicial sin tocar el resto: "BOM de activos" (capitalize daría "Bom de activos")."""
+    return texto[:1].upper() + texto[1:]
+
+
 def humanizar(nombre: str) -> str:
     """'nro_serie_chasis' -> 'Nro serie chasis'; 'NumeroPedido' -> 'Numero pedido'."""
     n = re.sub(r"_id$", "", nombre)
@@ -252,6 +257,15 @@ def inferir_entidad(model) -> dict:
             continue
 
         campos[key] = _inferir_campo(key, col, mapper)
+
+    # Orden: primero las columnas propias, después las heredadas (ej: el estado
+    # de un empleado, que está en "recursos") y al final los valores calculados.
+    def _orden(key):
+        if campos[key].get("solo_lectura") and es_calculado(mapper.attrs[key]):
+            return 2
+        return 0 if mapper.attrs[key].columns[0].table is mapper.local_table else 1
+
+    campos = {k: campos[k] for k in sorted(campos, key=_orden)}
 
     meta = {
         "model": model,

@@ -196,7 +196,7 @@ class EntitySpec:
             d["subentidades"] = [
                 {
                     "entidad": h,
-                    "label": specs[h].label_plural.capitalize(),
+                    "label": specs[h].label_plural[:1].upper() + specs[h].label_plural[1:],
                     "label_singular": specs[h].label_singular,
                     "label_plural": specs[h].label_plural,
                     "fk": specs[h].padre_de_tipo(self.name).fk,

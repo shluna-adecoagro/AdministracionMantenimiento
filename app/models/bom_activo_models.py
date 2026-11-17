@@ -17,12 +17,15 @@ class BOMActivo(db.Model, ModelMixin, AuditMixin):
     )
 
     # FK → Activo
+    # Al borrar el activo se borra su BOM (cascada).
     activo_id = db.Column(
         db.Integer, db.ForeignKey("activos.activo_id"), nullable=False
     )
-    activo = db.relationship("Activo", lazy="joined")
+    activo = db.relationship(
+        "Activo", lazy="joined", backref=db.backref("bom", cascade="all, delete")
+    )
 
-    # FK → Insumo
+    # FK → Insumo. Sin backref: un insumo que figura en un BOM no se puede borrar.
     insumo_id = db.Column(
         db.Integer, db.ForeignKey("insumos.insumo_id"), nullable=False
     )
@@ -32,13 +35,15 @@ class BOMActivo(db.Model, ModelMixin, AuditMixin):
     cantidad = db.Column(db.Float, nullable=True)
 
     # Equivalencias específicas del activo
-    es_equivalencia = db.Column(db.Boolean, default=False)
-    nota_equivalencia = db.Column(db.String(300), nullable=True)
-    origen_equivalencia = db.Column(db.String(100), nullable=True)
+    es_equivalencia = db.Column(db.Boolean, default=False, nullable=False,
+                                info={"label": "Es equivalencia"})
+    nota_equivalencia = db.Column(db.String(300), nullable=True, info={"label": "Nota de equivalencia"})
+    origen_equivalencia = db.Column(db.String(100), nullable=True, info={"label": "Origen de equivalencia"})
 
     # Reemplazo de insumo original del modelo
     reemplaza_insumo_modelo_id = db.Column(
-        db.Integer, db.ForeignKey("insumos.insumo_id"), nullable=True
+        db.Integer, db.ForeignKey("insumos.insumo_id"), nullable=True,
+        info={"label": "Reemplaza al insumo del modelo"},
     )
     reemplaza_insumo_modelo = db.relationship(
         "Insumo", lazy="joined", foreign_keys=[reemplaza_insumo_modelo_id]

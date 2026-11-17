@@ -16,6 +16,7 @@ import json
 from flask import Response, jsonify, request
 from sqlalchemy import inspect as sa_inspect
 
+from app.crud.introspect import inicial
 from app.crud.meta.spec import EntitySpec
 from app.crud.schema import jsonschema
 
@@ -90,7 +91,7 @@ def generar_openapi(registry: dict[str, EntitySpec], url_base: str) -> dict:
     paths, tags = {}, []
     for spec in registry.values():
         n, nombre = spec.name, _nombre(spec)
-        tags.append({"name": n, "description": spec.label_plural.capitalize()})
+        tags.append({"name": n, "description": inicial(spec.label_plural)})
 
         esquemas[nombre] = _a_openapi(jsonschema.esquema_registro(spec))
         for modo, sufijo in (("crear", "Crear"), ("reemplazar", "Reemplazar"), ("modificar", "Modificar")):

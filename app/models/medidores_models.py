@@ -14,22 +14,27 @@ class Medidor(db.Model, ModelMixin, AuditMixin):
     medidor_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     uuid = db.Column(db.String(36), default=lambda: str(uuid.uuid4()), nullable=False)
 
-    nombre_medidor = db.Column(db.String(100), nullable=False)
+    nombre_medidor = db.Column(db.String(100), nullable=False, info={"label": "Nombre"})
 
     # FK → Unidad de medida
     unidad_medida_id = db.Column(
-        db.Integer, db.ForeignKey("unidades_medida.unidad_medida_id"), nullable=False
+        db.Integer, db.ForeignKey("unidades_medida.unidad_medida_id"), nullable=False,
+        info={"label": "Unidad de medida"},
     )
     unidad_medida = db.relationship("UnidadMedida", lazy="joined")
 
-    # FK → Activo
+    # FK → Activo. Sin backref: un activo con medidores no se puede borrar
+    # (las lecturas son historial; para retirarlo se usa el estado "Baja").
     activo_id = db.Column(
-        db.Integer, db.ForeignKey("activos.activo_id"), nullable=False
+        db.Integer, db.ForeignKey("activos.activo_id"), nullable=False,
+        info={"label": "Activo"},
     )
     activo = db.relationship("Activo", lazy="joined")
 
-    valor_inicial = db.Column(db.Float, default=0)
-    valor_actual = db.Column(db.Float, default=0)
+    valor_inicial = db.Column(db.Float, default=0, info={"label": "Valor inicial"})
+
+    # valor_actual: calculado a partir de la última lectura (ver
+    # lecturas_medidores_models.py, donde se define porque necesita LecturaMedidor).
 
     creado_en = db.Column(db.DateTime, default=datetime.utcnow)
     actualizado_en = db.Column(

@@ -97,6 +97,16 @@ def run_migrations_online():
     connectable = get_engine()
 
     with connectable.connect() as connection:
+        # SQLite: para cambiar una tabla, Alembic la recrea (copia, borra la vieja
+        # y renombra). Con las claves foráneas activas, borrar una tabla a la que
+        # apuntan otras (ej: modelos ← activos) falla. Se desactivan durante la
+        # migración (el PRAGMA no tiene efecto dentro de una transacción) y al
+        # final se verifica que no haya quedado ninguna referencia rota.
+        es_sqlite = connection.dialect.name == "sqlite"
+        if es_sqlite:
+            connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+            connection.commit()
+
         context.configure(
             connection=connection,
             target_metadata=get_metadata(),
@@ -105,6 +115,16 @@ def run_migrations_online():
 
         with context.begin_transaction():
             context.run_migrations()
+            if es_sqlite:
+                rotas = connection.exec_driver_sql("PRAGMA foreign_key_check").fetchall()
+                if rotas:
+                    raise RuntimeError(
+                        f"La migración dejó {len(rotas)} referencia(s) rota(s), por ejemplo: "
+                        f"tabla {rotas[0][0]}, fila {rotas[0][1]} → {rotas[0][2]}. No se aplicó."
+                    )
+
+        if es_sqlite:
+            connection.exec_driver_sql("PRAGMA foreign_keys=ON")
 
 
 if context.is_offline_mode():

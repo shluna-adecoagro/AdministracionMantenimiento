@@ -76,8 +76,8 @@ Diseño:
   | Relación | Regla | Decidido |
   |---|---|---|
   | Sector → ubicaciones | Cascada | ✅ |
-  | Sector / ubicación → activos, empleados, stock | Bloqueo | Provisorio: revisar en Fase 7 |
-  | Resto de las entidades | — | **Revisar al migrar cada una (Fase 7)** |
+  | Sector / ubicación → activos, empleados, stock | Bloqueo | ✅ (Fase 7) |
+  | Resto de las entidades | — | Ver «Notas de la Fase 7» |
 
 - Al reemplazar un archivo subido, el anterior queda en disco (pendiente de definir).
 
@@ -167,6 +167,65 @@ archivo de la base.
 
 Se eligió **A** (noviembre 2026): «SharePoint es más para mostrar que para gestionar».
 
+## Notas de la Fase 7
+
+Todas las entidades están en el registry (18). Ya no queda ninguna pantalla en
+`framework.py` ni en `app/routes/web/*_web.py` (salvo inicio y motivos); el menú lateral
+sale del registry.
+
+Decisiones del usuario (noviembre 2026):
+
+- **Stock**: sin sector (es el de la ubicación) y una sola fila por insumo + ubicación.
+  La migración suma las filas repetidas.
+- **Medidores**: el valor actual se calcula de la lectura más reciente (o el valor
+  inicial si no hay lecturas); ya no se edita.
+- **Usuario asignado** del activo: texto libre, con los empleados como sugerencias.
+- **Borrar un activo**: su BOM se borra en cascada; si tiene medidores, no se borra (para
+  retirarlo se usa el estado «Baja»).
+
+Reglas de borrado (decididas en esta fase, a confirmar con el uso):
+
+| Relación | Regla |
+|---|---|
+| Activo → BOM del activo | Cascada |
+| Activo → medidores; medidor → lecturas | Bloqueo (las lecturas son historial) |
+| Marca → modelos → BOM del modelo | Cascada (bloquea si un modelo está en un activo) |
+| Categoría de insumo → tipos | Cascada (bloquea si un tipo está en uso) |
+| Proveedor → contactos | Cascada |
+| Insumo con stock o en algún BOM | Bloqueo |
+| Marca, categoría, tipo, unidad o sector en uso | Bloqueo (antes algunos dejaban el dato vacío en silencio) |
+
+Framework (lo nuevo que se puede usar en cualquier entidad):
+
+- **Calculados**: un `column_property` del modelo (ej: `Insumo.stock_total`,
+  `Medidor.valor_actual`) aparece solo como campo de solo lectura: listado, detalle y
+  API, pero no en el formulario, la entrada de la API ni la importación. También se
+  puede marcar una columna con `{"solo_lectura": True}` (ej: fecha de actualización del stock).
+- **Varios padres**: `"padre": [{...}, {...}]`. El BOM de un modelo se carga desde el
+  modelo y se ve también en el insumo; el padre activo sale de la URL.
+- **Pestañas calculadas**: `tabs_extra` con una función que arma una tabla. Reemplazan a
+  las rutas especiales: «BOM del modelo» y «BOM final» en el activo, «Compatibilidad
+  final» en el insumo (`app/crud/meta/overrides/bom.py`).
+- **Sugerencias**: `"tipo": "datalist"` con `fk_model` (texto libre con lista de ayuda).
+- `recursos` no tiene pantallas: es la base común de empleados y proveedores.
+- Nuevos catálogos editables (e importables desde SharePoint): categorías y tipos de insumo.
+- Modelos: nombre único dentro de la marca. BOM: «es equivalencia» obligatorio.
+- Migraciones en SQLite: ahora desactivan las claves foráneas mientras recrean tablas y
+  verifican al final que no quede ninguna referencia rota (antes una migración que
+  tocara una tabla referenciada, como `modelos`, fallaba con datos).
+
+Pendientes:
+
+- **Clave natural de activos**: sin definir, así que todavía no se pueden importar
+  activos. Falta saber qué columna de SharePoint los identifica (¿`name` = descripción?).
+- Claves naturales provisorias: empleados (apellido + nombre), proveedores (razón social),
+  unidades (nombre). Ajustar cuando se conozcan las columnas de SharePoint.
+- `app/schemas/activos/` (detalles técnicos por tipo de activo, columna JSON) no se usa:
+  decidir en la Fase 8 si se implementa o se borra.
+- Código sin uso para borrar en la Fase 8: `app/routes/api/insumos_routes.py`,
+  `app/services/stock_service.py`, los `.txt` de `app/crud/metamodelos/`, `ENTIDADES` y
+  `to_legacy()`.
+
 ## Arquitectura objetivo
 
 ```
@@ -212,7 +271,7 @@ la API generada respeta ese contrato.
 | **4. API generada** | Generador de JSON Schema, endpoints REST genéricos con paginación y errores JSON, especificación OpenAPI (3.0 y 2.0 para Power Apps) y página `/api/docs`. Reemplaza `sectores_routes.py`; se elimina `activos_routes.py`. | ✅ Hecha |
 | **5. Base de datos** | Quitar el respaldo automático y `sync-db`. Flask-Migrate (Alembic) y fuera `create_all` de `before_request`. Configuración por `.env`. Comandos de consola a `app/cli.py`. | ✅ Hecha |
 | **6. Carga de datos** | `flask importar` / `flask exportar` en CSV, con clave natural, FK por nombre, simulación y todo o nada. Ver «Carga de datos» más abajo. | ✅ Hecha |
-| **7. Migrar el resto** | Tras revisar su diseño: activos, medidores, lecturas, insumos, stock, unidades, marcas, modelos, recursos, BOM. | Pendiente |
+| **7. Migrar el resto** | Tras revisar su diseño: activos, medidores, lecturas, insumos, stock, unidades, marcas, modelos, recursos, BOM. Ver «Notas de la Fase 7». | ✅ Hecha |
 | **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. | Pendiente |
 | **9. Sincronización con SharePoint** | Opción A: exportar periódicamente de la app a SharePoint, más copias de seguridad automáticas de la base. Al final, escribir en SharePoint directo (Microsoft Graph) en lugar de pasar por CSV. | Pendiente |
 

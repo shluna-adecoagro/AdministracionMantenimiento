@@ -93,3 +93,36 @@ def test_reset_db(app_archivo):
 def test_reset_db_pide_confirmacion(app_archivo):
     resultado = app_archivo().test_cli_runner().invoke(args=["reset-db"], input="n\n")
     assert resultado.exit_code != 0
+
+
+def test_fase_7_conserva_los_datos(app_archivo):
+    """
+    Con datos reales: las tablas referenciadas (modelos, medidores) se recrean sin
+    romper las claves foráneas, el stock repetido se suma y el BOM vacío pasa a "No".
+    """
+    from sqlalchemy import text
+
+    sql = [
+        "INSERT INTO estados_sector VALUES (1, 'e', 'Activo', '#000')",
+        "INSERT INTO sectores (sector_id, uuid, nombre_sector, centro_costo, estado_sector_id) VALUES (1, 's', 'Taller', 'CC', 1)",
+        "INSERT INTO ubicaciones (ubicacion_id, uuid, nombre_ubicacion, sector_id) VALUES (1, 'u', 'Galpón', 1)",
+        "INSERT INTO categorias_insumo VALUES (1, 'Filtros')",
+        "INSERT INTO insumos (insumo_id, uuid, codigo, descripcion, categoria_insumo_id) VALUES (1, 'i', 'F-1', 'Filtro', 1)",
+        "INSERT INTO stock_insumo (stock_insumo_id, uuid, insumo_id, sector_id, ubicacion_id, cantidad) VALUES (1, 'a', 1, 1, 1, 2), (2, 'b', 1, 1, 1, 3)",
+        "INSERT INTO marcas (marca_id, uuid, nombre_marca) VALUES (1, 'm', 'Marca')",
+        "INSERT INTO modelos (modelo_id, uuid, nombre_modelo, marca_id) VALUES (1, 'mo', 'Modelo', 1)",
+        "INSERT INTO bom_modelo (bom_modelo_id, uuid, insumo_id, modelo_id) VALUES (1, 'bm', 1, 1)",
+    ]
+    with app_archivo().app_context():
+        upgrade(revision="2e78b97a2c67")
+        with db.engine.begin() as c:
+            for s in sql:
+                c.execute(text(s))
+        upgrade()
+        with db.engine.connect() as c:
+            assert c.execute(text("SELECT stock_insumo_id, cantidad FROM stock_insumo")).all() == [(1, 5.0)]
+            assert c.execute(text("SELECT es_equivalencia FROM bom_modelo")).scalar_one() in (0, False)
+            assert c.execute(text("SELECT count(*) FROM bom_modelo")).scalar_one() == 1
+        downgrade(revision="2e78b97a2c67")
+        with db.engine.connect() as c:
+            assert c.execute(text("SELECT sector_id FROM stock_insumo")).scalar_one() == 1

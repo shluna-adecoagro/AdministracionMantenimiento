@@ -15,13 +15,6 @@ from app.routes.api.auditoria_routes import audit_bp
 ## Web
 from app.routes.web.index_web import index_web_bp
 from app.routes.web.motivos_web import motivos_web
-from app.routes.web.marcas_modelos_web import marcas_modelos_web_bp
-from app.routes.web.recursos_web import recursos_web_bp
-from app.routes.web.activos_web import activos_web_bp
-from app.routes.web.lecturas_web import lecturas_web
-from app.routes.web.insumos_web import insumos_web_bp
-from app.routes.web.unidades_medida_web import unidades_medida_web_bp
-from app.routes.web.bom_web import bom_web_bp
 
 
 from app.utils.json_validator import JSONValidationError
@@ -60,15 +53,8 @@ def create_app(env="development", config_extra=None):
     # ============================
     app.register_blueprint(index_web_bp)
     app.register_blueprint(motivos_web)
-    app.register_blueprint(marcas_modelos_web_bp)
-    app.register_blueprint(recursos_web_bp)
-    app.register_blueprint(activos_web_bp)
-    app.register_blueprint(lecturas_web)
-    app.register_blueprint(insumos_web_bp)
-    app.register_blueprint(unidades_medida_web_bp)
-    app.register_blueprint(bom_web_bp)
 
-    # Pantallas CRUD generadas desde el registry (entidades migradas)
+    # Pantallas CRUD generadas desde el registry
     from app.crud.metamodelos import REGISTRY
     from app.crud.web.views import registrar_web
 
@@ -82,6 +68,10 @@ def create_app(env="development", config_extra=None):
     # ============================
     # Filtros de plantilla
     # ============================
+    from app.crud.introspect import inicial as _inicial
+
+    app.add_template_filter(_inicial, "inicial")
+
     @app.template_filter("mostrar")
     def mostrar(valor):
         """Valor para mostrar en una celda: None (dato vacío) se ve como un guion."""
@@ -124,25 +114,14 @@ def create_app(env="development", config_extra=None):
     # ============================
     # Sidebar dinámico
     # ============================
-    from app.crud.metamodelos import ENTIDADES
+    menu = [
+        {"name": n, "label": _inicial(s.label_plural), "url": f"/{n}"}
+        for n, s in sorted(REGISTRY.items(), key=lambda par: par[1].orden)
+        if s.sidebar
+    ]
 
     @app.context_processor
     def inject_sidebar_entities():
-        items = []
-
-        for name, cfg in ENTIDADES.items():
-            if cfg.get("mostrar_en_sidebar", False):
-                items.append(
-                    {
-                        "name": name,
-                        "label": cfg.get("label_plural", name).capitalize(),
-                        "url": f"/{name}",
-                        "orden": cfg.get("orden", 999),
-                    }
-                )
-
-        items = sorted(items, key=lambda x: x["orden"])
-
-        return {"sidebar_items": items}
+        return {"sidebar_items": menu}
 
     return app

@@ -22,6 +22,7 @@ from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import types as T
 
 from app.crud.core.coercion import ErroresValidacion
+from app.crud.introspect import inicial
 from app.crud.meta.spec import EntitySpec
 
 MODOS_ENTRADA = ("crear", "reemplazar", "modificar")
@@ -118,7 +119,7 @@ def esquema_entrada(spec: EntitySpec, modo: str) -> dict:
 
     resultado = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "title": f"{spec.label_singular.capitalize()} ({modo})",
+        "title": f"{inicial(spec.label_singular)} ({modo})",
         "type": "object",
         "properties": propiedades,
         "additionalProperties": False,
@@ -155,7 +156,7 @@ def esquema_registro(spec: EntitySpec) -> dict:
             propiedades[tecnica] = {"type": ["string", "null"], "format": "date-time", "readOnly": True}
 
     return {
-        "title": spec.label_singular.capitalize(),
+        "title": inicial(spec.label_singular),
         "type": "object",
         "properties": propiedades,
     }
