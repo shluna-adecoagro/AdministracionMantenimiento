@@ -1,7 +1,7 @@
 # Administración de Mantenimiento
 
 Sistema para **centralizar los datos del área de mantenimiento** de la empresa: qué activos
-existen, dónde están, qué insumos y repuestos usan, cuánto stock hay, quiénes trabajan en
+existen, dónde están, qué materiales y repuestos usan, cuánto stock hay, quiénes trabajan en
 ellos y qué cambios se hicieron, con trazabilidad completa.
 
 La idea es tener **una única fuente de verdad** consultable desde distintos lugares:
@@ -18,7 +18,7 @@ La idea es tener **una única fuente de verdad** consultable desde distintos lug
 |---|---|
 | Organización | Sectores, ubicaciones, cuentas contables |
 | Activos | Activos (vehículos, equipos fijos, implementos), marcas y modelos, medidores y lecturas |
-| Insumos | Insumos, stock, unidades de medida, listas de materiales (BOM) por modelo y por activo |
+| Materiales | Materiales, stock, unidades de medida, listas de materiales (BOM) por modelo y por activo |
 | Recursos | Empleados, proveedores y sus contactos |
 | Trazabilidad | Auditoría de cada alta, modificación y baja, con versión, motivo y usuario |
 
@@ -36,7 +36,7 @@ Overrides (lo no inferible) ───────────┘                
 Agregar una entidad nueva consiste en definir su modelo y, si hace falta, un override con
 lo que no se puede deducir del modelo (textos, columnas del listado, subentidades…).
 
-Este diseño está en plena refactorización. El plan y su avance están en
+El diseño del framework, sus decisiones y cómo agregar una entidad están en
 [`docs/plan_refactor_crud.md`](docs/plan_refactor_crud.md).
 
 ### Estructura
@@ -44,16 +44,16 @@ Este diseño está en plena refactorización. El plan y su avance están en
 ```
 app/
 ├── models/      Modelos SQLAlchemy (una tabla por clase)
-├── crud/        Framework CRUD: metamodelos, introspección, generación de rutas
-├── routes/      Rutas web (web/) y API (api/)
+├── crud/        Framework CRUD: meta/ (registry y overrides), core/ (servicio,
+│                consultas), web/ y api/ (pantallas y API generadas), intercambio/ (CSV)
+├── routes/      Rutas que no son CRUD (inicio, motivos, auditoría)
 ├── templates/   Plantillas Jinja2 (las genéricas están en crud/)
-├── schemas/     JSON Schemas para validar la API
-├── services/    Lógica de negocio que no es CRUD (stock, pedidos…)
+├── schemas/     JSON Schemas de lo que no es CRUD (auditoría, pedidos, activos)
+├── services/    Lógica de negocio que no es CRUD (pedidos)
 ├── audit/       Registro de auditoría
 └── utils/       Seed de datos iniciales y utilidades
 src/sync/        Sincronización de planillas Excel contra la API
 ml/              Scripts de análisis
-tools/           Herramientas de desarrollo (p. ej. informe de metamodelos)
 tests/           Tests automáticos (pytest)
 ```
 
@@ -160,9 +160,3 @@ python -m pytest
 Cada test usa una base SQLite en memoria, así que no toca tus datos. Los errores ya
 conocidos están marcados como `xfail` con la fase del plan en la que se corrigen: cuando
 uno se arregla, pytest avisa para quitar la marca.
-
-Para revisar la coherencia entre los metamodelos y los modelos:
-
-```bash
-python tools/crud_shadow.py          # genera informe_sombra.md
-```

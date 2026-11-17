@@ -2,7 +2,7 @@
 import pytest
 
 from app.crud.intercambio.csv_entidades import exportar, importar
-from app.crud.metamodelos import REGISTRY
+from app.crud.entidades import REGISTRY
 from app.models.sectores_models import Sector
 from app.models.ubicaciones_models import Ubicacion
 

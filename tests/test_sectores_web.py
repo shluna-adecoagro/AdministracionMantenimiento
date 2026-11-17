@@ -211,8 +211,8 @@ def activo_en(db):
     def _crear(sector_id=None, ubicacion_id=None):
         cat = CategoriaActivo.query.first()
         a = Activo(
+            numero_activo=f"A-{Activo.query.count() + 1}",
             descripcion="Tractor 1",
-            tipo_activo_id=cat.tipo_activo_id,
             categoria_activo_id=cat.categoria_activo_id,
             estado_activo_id=EstadoActivo.query.first().estado_activo_id,
             sector_id=sector_id,

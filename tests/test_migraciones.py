@@ -93,3 +93,15 @@ def test_reset_db(app_archivo):
 def test_reset_db_pide_confirmacion(app_archivo):
     resultado = app_archivo().test_cli_runner().invoke(args=["reset-db"], input="n\n")
     assert resultado.exit_code != 0
+
+
+def test_revision_desconocida_pide_reset(app_archivo):
+    """Una base en una migración que ya no existe (p. ej., tras unificarlas) da un aviso claro."""
+    from sqlalchemy import text
+
+    with app_archivo().app_context():
+        with db.engine.begin() as c:
+            c.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32))"))
+            c.execute(text("INSERT INTO alembic_version VALUES ('no_existe')"))
+        with pytest.raises(BaseDesactualizada, match="reset-db"):
+            preparar_base()

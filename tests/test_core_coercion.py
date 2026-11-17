@@ -11,7 +11,7 @@ from app.crud.core.coercion import (
     datos_de_entrada,
     valor_para_formulario,
 )
-from app.crud.metamodelos import ENTIDADES
+from app.crud.entidades import REGISTRY
 
 
 @pytest.mark.parametrize("tipo, crudo, esperado", [
@@ -53,40 +53,40 @@ def test_convertir_invalido(tipo, crudo, mensaje):
 
 
 # ---------------------------------------------------------------------------
-# Con modelos y metamodelos reales
+# Con modelos y specs reales
 # ---------------------------------------------------------------------------
 
 def test_alta_valida_y_convierte(app):
-    cfg = ENTIDADES["sectores"]
-    datos = datos_de_entrada(cfg["model"], cfg["fields"], {
+    cfg = REGISTRY["sectores"]
+    datos = datos_de_entrada(cfg.model, cfg.fields, {
         "nombre_sector": " Taller ", "centro_costo": "CC", "estado_sector_id": "1",
     })
     assert datos == {"nombre_sector": "Taller", "centro_costo": "CC", "estado_sector_id": 1}
 
 
 def test_alta_junta_todos_los_errores(app):
-    cfg = ENTIDADES["sectores"]
+    cfg = REGISTRY["sectores"]
     with pytest.raises(ErroresValidacion) as exc:
-        datos_de_entrada(cfg["model"], cfg["fields"], {"estado_sector_id": "x"})
+        datos_de_entrada(cfg.model, cfg.fields, {"estado_sector_id": "x"})
     assert set(exc.value.errores) == {"nombre_sector", "centro_costo", "estado_sector_id"}
 
 
 def test_edicion_parcial_solo_toca_lo_enviado(app):
-    cfg = ENTIDADES["sectores"]
-    datos = datos_de_entrada(cfg["model"], cfg["fields"], {"centro_costo": "CC-2"}, parcial=True)
+    cfg = REGISTRY["sectores"]
+    datos = datos_de_entrada(cfg.model, cfg.fields, {"centro_costo": "CC-2"}, parcial=True)
     assert datos == {"centro_costo": "CC-2"}
 
 
 def test_edicion_parcial_no_permite_vaciar_obligatorios(app):
-    cfg = ENTIDADES["sectores"]
+    cfg = REGISTRY["sectores"]
     with pytest.raises(ErroresValidacion):
-        datos_de_entrada(cfg["model"], cfg["fields"], {"nombre_sector": ""}, parcial=True)
+        datos_de_entrada(cfg.model, cfg.fields, {"nombre_sector": ""}, parcial=True)
 
 
 def test_lectura_de_medidor_acepta_fecha_del_formulario(app):
     """Antes daba error 500: SQLite exige datetime, no texto."""
-    cfg = ENTIDADES["lecturas_medidor"]
-    datos = datos_de_entrada(cfg["model"], cfg["fields"], {
+    cfg = REGISTRY["lecturas_medidor"]
+    datos = datos_de_entrada(cfg.model, cfg.fields, {
         "medidor_id": "1", "fecha_lectura": "2026-01-15", "valor": "120,5", "origen": "manual",
     })
     assert datos["fecha_lectura"] == datetime(2026, 1, 15)
@@ -94,8 +94,8 @@ def test_lectura_de_medidor_acepta_fecha_del_formulario(app):
 
 def test_bom_acepta_booleano_del_formulario(app):
     """Antes daba error 500: llegaba el texto 'False'."""
-    cfg = ENTIDADES["bom_activo"]
-    datos = datos_de_entrada(cfg["model"], cfg["fields"], {"es_equivalencia": "False"}, parcial=True)
+    cfg = REGISTRY["bom_activo"]
+    datos = datos_de_entrada(cfg.model, cfg.fields, {"es_equivalencia": "False"}, parcial=True)
     assert datos == {"es_equivalencia": False}
 
 

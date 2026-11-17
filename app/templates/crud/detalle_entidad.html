@@ -19,7 +19,7 @@
      ============================================================ -->
 <div class="detalle-tabs">
     {% for sec in secciones %}
-        <a href="{{ url_for(endpoint_base + '_detalle', id=modelo[pk], seccion=sec.id) }}"
+        <a href="{{ url_for(endpoint_base + '_detalle', id=modelo[pk], seccion=sec.id, **(args_padre or {})) }}"
            class="detalle-tab {{ 'active' if sec.id == seccion_activa else '' }}">
             {{ sec.label }}
         </a>
@@ -79,11 +79,11 @@
 
             <!-- Botones dentro de la columna izquierda -->
             <div class="form-actions">
-                <a href="{{ url_for(endpoint_base + '_editar', id=modelo[pk]) }}" class="btn-primary">
+                <a href="{{ url_for(endpoint_base + '_editar', id=modelo[pk], **(args_padre or {})) }}" class="btn-primary">
                     Editar
                 </a>
 
-                <a href="{{ url_for(endpoint_base + '_confirmar_eliminar', id=modelo[pk]) }}" class="btn-eliminar">
+                <a href="{{ url_for(endpoint_base + '_confirmar_eliminar', id=modelo[pk], **(args_padre or {})) }}" class="btn-eliminar">
                     Eliminar
                 </a>
             </div>
@@ -108,11 +108,9 @@
     <!-- HISTORIAL -->
     {% include "crud/historial.html" %}
 
-{% else %}
+{% elif sub %}
 
     <!-- SUBENTIDAD -->
-    {% set sub = secciones_dict[seccion_activa].sub %}
-
     {% with 
         items=sub["items"],
         fields=sub["fields"],
@@ -127,12 +125,30 @@
         {% include sub.template_listado %}
     {% endwith %}
 
-    {% for tab in tabs_extra %}
-        <li class="tab-item">
-            <a href="{{ url_for(tab.endpoint, id=pk_value) }}">{{ tab.label }}</a>
-        </li>
-    {% endfor %}
+{% elif tabla %}
 
+    <!-- PESTAÑA CALCULADA (solo lectura) -->
+    <section class="p-8">
+        {% if tabla.nota %}<p class="tabla-nota">{{ tabla.nota }}</p>{% endif %}
+        <div class="tabla-container">
+            <table class="tabla-listado">
+                <thead>
+                    <tr>{% for col in tabla.columnas %}<th>{{ col }}</th>{% endfor %}</tr>
+                </thead>
+                <tbody>
+                    {% for fila in tabla.filas %}
+                        <tr>{% for valor in fila %}<td>{{ valor | mostrar }}</td>{% endfor %}</tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="{{ tabla.columnas | length }}" class="no-registros">
+                                <em>{{ tabla.vacio }}</em>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
 
 {% endif %}
 

@@ -2,7 +2,7 @@
 import pytest
 
 from app.crud.meta.registry import MetamodeloError, construir_registry
-from app.crud.metamodelos import ENTIDADES, REGISTRY
+from app.crud.entidades import REGISTRY
 from app.models.cuentas_models import Cuenta, EstadoCuenta
 from app.models.sectores_models import EstadoSector, Sector
 from app.models.ubicaciones_models import Ubicacion
@@ -33,8 +33,14 @@ def errores_de(overrides):
 # Registry real de la app
 # ---------------------------------------------------------------------------
 
-def test_entidades_migradas():
-    assert set(REGISTRY) == {"sectores", "ubicaciones", "cuentas"}
+def test_todas_las_entidades_estan_en_el_registry():
+    assert set(REGISTRY) == {
+        "sectores", "ubicaciones", "cuentas",
+        "activos", "medidores", "lecturas_medidor", "bom_activo", "bom_modelo",
+        "materiales", "stock_material", "categorias_material", "tipos_material",
+        "marcas", "modelos", "unidades_medida",
+        "empleados", "proveedores", "contactos_proveedor",
+    }
 
 
 def test_sectores_inferido_del_modelo():
@@ -83,19 +89,6 @@ def test_listado_y_filtros_por_defecto():
     s = REGISTRY["sectores"]
     assert s.listado == ("nombre_sector", "centro_costo", "estado_sector_id")
     assert s.filtros == ("nombre_sector", "centro_costo", "estado_sector_id")
-
-
-def test_formato_legacy_para_framework():
-    d = ENTIDADES["sectores"]
-    assert d["bp_name"] == "crud"
-    assert d["listado"] == {"columns": ["nombre_sector", "centro_costo", "estado_sector_id"]}
-    assert d["subentidades"][0]["entidad"] == "ubicaciones"
-    assert d["subentidades"][0]["fk"] == "sector_id"
-    assert d["subentidades"][0]["label"] == "Ubicaciones"
-
-    u = ENTIDADES["ubicaciones"]
-    assert u["es_subentidad"] is True
-    assert (u["entidad_padre"], u["fk_padre"]) == ("sectores", "sector_id")
 
 
 # ---------------------------------------------------------------------------

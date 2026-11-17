@@ -50,30 +50,49 @@ def destino(registro, campo: str, cfg: dict):
 
 def opciones(cfg: dict) -> list[dict]:
     """
-    Opciones de un <select> de FK. `extra_field`/`extra_value` permiten filtrar
-    selects dependientes en el navegador (ej: modelos según la marca elegida).
+    Opciones de un <select> de FK.
+
+    En un select dependiente (cfg.depende_de, ej: modelo según la marca), cada
+    opción lleva el campo del que depende (`extra_field`), el valor que le
+    corresponde (`extra_value`, el ID de su marca) y el texto de ese valor
+    (`grupo`, el nombre de la marca) para distinguir nombres repetidos.
     """
     fk_model = cfg["fk_model"]
     pk = fk_model.__mapper__.primary_key[0].name
-    padres = [
-        c.name for c in fk_model.__table__.columns
-        if c.name.endswith("_id") and c.name != pk
-    ]
-    extra = padres[0] if padres else None
+    depende_de, columna = cfg.get("depende_de"), cfg.get("depende_fk")
+    rel_padre = relacion(fk_model, columna, {}) if columna else None
 
-    return [
-        {
-            "value": getattr(obj, pk),
-            "label": etiqueta(obj, cfg),
-            "extra_value": getattr(obj, extra) if extra else None,
-            "extra_field": extra,
-        }
-        for obj in fk_model.query.all()
-    ]
+    resultado = []
+    for obj in fk_model.query.all():
+        opcion = {"value": getattr(obj, pk), "label": etiqueta(obj, cfg),
+                  "extra_field": None, "extra_value": None, "grupo": None}
+        if depende_de:
+            padre = getattr(obj, rel_padre) if rel_padre else None
+            opcion.update(extra_field=depende_de, extra_value=getattr(obj, columna),
+                          grupo=etiqueta(padre, {}) if padre is not None else None)
+        resultado.append(opcion)
+    return sorted(resultado, key=lambda o: (str(o["grupo"] or ""), str(o["label"] or "")))
 
 
 def opciones_de(fields: dict) -> dict[str, list[dict]]:
     return {c: opciones(cfg) for c, cfg in campos_fk(fields).items()}
+
+
+def sugerencias_de(fields: dict) -> dict[str, list[str]]:
+    """
+    Sugerencias de los campos "datalist" (texto libre con lista de ayuda): las
+    opciones fijas o, si tiene fk_model, los nombres de ese modelo (ej: empleados).
+    """
+    resultado = {}
+    for c, cfg in fields.items():
+        if cfg.get("tipo") != "datalist":
+            continue
+        if cfg.get("fk_model") is not None:
+            textos = {str(etiqueta(o, cfg)) for o in cfg["fk_model"].query.all()}
+        else:
+            textos = {str(o["label"]) for o in cfg.get("options") or ()}
+        resultado[c] = sorted(t for t in textos if t)
+    return resultado
 
 
 def validar_existencia(fields: dict, datos: dict) -> None:
@@ -132,7 +151,9 @@ def para_auditoria(registro, fields: dict) -> dict:
     Dict del registro con las FK expandidas a texto (ej: estado_sector='Activo'),
     para que el historial muestre nombres en lugar de IDs.
     """
-    d = registro.to_dict()
+    from app.crud.core.repository import valores
+
+    d = valores(registro, calculados=False)
     for campo, cfg in campos_fk(fields).items():
         obj = destino(registro, campo, cfg)
         if obj is None:

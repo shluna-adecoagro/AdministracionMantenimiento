@@ -2,11 +2,9 @@
 """
 Introspección de modelos SQLAlchemy -> metamodelo CRUD.
 
-Genera, a partir de un modelo, un dict con el MISMO esquema que usan hoy los
-metamodelos escritos a mano (app/crud/metamodelos/*.py). Eso permite:
-
-  1. compararlo contra los metamodelos actuales (modo sombra, ver shadow_diff.py);
-  2. más adelante, reemplazarlos: lo inferido + overrides = metamodelo final.
+Genera, a partir de un modelo, la descripción de sus campos (etiqueta, widget,
+obligatoriedad, FKs...). El registry (app/crud/meta/registry.py) la combina con
+los overrides de cada entidad: lo inferido + overrides = EntitySpec.
 
 Solo infiere lo que el modelo realmente sabe. Lo que NO puede saber (labels con
 acentos, género, columnas del listado, widgets especiales, subentidades, tabs)
@@ -19,6 +17,7 @@ from __future__ import annotations
 import re
 import unicodedata
 
+from sqlalchemy import Column
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import types as T
 from sqlalchemy.orm import configure_mappers
@@ -67,6 +66,11 @@ def sin_acentos(texto: str) -> str:
 def normalizar_texto(texto) -> str:
     """Minúsculas, sin acentos y con espacios colapsados (para comparar labels)."""
     return re.sub(r"\s+", " ", sin_acentos(texto or "").strip().lower())
+
+
+def inicial(texto: str) -> str:
+    """Mayúscula inicial sin tocar el resto: "BOM de activos" (capitalize daría "Bom de activos")."""
+    return texto[:1].upper() + texto[1:]
 
 
 def humanizar(nombre: str) -> str:
@@ -125,6 +129,16 @@ def _clase_por_tabla(mapper, tabla):
     return None
 
 
+def columnas_hacia(model, destino) -> list[str]:
+    """Columnas de `model` que son FK hacia alguna tabla de `destino`."""
+    tablas = set(sa_inspect(destino).tables)
+    return [
+        attr.key for attr in sa_inspect(model).column_attrs
+        if isinstance(attr.columns[0], Column)
+        and any(fk.column.table in tablas for fk in attr.columns[0].foreign_keys)
+    ]
+
+
 def fk_apunta_a(hijo, columna: str, padre) -> bool:
     """¿`hijo.columna` es una FK hacia alguna de las tablas de `padre`?"""
     try:
@@ -138,6 +152,31 @@ def fk_apunta_a(hijo, columna: str, padre) -> bool:
 # ---------------------------------------------------------------------------
 # Inferencia
 # ---------------------------------------------------------------------------
+
+def info_de(prop) -> dict:
+    """
+    `info` de un atributo: el de la columna (Column(..., info=...)) o, para un
+    valor calculado, el de column_property(..., info=...).
+    """
+    col = prop.columns[0]
+    if isinstance(col, Column):
+        return col.info or {}
+    return prop.info or {}
+
+
+def es_calculado(prop) -> bool:
+    """column_property con una expresión (ej: una suma), no una columna de la tabla."""
+    return not isinstance(prop.columns[0], Column)
+
+
+def _inferir_calculado(key: str, prop) -> dict:
+    info = info_de(prop)
+    tipo, extras = tipo_widget(prop.columns[0])
+    if tipo in ("select", "textarea"):
+        tipo, extras = "text", {}
+    return {"label": info.get("label") or humanizar(key), "tipo": tipo,
+            "required": False, "solo_lectura": True}
+
 
 def _inferir_campo(key: str, col, mapper) -> dict:
     info = getattr(col, "info", None) or {}
@@ -203,13 +242,16 @@ def inferir_entidad(model) -> dict:
         col = prop.columns[0]
 
         # Validar `info` antes de cualquier `continue`: un typo no debe pasar en silencio.
-        info = getattr(col, "info", None) or {}
+        info = info_de(prop)
         desconocidas = sorted(set(info) - CLAVES_INFO)
         if desconocidas:
             avisos.append((key, f"info con claves desconocidas {desconocidas} (¿typo? válidas: {sorted(CLAVES_INFO)})"))
         if "label" in info and not (isinstance(info["label"], str) and info["label"].strip()):
             avisos.append((key, "info['label'] debe ser un texto no vacío"))
 
+        if es_calculado(prop):
+            campos[key] = _inferir_calculado(key, prop)
+            continue
         if getattr(col, "primary_key", False):
             continue
         if key in COLUMNAS_OCULTAS:
@@ -223,6 +265,15 @@ def inferir_entidad(model) -> dict:
             continue
 
         campos[key] = _inferir_campo(key, col, mapper)
+
+    # Orden: primero las columnas propias, después las heredadas (ej: el estado
+    # de un empleado, que está en "recursos") y al final los valores calculados.
+    def _orden(key):
+        if campos[key].get("solo_lectura") and es_calculado(mapper.attrs[key]):
+            return 2
+        return 0 if mapper.attrs[key].columns[0].table is mapper.local_table else 1
+
+    campos = {k: campos[k] for k in sorted(campos, key=_orden)}
 
     meta = {
         "model": model,

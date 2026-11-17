@@ -30,10 +30,6 @@ def load_schema(relative_path: str):
 
 
 # Schemas expuestos como variables listas para importar
+# (Los esquemas de las entidades CRUD se generan desde los modelos: app/crud/schema/.)
 auditoria_schema = load_schema("auditoria/auditoria.schema.json")
-sectores_schema = load_schema("sectores/sectores.schema.json")
-
-# Si querés, podés agregar más:
-# activos_general_schema = load_schema("activos/activos_general.schema.json")
-# pedidos_input_schema = load_schema("pedidos/pedido_input.schema.json")
 

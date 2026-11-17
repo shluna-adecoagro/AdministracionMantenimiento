@@ -43,58 +43,74 @@ class CategoriaActivo(db.Model, ModelMixin, AuditMixin):
 
 
 class Activo(db.Model, ModelMixin, AuditMixin):
+    """
+    Un equipo, vehículo o instalación.
+
+    Marca y sector se guardan aunque se puedan deducir del modelo y de la
+    ubicación: un activo puede tener marca sin modelo conocido, o sector sin
+    ubicación precisa. Cuando están los dos, el sistema verifica que coincidan
+    (y si falta la marca o el sector, los completa). Ver FieldSpec.depende_de.
+    """
+
     __tablename__ = "activos"
+    __label_field__ = "descripcion"
 
     activo_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     uuid = db.Column(
         db.String(36), default=lambda: str(uuid.uuid4()), unique=True, nullable=False
     )
 
-    # FK → TipoActivo
-    tipo_activo_id = db.Column(
-        db.Integer, db.ForeignKey("tipos_activo.tipo_activo_id"), nullable=False
-    )
-    tipo_activo = db.relationship("TipoActivo", lazy="joined")
+    # Identifica al activo (también fuera de la base, ej: en SharePoint).
+    numero_activo = db.Column(db.String(50), nullable=False, unique=True,
+                              info={"label": "Número de activo"})
+    descripcion = db.Column(db.String(200), nullable=False, info={"label": "Descripción"})
 
-    # FK → CategoriaActivo
+    # FK → CategoriaActivo (el tipo de activo es el de la categoría)
     categoria_activo_id = db.Column(
         db.Integer,
         db.ForeignKey("categorias_activo.categoria_activo_id"),
         nullable=False,
+        info={"label": "Categoría"},
     )
     categoria_activo = db.relationship("CategoriaActivo", lazy="joined")
 
-    # FK → Marca
+    observaciones = db.Column(db.String(300), nullable=True)
+
+    # FK → Marca / Modelo (el modelo pertenece a la marca)
     marca_id = db.Column(db.Integer, db.ForeignKey("marcas.marca_id"), nullable=True)
     marca = db.relationship("Marca", lazy="joined")
 
-    # FK → Modelo
     modelo_id = db.Column(db.Integer, db.ForeignKey("modelos.modelo_id"), nullable=True)
     modelo = db.relationship("Modelo", lazy="joined")
 
-    patente = db.Column(db.String(50), nullable=True)
-    descripcion = db.Column(db.String(200), nullable=False)
-
-    nro_serie_chasis = db.Column(db.String(100), nullable=True)
-    nro_motor = db.Column(db.String(100), nullable=True)
+    # Únicos cuando están cargados (puede haber varios activos sin dato).
+    numero_serie = db.Column(db.String(100), nullable=True, unique=True,
+                             info={"label": "Número de serie"})
+    numero_motor = db.Column(db.String(100), nullable=True, unique=True,
+                             info={"label": "Número de motor"})
 
     año = db.Column(db.Integer, nullable=True)
-    observacion = db.Column(db.String(300), nullable=True)
-    codigo_brescia = db.Column(db.String(50), nullable=True)
 
-    # FK → Sector
+    # FK → Sector / Ubicación (la ubicación pertenece al sector).
+    # Sin backref: un sector o ubicación con activos no se puede borrar.
     sector_id = db.Column(
-        db.Integer, db.ForeignKey("sectores.sector_id"), nullable=True
+        db.Integer, db.ForeignKey("sectores.sector_id"), nullable=True,
+        info={"label": "Sector asignado"},
     )
     sector = db.relationship("Sector", lazy="joined")
 
+    ubicacion_id = db.Column(
+        db.Integer, db.ForeignKey("ubicaciones.ubicacion_id"), nullable=True,
+        info={"label": "Ubicación asignada"},
+    )
+    ubicacion = db.relationship("Ubicacion", lazy="joined")
+
+    # Texto libre, con los empleados como sugerencias (puede ser alguien que no
+    # está cargado como empleado).
     usuario_asignado = db.Column(db.String(150), nullable=True)
 
-    # FK → Ubicacion
-    ubicacion_id = db.Column(
-        db.Integer, db.ForeignKey("ubicaciones.ubicacion_id"), nullable=True
-    )
-    ubicacion = db.relationship("Ubicacion", lazy="joined") 
+    codigo_carga_gasoil = db.Column(db.String(50), nullable=True,
+                                    info={"label": "Código de carga de gasoil"})
 
     # FK → EstadoActivo
     estado_activo_id = db.Column(
@@ -109,28 +125,3 @@ class Activo(db.Model, ModelMixin, AuditMixin):
     actualizado_en = db.Column(
         db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
-
-    def to_dict(self):
-        return {
-            "activo_id": self.activo_id,
-            "uuid": self.uuid,
-            "tipo_activo_id": self.tipo_activo_id,
-            "categoria_activo_id": self.categoria_activo_id,
-            "marca_id": self.marca_id,
-            "modelo_id": self.modelo_id,
-            "patente": self.patente,
-            "descripcion": self.descripcion,
-            "nro_serie_chasis": self.nro_serie_chasis,
-            "nro_motor": self.nro_motor,
-            "año": self.año,
-            "observacion": self.observacion,
-            "codigo_brescia": self.codigo_brescia,
-            "sector_id": self.sector_id,
-            "usuario_asignado": self.usuario_asignado,
-            "ubicacion_id": self.ubicacion_id,
-            "estado_activo_id": self.estado_activo_id,
-            "foto_path": self.foto_path,
-            "detalles_tecnicos": self.detalles_tecnicos,
-            "creado_en": self.creado_en.isoformat(),
-            "actualizado_en": self.actualizado_en.isoformat(),
-        }

@@ -22,3 +22,6 @@ __pycache__/
 *.pbix
 .pytest_cache/
 instance/
+
+# Archivos subidos desde la app (fotos, documentos): son datos, no código
+app/static/uploads/

@@ -67,4 +67,27 @@ def preparar_base():
             )
         current_app.logger.warning("Base existente sin migraciones: se marca como actualizada.")
         stamp()
+    elif TABLA_VERSION in tablas:
+        _verificar_revision_conocida()
     upgrade()
+
+
+def _verificar_revision_conocida():
+    """
+    La base está en una migración que ya no existe en migrations/versions/ (por
+    ejemplo, porque las migraciones se unificaron): no se puede actualizar sola.
+    """
+    from alembic.script import ScriptDirectory
+    from sqlalchemy import text
+
+    with db.engine.connect() as conexion:
+        version = conexion.execute(text(f"SELECT version_num FROM {TABLA_VERSION}")).scalar()
+    if version is None:
+        return
+    config = current_app.extensions["migrate"].migrate.get_config()
+    scripts = ScriptDirectory.from_config(config)
+    if version not in {r.revision for r in scripts.walk_revisions()}:
+        raise BaseDesactualizada(
+            f"La base está en la migración «{version}», que ya no existe (las migraciones "
+            "se unificaron). Si sus datos son de prueba, recreala con `flask reset-db`."
+        )

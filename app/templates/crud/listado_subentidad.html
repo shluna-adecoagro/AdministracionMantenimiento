@@ -1,7 +1,7 @@
 <section class="p-8">
 
     {% with 
-        titulo=sub.label_plural | capitalize,
+        titulo=sub.label_plural | inicial,
         boton_url=url_for(endpoint_base + '_crear', **{ fk|string : padre_id }),
         boton_texto="Crear " ~ sub.label_singular
     %}

@@ -19,7 +19,8 @@ class Recurso(ModelMixin, AuditMixin, db.Model):
     recurso_id = db.Column(db.Integer, autoincrement=True, primary_key=True)
     uuid = db.Column(db.String(36), default=lambda: str(uuid.uuid4()), unique=True)
     tipo_recurso = db.Column(db.String(20), nullable=False)  # interno / proveedor
-    estado_recurso_id = db.Column(db.Integer, db.ForeignKey("estados_recurso.estado_recurso_id"), nullable=False)
+    estado_recurso_id = db.Column(db.Integer, db.ForeignKey("estados_recurso.estado_recurso_id"), nullable=False,
+                                  info={"label": "Estado"})
     estado = db.relationship("EstadoRecurso", lazy="joined")
 
     __mapper_args__ = {
@@ -37,7 +38,9 @@ class Empleado(Recurso):
     nombre = db.Column(db.String(100), nullable=False)
     apellido = db.Column(db.String(100), nullable=False)
     legajo = db.Column(db.String(50))
+    # Sin backref: un sector con empleados no se puede borrar.
     sector_id = db.Column(db.Integer, db.ForeignKey("sectores.sector_id"))
+    sector = db.relationship("Sector")
     puesto = db.Column(db.String(100))
 
     @property
@@ -56,9 +59,9 @@ class Proveedor(Recurso):
 
     recurso_id = db.Column(db.Integer, db.ForeignKey("recursos.recurso_id"), primary_key=True)
 
-    razon_social = db.Column(db.String(150), nullable=False)
-    cuit = db.Column(db.String(20))
-    direccion = db.Column(db.String(200))
+    razon_social = db.Column(db.String(150), nullable=False, info={"label": "Razón social"})
+    cuit = db.Column(db.String(20), info={"label": "CUIT"})
+    direccion = db.Column(db.String(200), info={"label": "Dirección"})
 
     contactos = db.relationship("ContactoProveedor", back_populates="proveedor", cascade="all, delete-orphan")
 
@@ -76,9 +79,9 @@ class ContactoProveedor(db.Model, ModelMixin):
 
     proveedor_id = db.Column(db.Integer, db.ForeignKey("proveedores.recurso_id"), nullable=False)
 
-    nombre_contacto = db.Column(db.String(100), nullable=False)
+    nombre_contacto = db.Column(db.String(100), nullable=False, info={"label": "Nombre"})
     email = db.Column(db.String(100))
-    telefono = db.Column(db.String(50))
+    telefono = db.Column(db.String(50), info={"label": "Teléfono"})
     tipo_contacto = db.Column(db.String(50))
 
     proveedor = db.relationship("Proveedor", back_populates="contactos")

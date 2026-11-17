@@ -76,8 +76,8 @@ Diseño:
   | Relación | Regla | Decidido |
   |---|---|---|
   | Sector → ubicaciones | Cascada | ✅ |
-  | Sector / ubicación → activos, empleados, stock | Bloqueo | Provisorio: revisar en Fase 7 |
-  | Resto de las entidades | — | **Revisar al migrar cada una (Fase 7)** |
+  | Sector / ubicación → activos, empleados, stock | Bloqueo | ✅ (Fase 7) |
+  | Resto de las entidades | — | Ver «Notas de la Fase 7» |
 
 - Al reemplazar un archivo subido, el anterior queda en disco (pendiente de definir).
 
@@ -167,6 +167,113 @@ archivo de la base.
 
 Se eligió **A** (noviembre 2026): «SharePoint es más para mostrar que para gestionar».
 
+## Notas de la Fase 7
+
+Todas las entidades están en el registry (18). Ya no queda ninguna pantalla en
+`framework.py` ni en `app/routes/web/*_web.py` (salvo inicio y motivos); el menú lateral
+sale del registry.
+
+Decisiones del usuario (noviembre 2026):
+
+- **Stock**: sin sector (es el de la ubicación) y una sola fila por insumo + ubicación.
+  La migración suma las filas repetidas.
+- **Medidores**: el valor actual se calcula de la lectura más reciente (o el valor
+  inicial si no hay lecturas); ya no se edita.
+- **Usuario asignado** del activo: texto libre, con los empleados como sugerencias.
+- **Borrar un activo**: su BOM se borra en cascada; si tiene medidores, no se borra (para
+  retirarlo se usa el estado «Baja»).
+
+Reglas de borrado (decididas en esta fase, a confirmar con el uso):
+
+| Relación | Regla |
+|---|---|
+| Activo → BOM del activo | Cascada |
+| Activo → medidores; medidor → lecturas | Bloqueo (las lecturas son historial) |
+| Marca → modelos → BOM del modelo | Cascada (bloquea si un modelo está en un activo) |
+| Categoría de insumo → tipos | Cascada (bloquea si un tipo está en uso) |
+| Proveedor → contactos | Cascada |
+| Insumo con stock o en algún BOM | Bloqueo |
+| Marca, categoría, tipo, unidad o sector en uso | Bloqueo (antes algunos dejaban el dato vacío en silencio) |
+
+Framework (lo nuevo que se puede usar en cualquier entidad):
+
+- **Calculados**: un `column_property` del modelo (ej: `Insumo.stock_total`,
+  `Medidor.valor_actual`) aparece solo como campo de solo lectura: listado, detalle y
+  API, pero no en el formulario, la entrada de la API ni la importación. También se
+  puede marcar una columna con `{"solo_lectura": True}` (ej: fecha de actualización del stock).
+- **Varios padres**: `"padre": [{...}, {...}]`. El BOM de un modelo se carga desde el
+  modelo y se ve también en el insumo; el padre activo sale de la URL.
+- **Pestañas calculadas**: `tabs_extra` con una función que arma una tabla. Reemplazan a
+  las rutas especiales: «BOM del modelo» y «BOM final» en el activo, «Compatibilidad
+  final» en el insumo (`app/crud/meta/overrides/bom.py`).
+- **Sugerencias**: `"tipo": "datalist"` con `fk_model` (texto libre con lista de ayuda).
+- `recursos` no tiene pantallas: es la base común de empleados y proveedores.
+- Nuevos catálogos editables (e importables desde SharePoint): categorías y tipos de insumo.
+- Modelos: nombre único dentro de la marca. BOM: «es equivalencia» obligatorio.
+- Migraciones en SQLite: ahora desactivan las claves foráneas mientras recrean tablas y
+  verifican al final que no quede ninguna referencia rota (antes una migración que
+  tocara una tabla referenciada, como `modelos`, fallaba con datos).
+
+**Nuevo diseño de activos** (decidido por el usuario):
+
+| Campo | Notas |
+|---|---|
+| `numero_activo` | Identifica al activo: obligatorio, único y clave natural. Era `patente` |
+| `descripcion`, `observaciones`, `año` | `observaciones` era `observacion` |
+| `categoria_activo_id` | El tipo de activo es el de la categoría (se quitó `tipo_activo_id`) |
+| `marca_id`, `modelo_id` | El modelo debe ser de la marca; si falta la marca, se completa |
+| `numero_serie`, `numero_motor` | Únicos cuando están cargados. Eran `nro_serie_chasis` y `nro_motor` |
+| `sector_id`, `ubicacion_id` | La ubicación debe ser del sector; si falta el sector, se completa |
+| `usuario_asignado` | Texto libre con los empleados como sugerencias |
+| `codigo_carga_gasoil` | Era `codigo_brescia` |
+| `estado_activo_id`, `foto_path`, `detalles_tecnicos` | Sin cambios |
+
+La migración renombra sin perder datos; los activos sin patente reciben `ACT-<id>`. Si
+hay números de activo, serie o motor repetidos, se detiene y los lista.
+
+**Selects dependientes** (genérico, `FieldSpec.depende_de`). Se infieren del modelo: si
+un campo apunta a un modelo que a su vez apunta a otro campo de la entidad, quedan
+vinculados (modelo → marca, ubicación → sector, tipo de insumo → categoría). Se guarda
+también el «padre» porque puede existir sin el hijo (marca sin modelo conocido, sector
+sin ubicación precisa). Entonces:
+
+- en el formulario, el hijo muestra solo las opciones del padre elegido; sin padre,
+  muestra todas con el padre entre paréntesis («Galpón 1 (Taller)») y al elegir una se
+  completa el padre;
+- al guardar (web, API o importación) se verifica que coincidan, o se completa el padre;
+- un override `{"depende_de": None}` lo desactiva.
+
+**SharePoint** será un reflejo de la base: las columnas se definen acá, no hace falta
+mapear nombres de SharePoint.
+
+Pendientes:
+
+- Claves naturales provisorias: empleados (apellido + nombre), proveedores (razón social),
+  unidades (nombre).
+- `app/schemas/activos/` (detalles técnicos por tipo de activo, columna JSON): la columna
+  se conserva; falta decidir cómo se cargan (Fase 8 o una fase propia).
+
+## Notas de la Fase 8
+
+- Se borró el framework viejo (`framework.py`, metamodelos escritos a mano, modo sombra,
+  `ENTIDADES`, `to_legacy()`) y el código sin uso listado en las fases anteriores. El
+  registry está en `app/crud/entidades.py`.
+- **Insumos → Materiales** (pedido del usuario): modelos (`Material`, `CategoriaMaterial`,
+  `TipoMaterial`, `StockMaterial`), tablas, columnas (`material_id`,
+  `reemplaza_material_modelo_id` en el BOM), URLs (`/materiales`, `/api/materiales`...) y textos.
+- **Migraciones unificadas** en una sola («esquema inicial»): el proyecto todavía no tiene
+  datos reales. Una base local anterior avisa que hay que recrearla: `flask reset-db`.
+- Los archivos subidos (`app/static/uploads/`) ya no se versionan en git.
+- Quedan sin tocar, a decidir: **pedidos** (modelo, servicio y rutas sin registrar; la ruta
+  importa una clase que no existe) y **`src/sync`** (carga desde Excel; con la opción A de
+  sincronización y la importación CSV probablemente sobra).
+
+## Próximo: órdenes de trabajo (OT)
+
+Idea inicial (a diseñar): cada OT tiene una o más **operaciones**; a cada operación se
+le asignan **recursos** (empleados o proveedores, vía la tabla común `recursos`) y
+**materiales**.
+
 ## Arquitectura objetivo
 
 ```
@@ -212,8 +319,8 @@ la API generada respeta ese contrato.
 | **4. API generada** | Generador de JSON Schema, endpoints REST genéricos con paginación y errores JSON, especificación OpenAPI (3.0 y 2.0 para Power Apps) y página `/api/docs`. Reemplaza `sectores_routes.py`; se elimina `activos_routes.py`. | ✅ Hecha |
 | **5. Base de datos** | Quitar el respaldo automático y `sync-db`. Flask-Migrate (Alembic) y fuera `create_all` de `before_request`. Configuración por `.env`. Comandos de consola a `app/cli.py`. | ✅ Hecha |
 | **6. Carga de datos** | `flask importar` / `flask exportar` en CSV, con clave natural, FK por nombre, simulación y todo o nada. Ver «Carga de datos» más abajo. | ✅ Hecha |
-| **7. Migrar el resto** | Tras revisar su diseño: activos, medidores, lecturas, insumos, stock, unidades, marcas, modelos, recursos, BOM. | Pendiente |
-| **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. | Pendiente |
+| **7. Migrar el resto** | Tras revisar su diseño: activos, medidores, lecturas, insumos, stock, unidades, marcas, modelos, recursos, BOM. Ver «Notas de la Fase 7». | ✅ Hecha |
+| **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. Ver «Notas de la Fase 8». | ✅ Hecha |
 | **9. Sincronización con SharePoint** | Opción A: exportar periódicamente de la app a SharePoint, más copias de seguridad automáticas de la base. Al final, escribir en SharePoint directo (Microsoft Graph) en lugar de pasar por CSV. | Pendiente |
 
 ## Cómo agregar o modificar una entidad (desde la Fase 1)
@@ -224,8 +331,6 @@ la API generada respeta ese contrato.
    modelo. Lo mínimo es `{"model": MiModelo}`; las claves posibles están documentadas en
    `app/crud/meta/overrides/__init__.py`.
 3. Nada más: las pantallas (listado, alta, detalle, edición y baja) se generan solas.
-   Si la entidad migrada estaba en `app/crud/metamodelos/`, borrar su dict y su
-   `CRUDResource` de `app/routes/web/`.
 
 Si algo no cierra (un campo mal escrito, un padre inexistente, una FK que no apunta al
 padre), la app **no arranca** y el error dice qué corregir, con una sugerencia.
@@ -234,8 +339,10 @@ padre), la app **no arranca** y el error dice qué corregir, con una sugerencia.
 
 ```bash
 python -m pytest                     # todos los tests en verde (los xfail cuentan como esperados)
-python tools/crud_shadow.py          # coherencia de metamodelos
 ```
+
+La coherencia entre overrides y modelos la valida el registry al arrancar (la app no
+arranca si algo no cierra).
 
 Al corregir un error conocido, su test `xfail` empieza a pasar y pytest lo informa como
 falla (`xfail_strict = true`): en ese momento se quita la marca.

@@ -25,7 +25,7 @@ from dataclasses import replace
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.exc import NoInspectionAvailable
 
-from app.crud.introspect import fk_apunta_a, inferir_entidad
+from app.crud.introspect import columnas_hacia, fk_apunta_a, inferir_entidad
 from app.crud.meta.spec import (
     AUDITORIA_IGNORAR_DEFAULT,
     GENEROS,
@@ -33,6 +33,7 @@ from app.crud.meta.spec import (
     EntitySpec,
     FieldSpec,
     ParentSpec,
+    TabSpec,
 )
 
 PAQUETE_OVERRIDES = "app.crud.meta.overrides"
@@ -48,11 +49,12 @@ CLAVES_ENTIDAD = frozenset({
     "listado",            # [campo, ...] columnas del listado
     "filtros",            # [campo, ...] campos de búsqueda
     "padre",              # {"entidad": "sectores", "fk": "sector_id"} → subentidad
+                          # (o una lista, si cuelga de varias entidades)
     "sidebar",            # True para mostrarla en el menú lateral
     "orden",              # posición en el menú lateral
     "auditoria",          # True/False (por defecto: si el modelo usa AuditMixin)
     "auditoria_ignorar",  # columnas que no se registran en el historial
-    "tabs_extra",         # pestañas adicionales en el detalle
+    "tabs_extra",         # [{"id", "label", "funcion"}] pestañas calculadas en el detalle
     "clave_natural",      # [campo, ...] identifica el registro al importar (ej: nombre)
 })
 
@@ -97,9 +99,44 @@ def _field_spec(nombre: str, inferido: dict, override: dict, model) -> FieldSpec
     col = _columna(model, nombre)
     if col is not None:
         datos.setdefault("max_length", getattr(col.type, "length", None))
-        datos.setdefault("unique", bool(col.unique))
+        datos.setdefault("unique", bool(getattr(col, "unique", False)))
 
     return FieldSpec(name=nombre, **datos)
+
+
+def _dependencias(campos: dict, overrides_campos: dict, pref: str, errores: list) -> dict:
+    """
+    Completa depende_de / depende_fk de cada FK.
+
+    Inferido: el campo X (FK a M) depende del campo Y (FK a P) si M tiene una
+    única columna hacia P. Ej: en activos, modelo_id → Modelo, que tiene
+    marca_id → Marca, y el activo también tiene marca_id → modelo_id depende de marca_id.
+    """
+    resultado = dict(campos)
+    for c, f in campos.items():
+        if f.tipo != "fk" or f.fk_model is None:
+            continue
+        declarado = "depende_de" in overrides_campos.get(c, {})
+        if declarado and f.depende_de is None:
+            continue  # desactivado a propósito
+        candidatos = []
+        for otro, g in campos.items():
+            if otro == c or g.tipo != "fk" or g.fk_model is None:
+                continue
+            if declarado and otro != f.depende_de:
+                continue
+            columnas = columnas_hacia(f.fk_model, g.fk_model)
+            if len(columnas) == 1:
+                candidatos.append((otro, columnas[0]))
+        if declarado and not candidatos:
+            errores.append(
+                f"{pref} fields.{c}: depende_de '{f.depende_de}' no es un campo FK hacia una "
+                f"tabla a la que apunte {f.fk_model.__name__}.{_sugerir(f.depende_de, campos)}"
+            )
+        elif len(candidatos) == 1:
+            otro, columna = candidatos[0]
+            resultado[c] = replace(f, depende_de=otro, depende_fk=columna)
+    return resultado
 
 
 # ---------------------------------------------------------------------------
@@ -164,30 +201,47 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
             errores.append(f"{pref} fields.{c}: tipo 'fk' sin 'fk_model'")
         if f.tipo == "select" and not f.options:
             errores.append(f"{pref} fields.{c}: tipo 'select' sin 'options'")
+        if f.tipo == "datalist" and not (f.options or f.fk_model):
+            errores.append(f"{pref} fields.{c}: tipo 'datalist' sin 'options' ni 'fk_model'")
         campos[c] = f
+
+    # --- selects dependientes (ej: modelo según la marca) -----------------
+    campos = _dependencias(campos, overrides_campos, pref, errores)
 
     # --- listado y filtros ----------------------------------------------
     listado = tuple(ov.get("listado") or [
         c for c, f in campos.items() if f.tipo in _TIPOS_LISTADO and not f.oculto
     ])
     filtros = tuple(ov.get("filtros") or [
-        c for c, f in campos.items() if f.tipo in _TIPOS_FILTRO and not f.oculto
+        c for c, f in campos.items()
+        if f.tipo in _TIPOS_FILTRO and not f.oculto and not f.solo_lectura
     ])
     for clave, lista in (("listado", listado), ("filtros", filtros)):
         for c in lista:
             if c not in campos:
                 errores.append(f"{pref} {clave}: '{c}' no es un campo de la entidad.{_sugerir(c, campos)}")
 
-    # --- padre (se valida contra el resto del registry más adelante) -----
-    padre = None
-    if "padre" in ov:
-        p = ov["padre"]
+    # --- padres (se validan contra el resto del registry más adelante) ---
+    padres: list[ParentSpec] = []
+    declarados = ov.get("padre", [])
+    for p in (declarados if isinstance(declarados, (list, tuple)) else [declarados]):
         if not isinstance(p, dict) or set(p) != {"entidad", "fk"}:
-            errores.append(f"{pref} padre debe ser {{'entidad': ..., 'fk': ...}}")
-        else:
-            padre = ParentSpec(entidad=p["entidad"], fk=p["fk"])
-            if padre.fk not in campos:
-                errores.append(f"{pref} padre.fk: '{padre.fk}' no es un campo de la entidad.{_sugerir(padre.fk, campos)}")
+            errores.append(f"{pref} padre debe ser {{'entidad': ..., 'fk': ...}} (o una lista de ellos)")
+            continue
+        padre = ParentSpec(entidad=p["entidad"], fk=p["fk"])
+        if padre.fk not in campos:
+            errores.append(f"{pref} padre.fk: '{padre.fk}' no es un campo de la entidad.{_sugerir(padre.fk, campos)}")
+        if any(x.entidad == padre.entidad for x in padres):
+            errores.append(f"{pref} padre: '{padre.entidad}' está declarada dos veces")
+        padres.append(padre)
+
+    # --- pestañas extra ----------------------------------------------------
+    tabs: list[TabSpec] = []
+    for t in ov.get("tabs_extra", ()):
+        if not isinstance(t, dict) or set(t) != {"id", "label", "funcion"} or not callable(t.get("funcion")):
+            errores.append(f"{pref} tabs_extra: cada pestaña es {{'id', 'label', 'funcion'}} con una función")
+            continue
+        tabs.append(TabSpec(**t))
 
     # --- clave natural ---------------------------------------------------
     clave_natural = tuple(ov.get("clave_natural", ()))
@@ -213,10 +267,10 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
         filtros=filtros,
         auditoria=ov.get("auditoria", meta["auditoria"]["enabled"]),
         auditoria_ignorar=tuple(ov.get("auditoria_ignorar", AUDITORIA_IGNORAR_DEFAULT)),
-        padre=padre,
+        padres=tuple(padres),
         sidebar=bool(ov.get("sidebar", False)),
         orden=ov.get("orden", 999),
-        tabs_extra=tuple(ov.get("tabs_extra", ())),
+        tabs_extra=tuple(tabs),
         clave_natural=clave_natural,
     )
     return spec, errores
@@ -240,18 +294,16 @@ def construir_registry(overrides: dict[str, dict]) -> dict[str, EntitySpec]:
     # Relaciones padre → hijos
     hijos: dict[str, list[str]] = {n: [] for n in specs}
     for nombre, spec in specs.items():
-        if spec.padre is None:
-            continue
-        p = spec.padre
-        if p.entidad not in specs:
-            errores.append(f"[{nombre}] padre.entidad: '{p.entidad}' no está registrada.{_sugerir(p.entidad, specs)}")
-            continue
-        if p.fk in spec.fields and not fk_apunta_a(spec.model, p.fk, specs[p.entidad].model):
-            errores.append(
-                f"[{nombre}] padre.fk: '{p.fk}' no es una FK hacia {specs[p.entidad].model.__name__}"
-            )
-            continue
-        hijos[p.entidad].append(nombre)
+        for p in spec.padres:
+            if p.entidad not in specs:
+                errores.append(f"[{nombre}] padre.entidad: '{p.entidad}' no está registrada.{_sugerir(p.entidad, specs)}")
+                continue
+            if p.fk in spec.fields and not fk_apunta_a(spec.model, p.fk, specs[p.entidad].model):
+                errores.append(
+                    f"[{nombre}] padre.fk: '{p.fk}' no es una FK hacia {specs[p.entidad].model.__name__}"
+                )
+                continue
+            hijos[p.entidad].append(nombre)
 
     if errores:
         raise MetamodeloError(errores)

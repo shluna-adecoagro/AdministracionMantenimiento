@@ -241,7 +241,7 @@ def test_eliminar_en_uso_da_409(client, ubicacion, db):
 
     cat = CategoriaActivo.query.first()
     db.session.add(Activo(
-        descripcion="Tractor", tipo_activo_id=cat.tipo_activo_id,
+        numero_activo="A-1", descripcion="Tractor",
         categoria_activo_id=cat.categoria_activo_id,
         estado_activo_id=EstadoActivo.query.first().estado_activo_id,
         ubicacion_id=ubicacion.ubicacion_id,
@@ -300,7 +300,7 @@ def test_pagina_de_documentacion(client):
 def test_esquemas_de_entrada_son_json_schema_validos(modo):
     from jsonschema import Draft202012Validator
 
-    from app.crud.metamodelos import REGISTRY
+    from app.crud.entidades import REGISTRY
     from app.crud.schema.jsonschema import esquema_entrada
 
     for spec in REGISTRY.values():
