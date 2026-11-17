@@ -8,8 +8,7 @@ La idea es tener **una única fuente de verdad** consultable desde distintos lug
 
 - una **interfaz web** propia (Flask + Jinja2) para cargar y consultar datos;
 - una **API REST** con validación por JSON Schema, pensada para que la consuman otras
-  herramientas: la sincronización desde Excel (`src/sync`) y, más adelante, apps de
-  Power Apps u otras aplicaciones web;
+  herramientas (Power Apps u otras aplicaciones web);
 - **análisis** de mantenimiento (MTBF, consumo de gasoil, etc.) en `ml/`.
 
 ## Qué gestiona
@@ -52,7 +51,6 @@ app/
 ├── services/    Lógica de negocio que no es CRUD (pedidos)
 ├── audit/       Registro de auditoría
 └── utils/       Seed de datos iniciales y utilidades
-src/sync/        Sincronización de planillas Excel contra la API
 ml/              Scripts de análisis
 tests/           Tests automáticos (pytest)
 ```

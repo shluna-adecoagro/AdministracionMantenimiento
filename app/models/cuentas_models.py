@@ -9,7 +9,7 @@ class EstadoCuenta(ModelMixin, db.Model):
 
     estado_cuenta_id = db.Column(db.Integer, primary_key=True)
     uuid = db.Column(db.String(36), default=lambda: str(uuid.uuid4()), unique=True, nullable=False)
-    nombre_estado_cuenta = db.Column(db.String(50), nullable=False)
+    nombre_estado_cuenta = db.Column(db.String(50), nullable=False, info={"label": "Nombre"})
     color_badge = db.Column(db.String(20), nullable=False)
 
 
@@ -30,4 +30,6 @@ class Cuenta(ModelMixin, AuditMixin, db.Model):
         nullable=False,
         info={"label": "Estado"},
     )
-    estado = db.relationship("EstadoCuenta", backref="cuentas")
+    # passive_deletes="all": un estado en uso no se puede borrar (antes SQLAlchemy
+    # intentaba dejar las cuentas sin estado).
+    estado = db.relationship("EstadoCuenta", backref=db.backref("cuentas", passive_deletes="all"))

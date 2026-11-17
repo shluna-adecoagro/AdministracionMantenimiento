@@ -11,7 +11,7 @@ class EstadoSector(ModelMixin, db.Model):
     estado_sector_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     uuid = db.Column(db.String(36), default=lambda: str(uuid.uuid4()), unique=True, nullable=False)
 
-    nombre_estado_sector = db.Column(db.String(50), nullable=False)
+    nombre_estado_sector = db.Column(db.String(50), nullable=False, info={"label": "Nombre"})
     color_badge = db.Column(db.String(20), nullable=False)
 
 

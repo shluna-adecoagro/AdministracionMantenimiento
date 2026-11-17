@@ -1,3 +1,4 @@
+{% from "crud/partials/_valor.html" import valor %}
 <section class="p-8">
 
     {% with 
@@ -35,7 +36,7 @@
                                     {% if cfg.tipo == "fk" %}
                                         {{ (item[campo ~ "_label"] if item[campo ~ "_label"] else item[campo]) | mostrar }}
                                     {% else %}
-                                        {{ item[campo] | mostrar }}
+                                        {{ valor(item[campo], cfg) }}
                                     {% endif %}
                                 </td>
                             {% endif %}

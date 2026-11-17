@@ -102,14 +102,22 @@ def create_app(env="development", config_extra=None):
     # ============================
     # Sidebar dinámico
     # ============================
-    menu = [
-        {"name": n, "label": _inicial(s.label_plural), "url": f"/{n}"}
-        for n, s in sorted(REGISTRY.items(), key=lambda par: par[1].orden)
-        if s.sidebar
-    ]
+    from app.crud.meta.spec import GRUPOS
+
+    # Menú lateral: una sección por grupo (datos maestros, catálogos), cada una
+    # con sus entidades en el orden declarado.
+    menu = []
+    for clave, titulo in GRUPOS.items():
+        items = [
+            {"name": n, "label": _inicial(s.label_plural), "url": f"/{n}"}
+            for n, s in sorted(REGISTRY.items(), key=lambda par: par[1].orden)
+            if s.sidebar and s.grupo == clave
+        ]
+        if items:
+            menu.append({"clave": clave, "titulo": titulo, "items": items})
 
     @app.context_processor
     def inject_sidebar_entities():
-        return {"sidebar_items": menu}
+        return {"sidebar_grupos": menu}
 
     return app

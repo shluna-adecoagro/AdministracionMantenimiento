@@ -36,7 +36,8 @@ OVERRIDES = {
         "label_plural": "categorías de material",
         "genero": "f",
         "sidebar": True,
-        "orden": 25,
+        "grupo": "catalogos",
+        "orden": 130,
         "clave_natural": ["nombre_categoria"],
     },
     "tipos_material": {

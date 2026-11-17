@@ -75,7 +75,7 @@ def test_crear(client, estado_sector_activo, auditoria):
                     headers={"X-Usuario": "sync-excel"})
     assert r.status_code == 201
     datos = r.get_json()
-    assert datos["sector_id"] > 0  # src/sync usa el ID devuelto
+    assert datos["sector_id"] > 0  # los clientes usan el ID devuelto
     assert datos["nombre_sector"] == "Mantenimiento"
 
     [log] = auditoria("sectores")

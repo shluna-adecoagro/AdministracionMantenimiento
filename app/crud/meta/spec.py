@@ -14,8 +14,14 @@ from dataclasses import dataclass, field, fields as dc_fields
 
 # Vocabulario de widgets que entienden las plantillas (crud/form.html).
 TIPOS_CAMPO = frozenset(
-    {"text", "number", "textarea", "date", "fk", "datalist", "file", "select"}
+    {"text", "number", "textarea", "date", "fk", "datalist", "file", "select", "color"}
 )
+
+# Grupos del menú lateral, en el orden en que se muestran.
+GRUPOS = {
+    "maestros": "Datos maestros",   # lo que se gestiona a diario
+    "catalogos": "Catálogos",       # listas de valores: estados, tipos, categorías...
+}
 GENEROS = frozenset({"m", "f"})
 
 # Columnas que nunca se auditan como cambio (además de las globales de registrar.py).
@@ -121,6 +127,7 @@ class EntitySpec:
     padres: tuple[ParentSpec, ...] = ()
     hijos: tuple[str, ...] = ()        # lo completa el registry a partir de `padres`
     sidebar: bool = False
+    grupo: str = "maestros"            # grupo del menú lateral (ver GRUPOS)
     orden: int = 999
     tabs_extra: tuple[TabSpec, ...] = ()
     # Campos que identifican un registro fuera de la base (ej: en SharePoint),

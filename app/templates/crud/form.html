@@ -88,6 +88,10 @@
                                accept="image/*"
                                {% if cfg.required %}required{% endif %}>
                     
+                    {% elif cfg.tipo == "color" %}
+                    <input type="color" name="{{ campo }}" id="{{ campo }}"
+                        value="{{ modelo.get(campo) or '#64748b' }}">
+
                     {% elif cfg.tipo == "date" %}
                     <input type="date" name="{{ campo }}" id="{{ campo }}"
                         value="{{ modelo.get(campo) if modelo.get(campo) is not none else '' }}"

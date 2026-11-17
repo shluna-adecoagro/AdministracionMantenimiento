@@ -56,12 +56,26 @@
 
         <!-- Sidebar -->
         <aside class="sidebar">
-            <h3>Gestiones</h3>
-            <ul>
-                {% for item in sidebar_items %}
-                    <li><a href="{{ item.url }}">{{ item.label }}</a></li>
-                {% endfor %}
-            </ul>
+            {% for grupo in sidebar_grupos %}
+                {% set activo = grupo["items"] | selectattr("url", "in", [request.path, "/" ~ request.path.split("/")[1]]) | list %}
+                {% if grupo.clave == "maestros" %}
+                    <h3>{{ grupo.titulo }}</h3>
+                    <ul>
+                        {% for item in grupo["items"] %}
+                            <li><a href="{{ item.url }}" {% if item in activo %}class="activo"{% endif %}>{{ item.label }}</a></li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <details class="sidebar-grupo" {% if activo %}open{% endif %}>
+                        <summary><h3>{{ grupo.titulo }}</h3></summary>
+                        <ul>
+                            {% for item in grupo["items"] %}
+                                <li><a href="{{ item.url }}" {% if item in activo %}class="activo"{% endif %}>{{ item.label }}</a></li>
+                            {% endfor %}
+                        </ul>
+                    </details>
+                {% endif %}
+            {% endfor %}
         </aside>
 
 
