@@ -18,8 +18,12 @@ Dónde va cada dato:
       listado / filtros                         columnas y búsqueda
       padre                                     si es subentidad de otra
       sidebar / orden                           menú lateral
-      fields: {campo: {...}}                    widget, oculto, opciones...
+      fields: {campo: {...}}                    widget, oculto, opciones, alias
+                                                (otros nombres de columna al importar)
       excluir: [campo, ...]                     campos inferidos que no se exponen
+      clave_natural: [campo, ...]               cómo se identifica el registro al
+                                                importar (ej: el nombre), ya que los
+                                                IDs de otras fuentes no coinciden
 
 Lo mínimo es {"model": MiModelo}; todo lo demás tiene un valor por defecto.
 La lista completa de claves está en registry.CLAVES_ENTIDAD.

@@ -6,6 +6,8 @@ from datetime import datetime
 
 class Ubicacion(db.Model, ModelMixin, AuditMixin):
     __tablename__ = "ubicaciones"
+    # Dentro de un sector no puede haber dos ubicaciones con el mismo nombre.
+    __table_args__ = (db.UniqueConstraint("nombre_ubicacion", "sector_id"),)
 
     ubicacion_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
 

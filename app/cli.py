@@ -8,6 +8,8 @@ Comandos de consola: `flask --app run <comando>`.
     flask reset-db       borra la base, la recrea y carga los catálogos
     flask drop-db        borra la base
     flask inspect-db     muestra tablas, columnas y claves
+    flask importar <entidad> archivo.csv [--simular]   carga datos desde CSV
+    flask exportar <entidad> archivo.csv               descarga datos a CSV
 """
 import os
 
@@ -43,6 +45,15 @@ def _borrar_base():
         click.echo("✔ Tablas eliminadas.")
 
 
+def _spec(entidad):
+    from app.crud.metamodelos import REGISTRY
+
+    if entidad not in REGISTRY:
+        disponibles = ", ".join(sorted(REGISTRY))
+        raise click.BadParameter(f"«{entidad}» no existe. Disponibles: {disponibles}", param_hint="ENTIDAD")
+    return REGISTRY[entidad]
+
+
 def registrar_comandos(app):
     @app.cli.command("seed")
     def seed():
@@ -70,6 +81,38 @@ def registrar_comandos(app):
     def drop_db():
         """Borra la base."""
         _borrar_base()
+
+    @app.cli.command("importar")
+    @click.argument("entidad")
+    @click.argument("archivo", type=click.Path(exists=True, dir_okay=False))
+    @click.option("--simular", is_flag=True, help="Valida y muestra el resultado sin guardar nada.")
+    @click.option("--motivo", help="Motivo para la auditoría (por defecto, el nombre del archivo).")
+    @click.option("--usuario", default="importación", show_default=True,
+                  help="Usuario que figura en la auditoría.")
+    def importar(entidad, archivo, simular, motivo, usuario):
+        """Importa un CSV: crea o actualiza registros según su clave natural."""
+        from app.crud.intercambio.csv_entidades import importar as importar_csv
+        from app.crud.web.textos import etiqueta_tabla
+
+        spec = _spec(entidad)
+        with open(archivo, "rb") as f:
+            resultado = importar_csv(spec, f.read(), archivo, simular=simular,
+                                     usuario=usuario, motivo=motivo, etiqueta_tabla=etiqueta_tabla)
+        click.echo(resultado.resumen())
+        if not resultado.ok:
+            raise SystemExit(1)
+
+    @app.cli.command("exportar")
+    @click.argument("entidad")
+    @click.argument("archivo", type=click.Path(dir_okay=False, writable=True))
+    @click.option("--separador", default=";", show_default=True, help="Separador de columnas.")
+    def exportar(entidad, archivo, separador):
+        """Exporta una entidad a CSV (se puede volver a importar)."""
+        from app.crud.intercambio.csv_entidades import exportar as exportar_csv
+
+        with open(archivo, "wb") as f:
+            f.write(exportar_csv(_spec(entidad), separador))
+        click.echo(f"✔ {entidad} exportado a {archivo}")
 
     @app.cli.command("inspect-db")
     def inspect_db():

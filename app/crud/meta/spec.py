@@ -44,7 +44,11 @@ class FieldSpec:
     options: tuple = ()            # para tipo "select": ({"value":..., "label":...}, ...)
     subcarpeta: str | None = None  # para tipo "file"
 
-    # Restricciones del dato (las usará el JSON Schema en la Fase 4)
+    # Otros nombres de columna que se aceptan al importar un CSV, además del
+    # nombre del campo y su etiqueta (ej: ("name",) para una columna de SharePoint).
+    alias: tuple[str, ...] = ()
+
+    # Restricciones del dato (las usa el JSON Schema de la API)
     max_length: int | None = None
     unique: bool = False
 
@@ -112,6 +116,10 @@ class EntitySpec:
     sidebar: bool = False
     orden: int = 999
     tabs_extra: tuple = ()
+    # Campos que identifican un registro fuera de la base (ej: en SharePoint),
+    # donde los IDs no coinciden. Los usa la importación para actualizar en vez
+    # de duplicar. Ej: ("nombre_sector",) o ("nombre_ubicacion", "sector_id").
+    clave_natural: tuple[str, ...] = ()
 
     @property
     def es_subentidad(self) -> bool:

@@ -101,14 +101,19 @@ class ServicioCRUD:
     auditoria  {"enabled": bool, "ignore_fields": [...]}
     etiqueta_tabla  función (tabla, cantidad) → texto, para los mensajes
                     (ej: ("activos", 2) → "2 activos")
+    confirmar  True: cada operación se confirma (commit) sola. False: se deja
+               pendiente para que quien llama confirme o descarte un lote
+               completo (ej: una importación "todo o nada").
     """
 
-    def __init__(self, model, fields: dict, auditoria: dict | None = None, etiqueta_tabla=None):
+    def __init__(self, model, fields: dict, auditoria: dict | None = None,
+                 etiqueta_tabla=None, confirmar: bool = True):
         self.model = model
         self.fields = fields
         self.auditoria = auditoria or {"enabled": False}
         self.pk = model.__mapper__.primary_key[0].name
         self.etiqueta_tabla = etiqueta_tabla or _etiqueta_por_defecto
+        self.confirmar = confirmar
 
     # ------------------------------------------------------------------
     def crear(self, datos: dict, motivo: str | None = None, usuario: str = "sistema"):
@@ -192,7 +197,8 @@ class ServicioCRUD:
                     registro_id=getattr(registro, self.pk),
                     ignore_fields=self.auditoria.get("ignore_fields", []),
                 )
-            db.session.commit()
+            if self.confirmar:
+                db.session.commit()
         except IntegrityError as e:
             db.session.rollback()
             raise traducir_integridad(e, self.fields, tipo) from e
