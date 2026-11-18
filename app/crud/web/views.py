@@ -224,9 +224,15 @@ class VistasEntidad:
 
     def _render_form(self, tipo_operacion, modelo, padre, url_cancelar, errores=None, status=200):
         padre, padre_id = padre
+        s = self.spec
+        if tipo_operacion == "INSERT":
+            titulo = f"{'Nueva' if s.genero == 'f' else 'Nuevo'} {s.label_singular}"
+        else:
+            titulo = f"Editar {s.label_singular}"
         return render_template(
             "crud/form.html",
             **self._contexto(padre, padre_id),
+            titulo_pagina=titulo,
             nombre_entidad=inicial(self.spec.label_singular),
             modelo=modelo,
             tipo_operacion=tipo_operacion,
@@ -310,6 +316,7 @@ class VistasEntidad:
         return render_template(
             "crud/confirmar_eliminar.html",
             **self._contexto(padre, padre_id),
+            titulo_pagina=f"Eliminar {self.spec.label_singular}",
             nombre_entidad=inicial(self.spec.label_singular),
             modelo=repository.valores(registro),
             fk_labels=fk.etiquetas(registro, self.fields),
@@ -358,6 +365,7 @@ class VistasEntidad:
         return render_template(
             "crud/detalle_entidad.html",
             **self._contexto(padre, padre_id),
+            titulo_pagina=self._titulo_registro(registro),
             modelo=modelo,
             historial=historial,
             pagination=pagination,
@@ -367,6 +375,12 @@ class VistasEntidad:
             tabla=tabla,
             url_volver=self._url_volver(padre, padre_id),
         )
+
+    def _titulo_registro(self, registro) -> str:
+        """Nombre del registro para la pestaña del navegador (ej: «Tractor 1»)."""
+        campo = getattr(self.spec.model, "__label_field__", None)
+        nombre = getattr(registro, campo, None) if campo else None
+        return str(nombre) if nombre not in (None, "") else inicial(self.spec.label_singular)
 
     def _subentidad(self, hijo: EntitySpec, registro, id):
         """Datos de la pestaña de una subentidad en el detalle del padre."""

@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 {% from "crud/partials/_valor.html" import valor %}
 
-{% block title %}Gestión de {{ label_plural }}{% endblock %}
+{% block title %}{{ label_plural | inicial }}{% endblock %}
 
 {% block content %}
 
