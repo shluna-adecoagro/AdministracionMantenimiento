@@ -28,3 +28,25 @@ def test_menu_lateral_sigue_mostrando_las_entidades(client):
     html = client.get("/sectores").get_data(as_text=True)
     assert 'href="/sectores"' in html
     assert 'href="/cuentas"' in html
+
+
+def _titulo(client, url):
+    import re
+
+    return re.search(r"<title>(.*?)</title>", client.get(url).get_data(as_text=True), re.S).group(1).strip()
+
+
+def test_titulo_de_la_pestana(client, sector):
+    assert _titulo(client, "/") == "Mantenimiento Tambos"
+    assert _titulo(client, "/sectores") == "Sectores · Mantenimiento Tambos"
+    assert _titulo(client, "/sectores/crear") == "Nuevo sector · Mantenimiento Tambos"
+    assert _titulo(client, "/ubicaciones/crear") == "Nueva ubicación · Mantenimiento Tambos"
+    assert _titulo(client, f"/sectores/{sector.sector_id}") == "Taller · Mantenimiento Tambos"
+    assert _titulo(client, f"/sectores/{sector.sector_id}/editar") == "Editar sector · Mantenimiento Tambos"
+
+
+def test_favicon(client):
+    html = client.get("/").get_data(as_text=True)
+    for archivo in ("favicon.svg", "favicon-32.png", "apple-touch-icon.png"):
+        assert f"/static/img/{archivo}" in html
+        assert client.get(f"/static/img/{archivo}").status_code == 200

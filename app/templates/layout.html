@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <!-- Favicon -->
-    <!-- <link rel="icon" href="https://adecoagro.com/favicon.ico" type="image/x-icon"> -->
+    <!-- Favicon: el símbolo del logo (SVG; PNG para navegadores sin soporte de SVG) -->
+    <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+    <link rel="icon" href="{{ url_for('static', filename='img/favicon-32.png') }}" type="image/png" sizes="32x32">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
 
     <!-- FontAwesome -->
     <link rel="stylesheet"
@@ -20,7 +22,11 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css') }}">
 
 
-    <title>{% block title %}Mantenimiento - Administración{% endblock %}</title>
+    {# Título de la pestaña: «<página> · Mantenimiento Tambos». Cada plantilla define
+       el bloque title (o la vista pasa titulo_pagina); la portada no lo define. #}
+    {% if false %}{% block title %}{{ titulo_pagina | default("", true) }}{% endblock %}{% endif %}
+    {% set pagina = self.title() | trim %}
+    <title>{% if pagina %}{{ pagina }} · {% endif %}Mantenimiento Tambos</title>
 </head>
 
 <body>
