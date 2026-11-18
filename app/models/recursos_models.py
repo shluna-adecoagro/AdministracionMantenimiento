@@ -41,7 +41,9 @@ class Empleado(Recurso):
     # Sin backref: un sector con empleados no se puede borrar.
     sector_id = db.Column(db.Integer, db.ForeignKey("sectores.sector_id"))
     sector = db.relationship("Sector")
-    puesto = db.Column(db.String(100))
+    puesto = db.Column(db.String(100), info={"label": "Puesto"})
+    telefono = db.Column(db.String(50), info={"label": "Teléfono"})
+    email = db.Column(db.String(100), info={"label": "Email"})
 
     @property
     def nombre_completo(self):
@@ -62,6 +64,8 @@ class Proveedor(Recurso):
     razon_social = db.Column(db.String(150), nullable=False, info={"label": "Razón social"})
     cuit = db.Column(db.String(20), info={"label": "CUIT"})
     direccion = db.Column(db.String(200), info={"label": "Dirección"})
+    telefono = db.Column(db.String(50), info={"label": "Teléfono"})
+    email = db.Column(db.String(100), info={"label": "Email"})
 
     contactos = db.relationship("ContactoProveedor", back_populates="proveedor", cascade="all, delete-orphan")
 
@@ -80,7 +84,7 @@ class ContactoProveedor(db.Model, ModelMixin):
     proveedor_id = db.Column(db.Integer, db.ForeignKey("proveedores.recurso_id"), nullable=False)
 
     nombre_contacto = db.Column(db.String(100), nullable=False, info={"label": "Nombre"})
-    email = db.Column(db.String(100))
+    email = db.Column(db.String(100), info={"label": "Email"})
     telefono = db.Column(db.String(50), info={"label": "Teléfono"})
     tipo_contacto = db.Column(db.String(50))
 
