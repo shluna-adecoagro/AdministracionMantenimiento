@@ -35,8 +35,9 @@ Overrides (lo no inferible) ───────────┘                
 Agregar una entidad nueva consiste en definir su modelo y, si hace falta, un override con
 lo que no se puede deducir del modelo (textos, columnas del listado, subentidades…).
 
-El diseño del framework, sus decisiones y cómo agregar una entidad están en
-[`docs/plan_refactor_crud.md`](docs/plan_refactor_crud.md).
+- **Cómo agregar o modificar una entidad**: [`docs/agregar_entidad.md`](docs/agregar_entidad.md)
+  (modelo, migración, override y pruebas, con un ejemplo completo).
+- Diseño del framework, decisiones tomadas y fases: [`docs/plan_refactor_crud.md`](docs/plan_refactor_crud.md).
 
 ### Estructura
 

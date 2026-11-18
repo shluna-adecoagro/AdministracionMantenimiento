@@ -15,16 +15,23 @@ Dónde va cada dato:
 
   * Lo que describe la PANTALLA va en el override:
       label_singular / label_plural / genero   textos de la entidad
+      sidebar / grupo / orden                   menú lateral (grupo: "operativos",
+                                                "maestros" o "catalogos")
       listado / filtros                         columnas y búsqueda
-      padre                                     si es subentidad de otra
-      sidebar / orden                           menú lateral
-      fields: {campo: {...}}                    widget, oculto, opciones, alias
-                                                (otros nombres de columna al importar)
+      padre                                     si es subentidad de otra (o una lista
+                                                de padres, ej: el BOM de un modelo)
+      fields: {campo: {...}}                    widget, opciones, alias (otros nombres
+                                                de columna al importar), solo_lectura,
+                                                depende_de (None desactiva un select
+                                                dependiente inferido)...
       excluir: [campo, ...]                     campos inferidos que no se exponen
       clave_natural: [campo, ...]               cómo se identifica el registro al
-                                                importar (ej: el nombre), ya que los
-                                                IDs de otras fuentes no coinciden
+                                                importar (ej: el nombre)
+      tabs_extra: [{id, label, funcion}]        pestañas con una tabla calculada
+      auditoria / auditoria_ignorar             historial de cambios
 
 Lo mínimo es {"model": MiModelo}; todo lo demás tiene un valor por defecto.
 La lista completa de claves está en registry.CLAVES_ENTIDAD.
+
+Guía paso a paso, con un ejemplo: docs/agregar_entidad.md
 """

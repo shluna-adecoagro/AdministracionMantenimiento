@@ -406,17 +406,10 @@ La API generada usa `GET/POST {url}` y `PUT/PATCH/DELETE {url}/{id}`.
 | **11. Documentos de proveedores** | Presupuestos, remitos y facturas (cabecera + ítems): ofertas por solicitud de OC y lista de precios de materiales. Procesamiento automático de PDF a definir. | Pendiente |
 | **12. Sincronización con SharePoint** | Opción A: exportar periódicamente de la app a SharePoint, más copias de seguridad automáticas de la base. Al final, escribir en SharePoint directo (Microsoft Graph) en lugar de pasar por CSV. | Pendiente |
 
-## Cómo agregar o modificar una entidad (desde la Fase 1)
+## Cómo agregar o modificar una entidad
 
-1. **Modelo** (`app/models/`): columnas, obligatoriedad (`nullable`), largo, FKs,
-   relaciones y etiquetas de los campos con `info={"label": "..."}`.
-2. **Override** (`app/crud/meta/overrides/<modulo>.py`): solo lo que no se deduce del
-   modelo. Lo mínimo es `{"model": MiModelo}`; las claves posibles están documentadas en
-   `app/crud/meta/overrides/__init__.py`.
-3. Nada más: las pantallas (listado, alta, detalle, edición y baja) se generan solas.
-
-Si algo no cierra (un campo mal escrito, un padre inexistente, una FK que no apunta al
-padre), la app **no arranca** y el error dice qué corregir, con una sugerencia.
+Ver la guía [`docs/agregar_entidad.md`](agregar_entidad.md): modelo, migración, override
+y pruebas, con un ejemplo completo.
 
 ## Cómo verificar cada fase
 
