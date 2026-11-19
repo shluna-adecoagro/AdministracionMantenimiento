@@ -13,6 +13,8 @@ __pycache__/
 *.txt
 # Excepción: las dependencias sí se versionan
 !requirements*.txt
+# Excepción: las imágenes de la propia app (favicon, logo) sí se versionan
+!app/static/img/*.png
 *.tsv
 *.ipynb
 *.csv
