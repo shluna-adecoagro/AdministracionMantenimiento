@@ -58,28 +58,85 @@ tests/           Tests automáticos (pytest)
 
 ## Puesta en marcha
 
-Requiere Python 3.11 o superior.
+Requiere Python 3.11 o superior. Se puede usar **conda** (recomendado; incluye las
+librerías de análisis de `ml/`) o un **entorno virtual** de Python.
+
+### Con conda (Miniforge) en Debian / Ubuntu
+
+1. **Instalar Miniforge** (una sola vez por máquina). Si ya está instalado, saltear.
+
+   ```bash
+   sudo apt update && sudo apt install -y curl git
+   curl -fsSLO "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
+   bash Miniforge3-$(uname)-$(uname -m).sh
+   ```
+
+   Aceptar la licencia y la carpeta propuesta (`~/miniforge3`), y responder **yes**
+   cuando pregunta si inicializar conda. Cerrar y volver a abrir la terminal.
+
+2. **Bajar el proyecto y crear el entorno**:
+
+   ```bash
+   git clone https://github.com/shluna-adecoagro/AdministracionMantenimiento.git
+   cd AdministracionMantenimiento
+   conda env create -f environment.yml
+   conda activate adminmant
+   ```
+
+3. **Verificar** que todo esté bien (unos 30 segundos):
+
+   ```bash
+   python -m pytest
+   ```
+
+4. **Levantar la aplicación** y abrir http://127.0.0.1:5000 en el navegador:
+
+   ```bash
+   python run.py
+   ```
+
+   En desarrollo, el primer acceso crea la base (`instance/mantenimiento.db`), aplica las
+   migraciones y carga los catálogos iniciales. Se detiene con Ctrl+C.
+
+Cada vez que se abre una terminal nueva: `cd AdministracionMantenimiento` y
+`conda activate adminmant`.
+
+**Actualizar** después de bajar cambios (`git pull`):
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate        # en Windows: .venv\Scripts\activate
-pip install -r requirements-dev.txt
+conda env update -f environment.yml   # por si cambiaron las dependencias
+flask --app run db upgrade            # por si hay migraciones nuevas
 ```
 
-La base de datos es **SQLite**. Por defecto se crea en `instance/mantenimiento.db`; para
-usar otra ruta, definí `DATABASE_URL` en un archivo `.env`:
+Con `--prune`, `conda env update` además quita del entorno los paquetes que no están en
+`environment.yml` (por ejemplo, Jupyter, si se instaló aparte).
+
+### Con un entorno virtual (venv)
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate        # en Windows: .venv\Scripts\activate
+pip install -r requirements-dev.txt
+python -m pytest
+python run.py
+```
+
+En Debian / Ubuntu, `python3 -m venv` necesita el paquete `python3-venv`
+(`sudo apt install python3-venv`).
+
+### Configuración (opcional)
+
+La base de datos es **SQLite**. Por defecto se crea en `instance/mantenimiento.db`. Para
+cambiar la ruta o la clave de la sesión, crear un archivo `.env` en la carpeta del
+proyecto (no se sube a git):
 
 ```
 DATABASE_URL=sqlite:////ruta/absoluta/mantenimiento.db
 SECRET_KEY=una-clave-larga-y-secreta
 ```
 
-Levantar la aplicación (en desarrollo, el primer acceso crea o actualiza la base y carga
-los catálogos iniciales):
-
-```bash
-python run.py
-```
+Las dependencias están en dos lugares que deben coincidir: `requirements*.txt` (pip) y
+`environment.yml` (conda). Un test avisa si falta alguna en `environment.yml`.
 
 Comandos útiles (`flask --app run <comando>`):
 
