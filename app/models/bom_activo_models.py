@@ -8,8 +8,15 @@ from app.crud.audit_mixin import AuditMixin
 
 
 class BOMActivo(db.Model, ModelMixin, AuditMixin):
+    """
+    BOM (lista de materiales) de un activo. Al crear el activo se copia del BOM
+    de su modelo y después se edita libremente (ver app/crud/meta/overrides/bom.py).
+    """
+
     __tablename__ = "bom_activo"
     __label_field__ = None  # se arma con FK
+    # Cada material figura una sola vez en el BOM de un activo.
+    __table_args__ = (db.UniqueConstraint("activo_id", "material_id"),)
 
     bom_activo_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     uuid = db.Column(
@@ -29,25 +36,16 @@ class BOMActivo(db.Model, ModelMixin, AuditMixin):
     material_id = db.Column(
         db.Integer, db.ForeignKey("materiales.material_id"), nullable=False
     )
-    material = db.relationship("Material", lazy="joined", foreign_keys=[material_id])
+    material = db.relationship("Material", lazy="joined")
 
     # Cantidad requerida en el BOM del activo
     cantidad = db.Column(db.Float, nullable=True)
 
-    # Equivalencias específicas del activo
+    # Equivalencias (cuando el repuesto no es el original)
     es_equivalencia = db.Column(db.Boolean, default=False, nullable=False,
                                 info={"label": "Es equivalencia"})
     nota_equivalencia = db.Column(db.String(300), nullable=True, info={"label": "Nota de equivalencia"})
     origen_equivalencia = db.Column(db.String(100), nullable=True, info={"label": "Origen de equivalencia"})
-
-    # Reemplazo de material original del modelo
-    reemplaza_material_modelo_id = db.Column(
-        db.Integer, db.ForeignKey("materiales.material_id"), nullable=True,
-        info={"label": "Reemplaza al material del modelo"},
-    )
-    reemplaza_material_modelo = db.relationship(
-        "Material", lazy="joined", foreign_keys=[reemplaza_material_modelo_id]
-    )
 
     creado_en = db.Column(db.DateTime, default=datetime.utcnow)
     actualizado_en = db.Column(

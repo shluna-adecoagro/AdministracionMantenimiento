@@ -159,11 +159,13 @@ Lo mínimo es `{"model": MiModelo}`. Claves disponibles:
 | `sidebar`, `orden` | entrada en el menú y su posición | `activos` |
 | `grupo` | sección del menú: `"operativos"`, `"maestros"` (por defecto) o `"catalogos"` | `overrides/catalogos.py` |
 | `listado`, `filtros` | columnas del listado y campos de búsqueda (por defecto, se eligen solas) | `activos` |
-| `padre` | subentidad: pestaña en el detalle del padre. Puede ser una lista de padres | `ubicaciones`; `bom_modelo` (dos padres) |
+| `padre` | subentidad: pestaña en el detalle del padre. Puede ser una lista de padres; `"label"` cambia el nombre de la pestaña en ese padre | `ubicaciones`; `bom_activo` («BOM» en el activo, «Usado en activos» en el material) |
 | `clave_natural` | campos que identifican el registro al importar | `["nombre_ubicacion", "sector_id"]` |
 | `fields: {campo: {...}}` | cambiar lo inferido de un campo (ver abajo) | `lecturas_medidor.origen` |
 | `excluir` | campos que no se exponen | — |
-| `tabs_extra` | pestañas con una tabla calculada por una función | «BOM final» en `overrides/bom.py` |
+| `tabs_extra` | pestañas con una tabla de solo lectura calculada por una función `funcion(registro) → {"columnas", "filas"}` | — |
+| `al_guardar` | función `(registro, operacion, cambiados)` que corre al crear o modificar, en la misma transacción (web, API e importación). Puede devolver un aviso para el usuario | copia del BOM del modelo al activo, `overrides/bom.py` |
+| `acciones` | botones del detalle que ejecutan una función sobre el registro (`id`, `label`, `funcion`, `seccion`, `confirmar`, `visible`) | «Traer ítems del modelo» en `overrides/bom.py` |
 | `auditoria`, `auditoria_ignorar` | activar o no el historial; campos que no se registran | — |
 
 Dentro de `fields`, cada campo acepta, entre otras: `label`, `tipo` (`text`, `number`,

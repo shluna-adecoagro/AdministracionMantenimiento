@@ -31,6 +31,19 @@
      CONTENIDO DE LA SECCIÓN ACTIVA
      ============================================================ -->
 
+{# Acciones de esta pestaña. En la pestaña de una subentidad van junto al botón
+   «Crear» (ver _listado_header.html); en las demás, acá. #}
+{% if acciones and not sub %}
+<div class="detalle-acciones">
+    {% for a in acciones %}
+        <form method="POST" action="{{ a.url }}"
+              {% if a.confirmar %}onsubmit="return confirm({{ a.confirmar | tojson }})"{% endif %}>
+            <button type="submit" class="btn-secondary">{{ a.label }}</button>
+        </form>
+    {% endfor %}
+</div>
+{% endif %}
+
 {% if seccion_activa == "datos" %}
 
     <!-- DATOS PRINCIPALES -->

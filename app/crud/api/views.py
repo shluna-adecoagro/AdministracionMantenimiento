@@ -37,10 +37,11 @@ from werkzeug.exceptions import HTTPException
 
 from app.crud.core import coercion, fk, repository
 from app.crud.core.coercion import ErroresValidacion
-from app.crud.core.service import ErrorIntegridad, ServicioCRUD
+from app.crud.core.service import ErrorIntegridad
+from app.crud.entidades import servicio
 from app.crud.meta.spec import EntitySpec
 from app.crud.schema import jsonschema
-from app.crud.web.textos import etiqueta_tabla
+
 
 BLUEPRINT = "api_crud"
 LIMITE_MAXIMO = 1000
@@ -87,12 +88,7 @@ def error_json(status: int, mensaje: str, errores: dict | None = None):
 class VistasAPI:
     def __init__(self, spec: EntitySpec):
         self.spec = spec
-        self.servicio = ServicioCRUD(
-            spec.model,
-            spec.fields,
-            {"enabled": spec.auditoria, "ignore_fields": list(spec.auditoria_ignorar)},
-            etiqueta_tabla,
-        )
+        self.servicio = servicio(spec)
 
     def registrar(self, bp):
         n = self.spec.name

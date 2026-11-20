@@ -1,125 +1,124 @@
 """
-BOM (lista de materiales/repuestos) de modelos y de activos.
+BOM (lista de materiales) de modelos y de activos.
 
-  * BOM del modelo: los materiales que lleva un modelo (ej: filtro de aceite X
-    para el tractor modelo Y). Vale para todos los activos de ese modelo.
-  * BOM del activo: ajustes de un activo puntual: materiales propios, o un
-    material que reemplaza a uno del modelo (`reemplaza_material_modelo_id`).
+  * BOM del modelo: la PLANTILLA. Los materiales que lleva un modelo (ej: filtro
+    de aceite X para el tractor modelo Y). Se carga desde el modelo.
+  * BOM del activo: el BOM REAL de cada activo. Al crear el activo (o al
+    asignarle o cambiarle el modelo, si su BOM está vacío) se copia la plantilla
+    de su modelo; después se edita libremente sin tocar la plantilla.
 
-Cada ítem se ve desde los dos lados: en el modelo/activo ("BOM") y en el
-material (dónde se usa). Las pestañas calculadas combinan ambos:
+Cambiar la plantilla no modifica los activos existentes. Para traer a un activo
+los materiales nuevos de su modelo está la acción «Traer ítems del modelo», que
+agrega solo los que falten (lo ya cargado no se modifica).
 
-  * Activo → "BOM final": el BOM del modelo con los ajustes del activo.
-  * Material → "Compatibilidad final": los activos en los que se usa.
+Cada ítem se ve desde los dos lados: en el modelo/activo («BOM») y en el
+material («Usado en modelos» / «Usado en activos»).
 """
 from __future__ import annotations
 
-from app.models.activos_models import Activo
 from app.models.bom_activo_models import BOMActivo
 from app.models.bom_modelo_models import BOMModelo
+
+# Datos de un ítem de la plantilla que se copian al BOM del activo.
+CAMPOS_COPIA = ("material_id", "cantidad", "es_equivalencia", "nota_equivalencia", "origen_equivalencia")
 
 OVERRIDES = {
     "bom_modelo": {
         "model": BOMModelo,
-        "label_singular": "ítem del BOM de modelo",
+        "label_singular": "ítem del BOM",
         "label_plural": "BOM de modelos",
         "genero": "m",
-        # Se gestiona desde el modelo (principal) y se ve también en el material.
         "padre": [
-            {"entidad": "modelos", "fk": "modelo_id"},
-            {"entidad": "materiales", "fk": "material_id"},
+            {"entidad": "modelos", "fk": "modelo_id", "label": "BOM"},
+            {"entidad": "materiales", "fk": "material_id", "label": "Usado en modelos"},
         ],
         "clave_natural": ["modelo_id", "material_id"],
     },
     "bom_activo": {
         "model": BOMActivo,
-        "label_singular": "ítem del BOM de activo",
+        "label_singular": "ítem del BOM",
         "label_plural": "BOM de activos",
         "genero": "m",
         "padre": [
-            {"entidad": "activos", "fk": "activo_id"},
-            {"entidad": "materiales", "fk": "material_id"},
+            {"entidad": "activos", "fk": "activo_id", "label": "BOM"},
+            {"entidad": "materiales", "fk": "material_id", "label": "Usado en activos"},
         ],
-        "listado": ["activo_id", "material_id", "cantidad", "es_equivalencia", "reemplaza_material_modelo_id"],
         "clave_natural": ["activo_id", "material_id"],
     },
 }
 
 
 # ---------------------------------------------------------------------------
-# Pestañas calculadas
+# Copia de la plantilla al activo
 # ---------------------------------------------------------------------------
 
-def _material(material) -> str:
-    return f"{material.codigo} · {material.descripcion}" if material else "—"
+def copiar_del_modelo(activo, motivo: str) -> int:
+    """
+    Agrega al BOM del activo los ítems del BOM de su modelo que todavía no
+    tiene (por material). Lo que ya está no se modifica. Cada ítem copiado queda
+    en la auditoría. No confirma la transacción: lo hace quien llama.
+    Devuelve cuántos ítems agregó.
+    """
+    from app.crud.entidades import servicio
 
-
-def _si_no(valor) -> str:
-    return "Sí" if valor else "No"
-
-
-def bom_del_modelo(activo: Activo) -> dict:
-    columnas = ["Material", "Cantidad", "Equivalencia", "Nota"]
     if activo.modelo_id is None:
-        return {"columnas": columnas, "filas": [], "vacio": "El activo no tiene modelo asignado."}
-    items = BOMModelo.query.filter_by(modelo_id=activo.modelo_id).order_by(BOMModelo.bom_modelo_id).all()
-    return {
-        "columnas": columnas,
-        "filas": [[_material(b.material), b.cantidad, _si_no(b.es_equivalencia), b.nota_equivalencia] for b in items],
-        "nota": f"Modelo {activo.modelo.nombre_modelo}. Se edita desde el modelo.",
-        "vacio": "El modelo no tiene BOM cargado.",
-    }
+        return 0
+    ya_tiene = {b.material_id for b in BOMActivo.query.filter_by(activo_id=activo.activo_id)}
+    plantilla = (
+        BOMModelo.query.filter_by(modelo_id=activo.modelo_id)
+        .order_by(BOMModelo.bom_modelo_id)
+        .all()
+    )
+    s = servicio("bom_activo", confirmar=False)
+    agregados = 0
+    for item in plantilla:
+        if item.material_id in ya_tiene:
+            continue
+        datos = {campo: getattr(item, campo) for campo in CAMPOS_COPIA}
+        s.crear({**datos, "activo_id": activo.activo_id}, motivo)
+        agregados += 1
+    return agregados
 
 
-def bom_final(activo: Activo) -> dict:
+def _items(n: int) -> str:
+    return f"{n} ítem{'s' if n != 1 else ''}"
+
+
+def al_guardar_activo(activo, operacion: str, cambiados: set):
     """
-    BOM del modelo con los ajustes del activo:
-      * un ítem del activo que reemplaza a un material del modelo lo saca de la lista;
-      * un ítem del activo con el mismo material que uno del modelo lo pisa;
-      * el resto de los ítems del activo se agregan.
+    Al crear un activo con modelo, o al asignarle o cambiarle el modelo, se copia
+    el BOM del modelo, pero solo si el BOM del activo está vacío: nunca se pisa
+    lo cargado a mano.
     """
-    finales: dict[int, list] = {}
-    if activo.modelo_id is not None:
-        for b in BOMModelo.query.filter_by(modelo_id=activo.modelo_id).order_by(BOMModelo.bom_modelo_id):
-            finales[b.material_id] = [_material(b.material), b.cantidad, _si_no(b.es_equivalencia), "Modelo", None]
+    if activo.modelo_id is None:
+        return None
+    if operacion == "UPDATE" and "modelo_id" not in cambiados:
+        return None
 
-    for b in BOMActivo.query.filter_by(activo_id=activo.activo_id).order_by(BOMActivo.bom_activo_id):
-        nota = None
-        if b.reemplaza_material_modelo_id is not None:
-            finales.pop(b.reemplaza_material_modelo_id, None)
-            nota = f"Reemplaza a {_material(b.reemplaza_material_modelo)}"
-        finales[b.material_id] = [_material(b.material), b.cantidad, _si_no(b.es_equivalencia), "Activo", nota]
+    modelo = activo.modelo.nombre_modelo
+    if BOMActivo.query.filter_by(activo_id=activo.activo_id).count():
+        return ("aviso", f"El activo pasó al modelo {modelo}, pero su BOM ya tenía ítems y no se "
+                         "modificó. Si corresponde, usá «Traer ítems del modelo» en la pestaña BOM.")
 
-    return {
-        "columnas": ["Material", "Cantidad", "Equivalencia", "Origen", "Nota"],
-        "filas": list(finales.values()),
-        "vacio": "Ni el modelo ni el activo tienen BOM cargado.",
-    }
+    copiados = copiar_del_modelo(activo, f"Copia del BOM del modelo {modelo}")
+    return ("ok", f"Se copió el BOM del modelo {modelo}: {_items(copiados)}.") if copiados else None
 
 
-def compatibilidad_final(material) -> dict:
-    """
-    Activos en los que se usa el material: los de los modelos que lo llevan
-    (salvo que el activo lo reemplace por otro) y los que lo tienen en su BOM propio.
-    """
-    filas: dict[int, list] = {}
+def traer_items_del_modelo(activo) -> str:
+    """Acción «Traer ítems del modelo»: agrega los materiales del modelo que falten."""
+    modelo = activo.modelo.nombre_modelo
+    agregados = copiar_del_modelo(activo, f"Ítems traídos del BOM del modelo {modelo}")
+    if not agregados:
+        return f"El BOM ya tiene todos los materiales del modelo {modelo}."
+    return f"Se agregaron {_items(agregados)} del modelo {modelo}."
 
-    modelos = [b.modelo_id for b in BOMModelo.query.filter_by(material_id=material.material_id)]
-    if modelos:
-        reemplazado_en = {
-            b.activo_id for b in BOMActivo.query.filter_by(reemplaza_material_modelo_id=material.material_id)
-        }
-        for a in Activo.query.filter(Activo.modelo_id.in_(modelos)).order_by(Activo.descripcion):
-            if a.activo_id not in reemplazado_en:
-                filas[a.activo_id] = [a.descripcion, a.numero_activo, a.modelo.nombre_modelo, "BOM del modelo"]
 
-    for b in BOMActivo.query.filter_by(material_id=material.material_id):
-        a = b.activo
-        modelo = a.modelo.nombre_modelo if a.modelo else None
-        filas[a.activo_id] = [a.descripcion, a.numero_activo, modelo, "BOM del activo"]
-
-    return {
-        "columnas": ["Activo", "Número de activo", "Modelo", "Según"],
-        "filas": sorted(filas.values(), key=lambda f: f[0] or ""),
-        "vacio": "El material no figura en el BOM de ningún modelo ni activo.",
-    }
+ACCION_TRAER_DEL_MODELO = {
+    "id": "traer_bom_modelo",
+    "label": "Traer ítems del modelo",
+    "funcion": traer_items_del_modelo,
+    "seccion": "bom_activo",
+    "confirmar": ("¿Agregar al BOM de este activo los materiales de su modelo que le falten? "
+                  "Lo ya cargado no se modifica."),
+    "visible": lambda activo: activo.modelo_id is not None,
+}

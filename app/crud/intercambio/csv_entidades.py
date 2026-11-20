@@ -39,7 +39,7 @@ from sqlalchemy import inspect as sa_inspect
 from app.core.db import db
 from app.crud.core import coercion
 from app.crud.core.coercion import ErroresValidacion
-from app.crud.core.service import ErrorIntegridad, ServicioCRUD
+from app.crud.core.service import ErrorIntegridad
 from app.crud.introspect import normalizar_texto
 from app.crud.meta.spec import EntitySpec
 
@@ -237,11 +237,9 @@ def importar(spec: EntitySpec, contenido: bytes, nombre_archivo: str = "archivo.
         return resultado
 
     # --- escritura (una sola transacción) ---------------------------------
-    servicio = ServicioCRUD(
-        spec.model, spec.fields,
-        {"enabled": spec.auditoria, "ignore_fields": list(spec.auditoria_ignorar)},
-        etiqueta_tabla, confirmar=False,
-    )
+    from app.crud.entidades import servicio as servicio_de
+
+    servicio = servicio_de(spec, confirmar=False)
     motivo = motivo or f"Importación de {os.path.basename(nombre_archivo)}"
     pk = spec.pk
     tocados: set = set()

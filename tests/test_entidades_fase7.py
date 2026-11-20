@@ -2,6 +2,7 @@
 Entidades migradas en la Fase 7: activos, medidores, lecturas, materiales, stock,
 catálogos de material, marcas, modelos, unidades, empleados, proveedores y BOM.
 """
+import re
 from datetime import datetime
 
 import pytest
@@ -95,14 +96,16 @@ def test_subentidades_abren_sin_el_padre(client, medidor):
 
 def test_detalle_con_todas_sus_pestanas(client, activo, material, modelo, medidor):
     pestanas = {
-        f"/activos/{activo.activo_id}": ["datos", "historial", "medidores", "bom_activo", "bom_del_modelo", "bom_final"],
-        f"/materiales/{material.material_id}": ["stock_material", "bom_modelo", "bom_activo", "compatibilidad_final"],
+        f"/activos/{activo.activo_id}": ["datos", "historial", "medidores", "bom_activo"],
+        f"/materiales/{material.material_id}": ["stock_material", "bom_modelo", "bom_activo"],
         f"/modelos/{modelo.modelo_id}": ["bom_modelo"],
         f"/medidores/{medidor.medidor_id}": ["lecturas_medidor"],
     }
     for url, secciones in pestanas.items():
         for seccion in secciones:
-            assert client.get(f"{url}?seccion={seccion}").status_code == 200, (url, seccion)
+            html = client.get(f"{url}?seccion={seccion}").get_data(as_text=True)
+            # La pestaña existe y es la activa (una inexistente cae en «Datos»).
+            assert re.search(rf'seccion={seccion}"\s+class="detalle-tab active', html), (url, seccion)
 
 
 def test_menu_lateral(client):
@@ -138,7 +141,7 @@ def test_borrar_activo_borra_su_bom(client, activo, material):
     BOMActivo.query.session.commit()
 
     html = client.get(f"/activos/{activo.activo_id}/confirmar_eliminar").get_data(as_text=True)
-    assert "También se eliminarán: 1 ítem del BOM de activo" in html
+    assert "También se eliminarán: 1 ítem del BOM" in html
 
     r = client.post(f"/activos/{activo.activo_id}/confirmar_eliminar")
     assert r.status_code == 302
@@ -279,28 +282,6 @@ def test_bom_desde_el_material_vuelve_al_material(client, material, modelo):
     assert r.headers["Location"].endswith(f"/materiales/{material.material_id}?seccion=bom_modelo")
     b = BOMModelo.query.one()
     assert (b.material_id, b.es_equivalencia) == (material.material_id, False)
-
-
-def test_bom_final_y_compatibilidad(client, db, activo, modelo):
-    original = _material(db, "F-001", "Filtro original")
-    alternativo = _material(db, "F-002", "Filtro alternativo")
-    propio = _material(db, "F-003", "Filtro extra")
-    _guardar(db, BOMModelo(modelo_id=modelo.modelo_id, material_id=original.material_id, cantidad=1))
-    _guardar(db,
-             BOMActivo(activo_id=activo.activo_id, material_id=alternativo.material_id,
-                       reemplaza_material_modelo_id=original.material_id, es_equivalencia=True),
-             BOMActivo(activo_id=activo.activo_id, material_id=propio.material_id))
-
-    html = client.get(f"/activos/{activo.activo_id}?seccion=bom_final").get_data(as_text=True)
-    assert "F-002 · Filtro alternativo" in html
-    assert "Reemplaza a F-001 · Filtro original" in html
-    assert "F-003 · Filtro extra" in html
-
-    # El original ya no aplica a este activo (lo reemplazó); el alternativo sí.
-    html = client.get(f"/materiales/{original.material_id}?seccion=compatibilidad_final").get_data(as_text=True)
-    assert "Tractor 1" not in html
-    html = client.get(f"/materiales/{alternativo.material_id}?seccion=compatibilidad_final").get_data(as_text=True)
-    assert "Tractor 1" in html and "BOM del activo" in html
 
 
 # ---------------------------------------------------------------------------
