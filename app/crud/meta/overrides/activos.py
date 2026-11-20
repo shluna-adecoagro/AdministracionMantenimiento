@@ -26,10 +26,10 @@ OVERRIDES = {
             "sector_id", "ubicacion_id", "estado_activo_id",
         ],
         "clave_natural": ["numero_activo"],
-        "tabs_extra": [
-            {"id": "bom_del_modelo", "label": "BOM del modelo", "funcion": bom.bom_del_modelo},
-            {"id": "bom_final", "label": "BOM final", "funcion": bom.bom_final},
-        ],
+        # BOM: al crear el activo (o asignarle modelo, si su BOM está vacío) se
+        # copia el del modelo; la acción trae los materiales nuevos del modelo.
+        "al_guardar": bom.al_guardar_activo,
+        "acciones": [bom.ACCION_TRAER_DEL_MODELO],
     },
     "medidores": {
         "model": Medidor,

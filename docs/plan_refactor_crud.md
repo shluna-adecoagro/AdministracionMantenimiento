@@ -203,9 +203,9 @@ Framework (lo nuevo que se puede usar en cualquier entidad):
   puede marcar una columna con `{"solo_lectura": True}` (ej: fecha de actualización del stock).
 - **Varios padres**: `"padre": [{...}, {...}]`. El BOM de un modelo se carga desde el
   modelo y se ve también en el insumo; el padre activo sale de la URL.
-- **Pestañas calculadas**: `tabs_extra` con una función que arma una tabla. Reemplazan a
-  las rutas especiales: «BOM del modelo» y «BOM final» en el activo, «Compatibilidad
-  final» en el insumo (`app/crud/meta/overrides/bom.py`).
+- **Pestañas calculadas**: `tabs_extra` con una función que arma una tabla. Reemplazaron
+  a las rutas especiales del BOM; desde el rediseño del BOM (ver «BOM: plantilla del
+  modelo y copia en el activo») no las usa ninguna entidad.
 - **Sugerencias**: `"tipo": "datalist"` con `fk_model` (texto libre con lista de ayuda).
 - `recursos` no tiene pantallas: es la base común de empleados y proveedores.
 - Nuevos catálogos editables (e importables desde SharePoint): categorías y tipos de insumo.
@@ -277,6 +277,29 @@ Pendientes:
 - Se borró **`src/sync`** (carga desde planillas Excel): los datos se cargan en la app o
   con `flask importar`.
 - **Pedidos** (modelo, servicio y rutas sin registrar) queda para una fase posterior.
+
+## BOM: plantilla del modelo y copia en el activo
+
+Decidido por el usuario (noviembre 2026), en reemplazo del BOM «final» calculado:
+
+- El **BOM del modelo** es la **plantilla** (se carga desde el modelo).
+- Al **crear un activo** con modelo, se **copia** la plantilla a su BOM, que después se
+  edita libremente. En el detalle del activo hay una sola pestaña: «BOM».
+- Si el activo se crea sin modelo y se le **asigna o cambia** después: se copia solo si su
+  BOM está vacío; si ya tiene ítems, no se toca y se avisa.
+- Cambiar la plantilla **no** modifica los activos existentes. La acción **«Traer ítems
+  del modelo»** (en la pestaña BOM del activo) agrega los materiales que falten, sin tocar
+  los editados.
+- Solo hay plantilla por modelo (no por marca). Cada material figura una sola vez por
+  activo y por modelo. Se quitó «reemplaza al material del modelo».
+- En el material, las pestañas «Usado en modelos» y «Usado en activos» reemplazan a
+  «Compatibilidad final».
+- Cada ítem copiado queda en la auditoría con el motivo («Copia del BOM del modelo …»).
+
+Framework: `al_guardar` (función del override que corre al guardar, en la misma
+transacción, desde web, API e importación), `acciones` (botones del detalle), `"label"`
+en `padre` (nombre de la pestaña según el padre) y mensajes en pantalla (flash).
+`app.crud.entidades.servicio()` arma el servicio de una entidad en un solo lugar.
 
 ## Menú: datos maestros y catálogos
 

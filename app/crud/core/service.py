@@ -106,16 +106,24 @@ class ServicioCRUD:
     confirmar  True: cada operación se confirma (commit) sola. False: se deja
                pendiente para que quien llama confirme o descarte un lote
                completo (ej: una importación "todo o nada").
+    al_guardar función(registro, operacion, cambiados) que se ejecuta después de
+               un alta o una modificación, en la misma transacción (ej: copiar
+               el BOM del modelo a un activo nuevo). Si devuelve un aviso (un
+               texto, o una tupla ("ok" | "aviso", texto)), queda en
+               registro.avisos_guardado para mostrárselo al usuario.
+
+    Para armar el servicio de una entidad del registry: app.crud.entidades.servicio().
     """
 
     def __init__(self, model, fields: dict, auditoria: dict | None = None,
-                 etiqueta_tabla=None, confirmar: bool = True):
+                 etiqueta_tabla=None, confirmar: bool = True, al_guardar=None):
         self.model = model
         self.fields = fields
         self.auditoria = auditoria or {"enabled": False}
         self.pk = model.__mapper__.primary_key[0].name
         self.etiqueta_tabla = etiqueta_tabla or _etiqueta_por_defecto
         self.confirmar = confirmar
+        self.al_guardar = al_guardar
 
     # ------------------------------------------------------------------
     def completar_dependencias(self, datos: dict, registro=None) -> dict:
@@ -168,15 +176,16 @@ class ServicioCRUD:
         datos = self.completar_dependencias(datos)
         registro = self.model(**datos)
         db.session.add(registro)
-        self._confirmar("INSERT", registro, None, motivo, usuario)
+        self._confirmar("INSERT", registro, None, motivo, usuario, cambiados=set(datos))
         return registro
 
     def actualizar(self, registro, datos: dict, motivo: str | None = None, usuario: str = "sistema"):
         datos = self.completar_dependencias(datos, registro)
         anterior = self._estado(registro)
+        cambiados = {c for c, v in datos.items() if getattr(registro, c) != v}
         for campo, valor in datos.items():
             setattr(registro, campo, valor)
-        self._confirmar("UPDATE", registro, anterior, motivo, usuario)
+        self._confirmar("UPDATE", registro, anterior, motivo, usuario, cambiados=cambiados)
         return registro
 
     def eliminar(self, registro, motivo: str | None = None, usuario: str = "sistema"):
@@ -228,7 +237,7 @@ class ServicioCRUD:
     def _estado(self, registro):
         return fk.para_auditoria(registro, self.fields) if self.auditoria.get("enabled") else None
 
-    def _confirmar(self, tipo, registro, anterior, motivo, usuario):
+    def _confirmar(self, tipo, registro, anterior, motivo, usuario, cambiados=None):
         try:
             # flush: la base valida ANTES de escribir la auditoría.
             db.session.flush()
@@ -247,8 +256,17 @@ class ServicioCRUD:
                     registro_id=getattr(registro, self.pk),
                     ignore_fields=self.auditoria.get("ignore_fields", []),
                 )
+            if self.al_guardar is not None and tipo != "DELETE":
+                aviso = self.al_guardar(registro, tipo, cambiados or set())
+                if isinstance(aviso, str):
+                    aviso = ("aviso", aviso)
+                registro.avisos_guardado = [aviso] if aviso else []
             if self.confirmar:
                 db.session.commit()
         except IntegrityError as e:
             db.session.rollback()
             raise traducir_integridad(e, self.fields, tipo) from e
+        except (ErrorIntegridad, ErroresValidacion):
+            # Error dentro de al_guardar: no queda nada a medias.
+            db.session.rollback()
+            raise

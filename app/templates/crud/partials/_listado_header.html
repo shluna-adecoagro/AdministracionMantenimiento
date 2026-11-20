@@ -1,9 +1,19 @@
 <div class="seccion-header">
     <h2>{{ titulo }}</h2>
 
-    {% if boton_url %}
-        <a href="{{ boton_url }}" class="btn-success">
-            {{ boton_texto }}
-        </a>
-    {% endif %}
+    <div class="seccion-botones">
+        {# Acciones de la pestaña (ej: «Traer ítems del modelo» en el BOM del activo) #}
+        {% for a in acciones or [] %}
+            <form method="POST" action="{{ a.url }}"
+                  {% if a.confirmar %}onsubmit="return confirm({{ a.confirmar | tojson }})"{% endif %}>
+                <button type="submit" class="btn-secondary">{{ a.label }}</button>
+            </form>
+        {% endfor %}
+
+        {% if boton_url %}
+            <a href="{{ boton_url }}" class="btn-success">
+                {{ boton_texto }}
+            </a>
+        {% endif %}
+    </div>
 </div>

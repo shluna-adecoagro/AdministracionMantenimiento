@@ -95,6 +95,10 @@ class ParentSpec:
 
     entidad: str  # nombre de la entidad padre en el registry
     fk: str       # columna del hijo que apunta al padre
+    # Nombre de la pestaña en el detalle del padre (por defecto, el plural del
+    # hijo). Ej: el BOM de un activo se ve como «BOM» en el activo y como
+    # «Usado en activos» en el material.
+    label: str | None = None
 
 
 @dataclass(frozen=True)
@@ -108,6 +112,25 @@ class TabSpec:
     id: str
     label: str
     funcion: object
+
+
+@dataclass(frozen=True)
+class AccionSpec:
+    """
+    Botón del detalle que ejecuta una operación sobre el registro (ej: «Traer
+    ítems del modelo» en el BOM de un activo).
+
+    funcion(registro) hace el trabajo y devuelve el mensaje para el usuario; la
+    vista confirma la transacción. seccion: pestaña donde aparece el botón.
+    visible(registro) -> bool: si se muestra (por defecto, siempre).
+    """
+
+    id: str
+    label: str
+    funcion: object
+    seccion: str = "datos"
+    confirmar: str | None = None   # pregunta antes de ejecutar
+    visible: object = None
 
 
 @dataclass(frozen=True)
@@ -131,6 +154,12 @@ class EntitySpec:
     grupo: str = "maestros"            # grupo del menú lateral (ver GRUPOS)
     orden: int = 999
     tabs_extra: tuple[TabSpec, ...] = ()
+    acciones: tuple[AccionSpec, ...] = ()
+    # Se ejecuta al guardar, en la misma transacción (web, API e importación):
+    # al_guardar(registro, operacion, cambiados) -> aviso o None. El aviso es un
+    # texto (advertencia) o una tupla ("ok" | "aviso", texto).
+    # operacion: "INSERT" | "UPDATE"; cambiados: campos que cambiaron.
+    al_guardar: object = None
     # Campos que identifican un registro fuera de la base (ej: en SharePoint),
     # donde los IDs no coinciden. Los usa la importación para actualizar en vez
     # de duplicar. Ej: ("nombre_sector",) o ("nombre_ubicacion", "sector_id").

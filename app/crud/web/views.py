@@ -26,12 +26,15 @@ el modelo y en el material). El padre "activo" es el que viene en la URL
 """
 from __future__ import annotations
 
-from flask import current_app, redirect, render_template, request, url_for
+from flask import current_app, flash, redirect, render_template, request, url_for
+
+from app.core.db import db
 
 from app.crud.core import coercion, dependencias, fk, repository
 from app.crud.core.coercion import ErroresValidacion
 from app.crud.core.files import ArchivoInvalido, guardar
-from app.crud.core.service import ErrorIntegridad, RegistroEnUso, ServicioCRUD
+from app.crud.core.service import ErrorIntegridad, RegistroEnUso
+from app.crud.entidades import servicio
 from app.crud.meta.spec import EntitySpec, ParentSpec
 from app.crud.web.textos import etiqueta_tabla, inicial
 
@@ -49,12 +52,7 @@ class VistasEntidad:
         self.spec = spec
         self.registry = registry
         self.fields = spec.fields
-        self.servicio = ServicioCRUD(
-            spec.model,
-            spec.fields,
-            {"enabled": spec.auditoria, "ignore_fields": list(spec.auditoria_ignorar)},
-            etiqueta_tabla,
-        )
+        self.servicio = servicio(spec)
 
     # ------------------------------------------------------------------
     # Registro de rutas
@@ -71,6 +69,9 @@ class VistasEntidad:
             f"{base}/<int:id>/confirmar_eliminar", f"{n}_confirmar_eliminar",
             self.confirmar_eliminar, methods=["GET", "POST"],
         )
+        if self.spec.acciones:
+            bp.add_url_rule(f"{base}/<int:id>/accion/<accion>", f"{n}_accion",
+                            self.accion, methods=["POST"])
 
     # ------------------------------------------------------------------
     # Navegación
@@ -267,6 +268,7 @@ class VistasEntidad:
 
         def operacion(datos):
             nuevo = self.servicio.crear(datos, self._motivo())
+            self._avisar(nuevo)
             # Si se vino desde el padre, volver a su pestaña; si no, al listado.
             return redirect(self._url_volver(padre, getattr(nuevo, padre.fk)) if padre
                             else self._url_volver(None, None))
@@ -287,6 +289,7 @@ class VistasEntidad:
 
         def operacion(datos):
             self.servicio.actualizar(registro, datos, self._motivo())
+            self._avisar(registro)
             return redirect(self._url_volver(*self._padre_de(registro)))
 
         return self._guardar(operacion, "UPDATE", self._valores_formulario(registro), (padre, padre_id), url_cancelar)
@@ -344,7 +347,7 @@ class VistasEntidad:
             secciones.append({"id": "historial", "label": "Historial"})
         # Una pestaña por cada subentidad (hijos declarados con "padre")...
         for nombre_hijo in s.hijos:
-            secciones.append({"id": nombre_hijo, "label": inicial(self.registry[nombre_hijo].label_plural)})
+            secciones.append({"id": nombre_hijo, "label": self._label_hijo(self.registry[nombre_hijo])})
         # ...y una por cada pestaña calculada (tabs_extra).
         for tab in s.tabs_extra:
             secciones.append({"id": tab.id, "label": tab.label})
@@ -373,8 +376,46 @@ class VistasEntidad:
             seccion_activa=seccion,
             sub=sub,
             tabla=tabla,
+            acciones=self._acciones_de(registro, seccion),
             url_volver=self._url_volver(padre, padre_id),
         )
+
+    def _label_hijo(self, hijo: EntitySpec) -> str:
+        """Nombre de la pestaña de una subentidad en este padre (ej: «BOM» en el activo)."""
+        return hijo.padre_de_tipo(self.spec.name).label or inicial(hijo.label_plural)
+
+    # ------------------------------------------------------------------
+    # ACCIONES (botones del detalle) y avisos
+    # ------------------------------------------------------------------
+
+    def _acciones_de(self, registro, seccion):
+        id_ = getattr(registro, self.spec.pk)
+        return [
+            {"label": a.label, "confirmar": a.confirmar,
+             "url": url_for(endpoint(self.spec.name, "accion"), id=id_, accion=a.id, **request.args)}
+            for a in self.spec.acciones
+            if a.seccion == seccion and (a.visible is None or a.visible(registro))
+        ]
+
+    def accion(self, id, accion):
+        registro = repository.obtener_o_404(self.spec.model, id)
+        a = next((x for x in self.spec.acciones if x.id == accion), None)
+        if a is None or (a.visible is not None and not a.visible(registro)):
+            return ("Acción no disponible.", 404)
+        try:
+            mensaje = a.funcion(registro)
+            db.session.commit()
+            if mensaje:
+                flash(mensaje, "ok")
+        except (ErroresValidacion, ErrorIntegridad) as e:
+            db.session.rollback()
+            flash(getattr(e, "mensaje", None) or "; ".join(e.errores.values()), "error")
+        args = {k: v for k, v in request.args.items() if k != "seccion"}
+        return redirect(url_for(endpoint(self.spec.name, "detalle"), id=id, seccion=a.seccion, **args))
+
+    def _avisar(self, registro):
+        for categoria, texto in getattr(registro, "avisos_guardado", []):
+            flash(texto, categoria)
 
     def _titulo_registro(self, registro) -> str:
         """Nombre del registro para la pestaña del navegador (ej: «Tractor 1»)."""
@@ -392,7 +433,7 @@ class VistasEntidad:
             .all()
         )
         return {
-            "label": inicial(hijo.label_plural),
+            "label": self._label_hijo(hijo),
             "label_singular": hijo.label_singular,
             "label_plural": hijo.label_plural,
             "template_listado": "crud/listado_subentidad.html",

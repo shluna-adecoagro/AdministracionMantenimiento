@@ -1,4 +1,3 @@
-from app.crud.meta.overrides import bom
 from app.models.materiales_models import CategoriaMaterial, Material, StockMaterial, TipoMaterial
 
 OVERRIDES = {
@@ -14,10 +13,6 @@ OVERRIDES = {
             "tipo_material_id", "stock_total",
         ],
         "clave_natural": ["codigo"],
-        "tabs_extra": [
-            {"id": "compatibilidad_final", "label": "Compatibilidad final",
-             "funcion": bom.compatibilidad_final},
-        ],
     },
     "stock_material": {
         "model": StockMaterial,

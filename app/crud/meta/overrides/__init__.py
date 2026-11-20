@@ -28,6 +28,10 @@ Dónde va cada dato:
       clave_natural: [campo, ...]               cómo se identifica el registro al
                                                 importar (ej: el nombre)
       tabs_extra: [{id, label, funcion}]        pestañas con una tabla calculada
+      al_guardar: funcion(registro, op, cambiados) se ejecuta al crear o modificar
+                                                (ej: copiar el BOM del modelo al activo)
+      acciones: [{id, label, funcion, ...}]     botones del detalle (ej: «Traer ítems
+                                                del modelo»)
       auditoria / auditoria_ignorar             historial de cambios
 
 Lo mínimo es {"model": MiModelo}; todo lo demás tiene un valor por defecto.

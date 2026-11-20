@@ -8,8 +8,15 @@ from app.crud.audit_mixin import AuditMixin
 
 
 class BOMModelo(db.Model, ModelMixin, AuditMixin):
+    """
+    BOM de un modelo: la plantilla que se copia al BOM de cada activo nuevo de
+    ese modelo. Cambiarla no modifica los activos existentes.
+    """
+
     __tablename__ = "bom_modelo"
     __label_field__ = None  # no hay un label único, se arma con FK
+    # Cada material figura una sola vez en el BOM de un modelo.
+    __table_args__ = (db.UniqueConstraint("modelo_id", "material_id"),)
 
     bom_modelo_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     uuid = db.Column(

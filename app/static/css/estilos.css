@@ -875,3 +875,31 @@ table {
   color: #64748b;
   font-size: 0.85rem;
 }
+
+/* Mensajes de la última operación (flash) */
+.mensaje {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+.mensaje--ok { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
+.mensaje--aviso { border-color: #fde68a; background: #fffbeb; color: #92400e; }
+.mensaje--error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
+
+/* Botones de acción de una pestaña del detalle */
+.detalle-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin: 1rem 0 -0.5rem;
+}
+.detalle-acciones form { margin: 0; }
+.seccion-botones {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.seccion-botones form { margin: 0; }

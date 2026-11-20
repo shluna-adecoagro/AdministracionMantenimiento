@@ -88,6 +88,12 @@
 
         <!-- Contenido dinámico -->
         <main class="content">
+            {# Mensajes de la última operación (ej: «Se copió el BOM del modelo») #}
+            {% with mensajes = get_flashed_messages(with_categories=true) %}
+                {% for categoria, mensaje in mensajes %}
+                    <div class="mensaje mensaje--{{ categoria }}" role="status">{{ mensaje }}</div>
+                {% endfor %}
+            {% endwith %}
             {% block content %}
             {% endblock %}
         </main>

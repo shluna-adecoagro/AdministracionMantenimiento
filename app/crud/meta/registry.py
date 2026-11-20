@@ -30,6 +30,7 @@ from app.crud.meta.spec import (
     AUDITORIA_IGNORAR_DEFAULT,
     GENEROS,
     GRUPOS,
+    AccionSpec,
     TIPOS_CAMPO,
     EntitySpec,
     FieldSpec,
@@ -57,6 +58,8 @@ CLAVES_ENTIDAD = frozenset({
     "auditoria",          # True/False (por defecto: si el modelo usa AuditMixin)
     "auditoria_ignorar",  # columnas que no se registran en el historial
     "tabs_extra",         # [{"id", "label", "funcion"}] pestañas calculadas en el detalle
+    "acciones",           # [{"id", "label", "funcion", "seccion"...}] botones del detalle
+    "al_guardar",         # función(registro, operacion, cambiados) tras guardar
     "clave_natural",      # [campo, ...] identifica el registro al importar (ej: nombre)
 })
 
@@ -243,10 +246,10 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
     padres: list[ParentSpec] = []
     declarados = ov.get("padre", [])
     for p in (declarados if isinstance(declarados, (list, tuple)) else [declarados]):
-        if not isinstance(p, dict) or set(p) != {"entidad", "fk"}:
-            errores.append(f"{pref} padre debe ser {{'entidad': ..., 'fk': ...}} (o una lista de ellos)")
+        if not isinstance(p, dict) or not {"entidad", "fk"} <= set(p) <= {"entidad", "fk", "label"}:
+            errores.append(f"{pref} padre debe ser {{'entidad': ..., 'fk': ..., 'label' (opcional)}} (o una lista de ellos)")
             continue
-        padre = ParentSpec(entidad=p["entidad"], fk=p["fk"])
+        padre = ParentSpec(entidad=p["entidad"], fk=p["fk"], label=p.get("label"))
         if padre.fk not in campos:
             errores.append(f"{pref} padre.fk: '{padre.fk}' no es un campo de la entidad.{_sugerir(padre.fk, campos)}")
         if any(x.entidad == padre.entidad for x in padres):
@@ -260,6 +263,20 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
             errores.append(f"{pref} tabs_extra: cada pestaña es {{'id', 'label', 'funcion'}} con una función")
             continue
         tabs.append(TabSpec(**t))
+
+    # --- acciones y al_guardar --------------------------------------------
+    acciones: list[AccionSpec] = []
+    claves_accion = {"id", "label", "funcion", "seccion", "confirmar", "visible"}
+    for a in ov.get("acciones", ()):
+        if (not isinstance(a, dict) or not {"id", "label", "funcion"} <= set(a) <= claves_accion
+                or not callable(a["funcion"])):
+            errores.append(f"{pref} acciones: cada acción es {{'id', 'label', 'funcion'}} "
+                           f"(opcionales: {sorted(claves_accion - {'id', 'label', 'funcion'})})")
+            continue
+        acciones.append(AccionSpec(**a))
+    al_guardar = ov.get("al_guardar")
+    if al_guardar is not None and not callable(al_guardar):
+        errores.append(f"{pref} al_guardar debe ser una función")
 
     # --- clave natural ---------------------------------------------------
     clave_natural = tuple(ov.get("clave_natural", ()))
@@ -294,6 +311,8 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
         grupo=grupo,
         orden=ov.get("orden", 999),
         tabs_extra=tuple(tabs),
+        acciones=tuple(acciones),
+        al_guardar=al_guardar,
         clave_natural=clave_natural,
     )
     return spec, errores
