@@ -18,13 +18,14 @@ from app.models.materiales_models import CategoriaMaterial, Material
 
 
 @pytest.fixture
-def plantilla(db):
+def plantilla(db, categorias_activo):
     """Modelo 6110J (John Deere) con dos materiales en su BOM, y otro modelo sin BOM."""
     marca = Marca(nombre_marca="John Deere")
     db.session.add(marca)
     db.session.flush()
-    modelo = Modelo(nombre_modelo="6110J", marca_id=marca.marca_id)
-    otro = Modelo(nombre_modelo="5090E", marca_id=marca.marca_id)
+    tractor = categorias_activo["Tractor"].categoria_activo_id
+    modelo = Modelo(nombre_modelo="6110J", marca_id=marca.marca_id, categoria_activo_id=tractor)
+    otro = Modelo(nombre_modelo="5090E", marca_id=marca.marca_id, categoria_activo_id=tractor)
     cat = CategoriaMaterial.query.first().categoria_material_id
     aceite = Material(codigo="F-1", descripcion="Filtro de aceite", categoria_material_id=cat)
     aire = Material(codigo="F-2", descripcion="Filtro de aire", categoria_material_id=cat)
@@ -206,8 +207,9 @@ def test_pestanas_segun_el_padre(client, categorias_activo, plantilla):
     client.post("/activos/crear", data=_datos(categorias_activo, modelo_id=plantilla["modelo"].modelo_id))
     assert _pestanas(client, f"/activos/{_activo().activo_id}") == ["Datos", "Historial", "Medidores", "BOM"]
     assert _pestanas(client, f"/materiales/{plantilla['aceite'].material_id}") == [
-        "Datos", "Historial", "Usado en modelos", "Usado en activos", "Stock por ubicación"]
-    assert _pestanas(client, f"/modelos/{plantilla['modelo'].modelo_id}") == ["Datos", "Historial", "BOM"]
+        "Datos", "Historial", "Usado en modelos", "Usado en activos", "Stock por ubicación", "Usado en planes"]
+    assert _pestanas(client, f"/modelos/{plantilla['modelo'].modelo_id}") == [
+        "Datos", "Historial", "BOM", "Planes preventivos"]
 
     modelo = client.get(f"/modelos/{plantilla['modelo'].modelo_id}?seccion=bom_modelo").get_data(as_text=True)
     assert "Filtro de aceite" in modelo

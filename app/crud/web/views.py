@@ -239,9 +239,18 @@ class VistasEntidad:
             tipo_operacion=tipo_operacion,
             fk_data=fk.opciones_de(self.fields),
             sugerencias=fk.sugerencias_de(self.fields),
+            campos_filtro=self._campos_filtro(),
             errores=errores or {},
             url_cancelar=url_cancelar,
         ), status
+
+    def _campos_filtro(self) -> set[str]:
+        """
+        Campos calculados de los que depende otro (ej: el tipo de activo, del que
+        depende la categoría): en el formulario son un filtro, sin name (no se envían).
+        """
+        return {padre for f in self.fields.values() for padre in f.depende_de
+                if self.fields[padre].solo_lectura and self.fields[padre].tipo == "fk"}
 
     def _guardar(self, operacion, tipo_operacion, modelo_actual, padre, url_cancelar, por_defecto=None):
         enviados = {**modelo_actual, **request.form.to_dict()}
@@ -258,13 +267,25 @@ class VistasEntidad:
     # CREAR
     # ------------------------------------------------------------------
 
+    def _valores_por_defecto(self) -> dict:
+        """Valores por defecto de las columnas (ej: «Vigente» = Sí), para el formulario de alta."""
+        columnas = self.spec.model.__table__.columns
+        resultado = {}
+        for campo in self.fields:
+            col = columnas.get(campo)
+            default = getattr(col, "default", None) if col is not None else None
+            if default is not None and getattr(default, "is_scalar", False):
+                resultado[campo] = default.arg
+        return resultado
+
     def crear(self):
         padre, padre_id = self._padre_desde_url()
         modelo = {padre.fk: padre_id} if padre else {}
+        formulario = {**self._valores_por_defecto(), **modelo}
         url_cancelar = self._url_volver(padre, padre_id)
 
         if request.method == "GET":
-            return self._render_form("INSERT", modelo, (padre, padre_id), url_cancelar)
+            return self._render_form("INSERT", formulario, (padre, padre_id), url_cancelar)
 
         def operacion(datos):
             nuevo = self.servicio.crear(datos, self._motivo())

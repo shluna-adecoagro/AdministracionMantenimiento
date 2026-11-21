@@ -43,13 +43,19 @@ class FieldSpec:
     fk_label: str | None = None    # atributo del destino que se muestra
     relacion: str | None = None    # relationship del modelo que lleva al destino
     es_estado: bool = False        # se muestra como badge de color
-    # Select dependiente: este campo depende de otro de la misma entidad (ej:
-    # modelo_id depende de marca_id). `depende_fk` es la columna del destino que
-    # apunta al otro (Modelo.marca_id). El formulario filtra las opciones y al
-    # guardar se verifica que coincidan (o se completa el otro si está vacío).
-    # Lo infiere el registry; un override {"depende_de": None} lo desactiva.
-    depende_de: str | None = None
-    depende_fk: str | None = None
+    # Select dependiente: este campo depende de otros de la misma entidad (ej:
+    # modelo_id depende de marca_id y de categoria_activo_id). `depende_fk` son
+    # las columnas del destino que apuntan a cada uno, en el mismo orden
+    # (Modelo.marca_id, Modelo.categoria_activo_id). El formulario filtra las
+    # opciones y al guardar se verifica que coincidan (o se completan los que
+    # estén vacíos). Lo infiere el registry; en un override, {"depende_de": None}
+    # lo desactiva y {"depende_de": "marca_id"} (o una lista) lo limita a esos.
+    depende_de: tuple[str, ...] = ()
+    depende_fk: tuple[str, ...] = ()
+    # Solo se aceptan las opciones que cumplen una condición: función sin
+    # argumentos que devuelve la condición SQLAlchemy sobre fk_model (ej: las
+    # unidades que tienen tipo de medidor). Filtra el select y se verifica al guardar.
+    fk_filtro: object = None
 
     # Presentación
     oculto: bool = False           # no se muestra en el formulario

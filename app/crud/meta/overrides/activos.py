@@ -1,4 +1,4 @@
-from app.crud.meta.overrides import bom
+from app.crud.meta.overrides import bom, preventivos
 from app.models.activos_models import Activo
 from app.models.lecturas_medidores_models import LecturaMedidor
 from app.models.medidores_models import Medidor
@@ -39,7 +39,11 @@ OVERRIDES = {
         # Subentidad: pestaña "Medidores" del activo. Un activo con medidores no
         # se puede borrar.
         "padre": {"entidad": "activos", "fk": "activo_id"},
-        "listado": ["nombre_medidor", "activo_id", "unidad_medida_id", "valor_actual"],
+        "fields": {
+            # Solo las unidades que dicen qué instrumento las mide (horas → horómetro).
+            "unidad_medida_id": {"fk_filtro": preventivos.unidades_de_medidor},
+        },
+        "listado": ["nombre_medidor", "activo_id", "tipo_medidor", "unidad_medida_id", "valor_actual"],
         "clave_natural": ["nombre_medidor", "activo_id"],
     },
     "lecturas_medidor": {

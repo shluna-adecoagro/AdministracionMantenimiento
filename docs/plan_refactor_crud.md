@@ -360,19 +360,46 @@ Reglas:
 - El modelo de un plan del modelo debe ser de la categoría del plan; la tarea de un
   material debe estar en el plan (propia o heredada).
 
-Cambios en entidades existentes:
+Cambios en entidades existentes (decididos por el usuario):
 
-- **Modelo → categoría de activo** (`modelos.categoria_activo_id`), para verificar lo
-  anterior. En el activo, el modelo debe ser de su categoría (si falta la categoría, se
-  completa desde el modelo).
-- **Tipo de medidor**: `unidades_medida.tipo_medidor` (opcional: horas → «Horómetro»,
-  km → «Odómetro», litros → «Caudalímetro», arranques → «Contador de arranques»). El
-  medidor lo muestra como campo calculado desde su unidad. Las unidades con tipo de medidor
-  son las que se ofrecen en el medidor y en el período por uso del plan.
+- **Modelo → categoría de activo** (`modelos.categoria_activo_id`, **obligatoria**). El
+  plan del modelo une un plan (que sabe su categoría) con un modelo: sin la categoría en el
+  modelo no se podría verificar que coincidan. En el activo, el modelo debe ser de su
+  categoría (si falta la categoría, se completa desde el modelo). Cambiar la categoría de
+  un modelo que tiene activos o planes de la anterior se rechaza.
+- **Tipo de medidor**: columna de texto `unidades_medida.tipo_medidor` (opcional; horas →
+  «Horómetro», km → «Odómetro», litros → «Caudalímetro», arranques → «Contador de
+  arranques»), con sugerencias: los habituales y los ya cargados. El medidor lo muestra
+  como campo calculado desde su unidad. Solo las unidades con tipo de medidor se ofrecen
+  en el medidor y en el período por uso del plan; el período por tiempo ofrece las de tipo
+  «Tiempo».
 
-Framework: **selects dependientes con más de un padre**. Hoy un campo depende de uno solo
-y, si hay dos candidatos, no se infiere ninguno. Con la categoría en el modelo, el modelo
-del activo depende de la marca **y** de la categoría (lo mismo en el plan del modelo).
+## Notas de la Fase 9
+
+- Modelos en `app/models/preventivos_models.py`; reglas, pestañas calculadas y overrides
+  en `app/crud/meta/overrides/preventivos.py`; tests en `tests/test_preventivos.py`.
+- Menú: «Planes preventivos» en datos maestros, «Tareas de preventivo» en catálogos. El
+  plan del modelo y las tareas del plan son pestañas (del plan, del modelo, de la tarea y
+  del material).
+- Las reglas corren en `al_guardar` (web, API e importación) y rechazan el cambio con el
+  campo y el motivo: períodos, inclusión (misma categoría y unidades, múltiplos, sin
+  círculos), tareas o materiales repetidos en la cadena, categoría del modelo, tarea del
+  material. Cambiar el período del inferior también se verifica contra su superior.
+- **Migración**: la categoría de los modelos existentes se toma de sus activos (si son
+  todos de una categoría). Si queda alguno sin categoría, se detiene antes de tocar la base
+  y los lista.
+
+Framework (lo nuevo que se puede usar en cualquier entidad):
+
+- **Selects dependientes con varios padres**: `FieldSpec.depende_de` es una tupla. El
+  modelo del activo depende de la categoría y de la marca; el formulario filtra con todos
+  los elegidos y completa los vacíos al elegir el hijo. Antes, con dos candidatos no se
+  infería ninguno. En el override, `"depende_de"` acepta un campo, una lista o `None`.
+- **Opciones restringidas** (`fk_filtro` en el campo): una función que devuelve la
+  condición que deben cumplir las opciones de una FK (ej: unidades con tipo de medidor).
+  Filtra el select y se verifica al guardar.
+- **Valores por defecto**: un campo no obligatorio que no se envía toma el `default` de
+  su columna (ej: «Vigente» = Sí), y el formulario de alta lo muestra preseleccionado.
 
 Para la fase de OT: el aviso de service compara el medidor del activo de la misma unidad
 con la última ejecución del plan, y la fecha estimada se proyecta con la tasa de uso
@@ -487,7 +514,7 @@ La API generada usa `GET/POST {url}` y `PUT/PATCH/DELETE {url}/{id}`.
 | **6. Carga de datos** | `flask importar` / `flask exportar` en CSV, con clave natural, FK por nombre, simulación y todo o nada. Ver «Carga de datos» más abajo. | ✅ Hecha |
 | **7. Migrar el resto** | Tras revisar su diseño: activos, medidores, lecturas, insumos, stock, unidades, marcas, modelos, recursos, BOM. Ver «Notas de la Fase 7». | ✅ Hecha |
 | **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. Ver «Notas de la Fase 8». | ✅ Hecha |
-| **9. Planes preventivos** | Planes por categoría de activo (período por uso y/o por tiempo, plan que incluye a otro), tareas, materiales por modelo; categoría en el modelo y tipo de medidor. Ver «Fase 9: planes preventivos». | Pendiente |
+| **9. Planes preventivos** | Planes por categoría de activo (período por uso y/o por tiempo, plan que incluye a otro), tareas, materiales por modelo; categoría en el modelo y tipo de medidor. Ver «Fase 9: planes preventivos». | ✅ Hecha |
 | **10. Órdenes de trabajo** | OT → operaciones → recursos y materiales. Incluye cuándo le toca un plan a cada activo. Ver «Fases operativas». | Pendiente |
 | **11. Pedidos y solicitudes de OC** | Qué se pide, para qué activo u OT, y qué se cotiza a proveedores. | Pendiente |
 | **12. Documentos de proveedores** | Presupuestos, remitos y facturas (cabecera + ítems): ofertas por solicitud de OC y lista de precios de materiales. Procesamiento automático de PDF a definir. | Pendiente |

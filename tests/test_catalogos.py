@@ -45,14 +45,15 @@ def test_estado_en_uso_no_se_borra(client, cuenta, estado_cuenta_activa):
     assert "1 cuenta" in r.get_data(as_text=True)
 
 
-def test_booleanos_se_ven_como_si_no(client, db):
+def test_booleanos_se_ven_como_si_no(client, db, categorias_activo):
     """El listado muestra el texto de las opciones (Sí/No), no True/False."""
     from app.models.bom_modelo_models import BOMModelo
     from app.models.marcas_modelos_models import Marca, Modelo
     from app.models.materiales_models import CategoriaMaterial, Material
 
     m = Marca(nombre_marca="M"); db.session.add(m); db.session.flush()
-    mo = Modelo(nombre_modelo="X", marca_id=m.marca_id)
+    mo = Modelo(nombre_modelo="X", marca_id=m.marca_id,
+                categoria_activo_id=categorias_activo["Tractor"].categoria_activo_id)
     mat = Material(codigo="C", descripcion="D", categoria_material_id=CategoriaMaterial.query.first().categoria_material_id)
     db.session.add_all([mo, mat]); db.session.flush()
     db.session.add(BOMModelo(modelo_id=mo.modelo_id, material_id=mat.material_id, es_equivalencia=True))

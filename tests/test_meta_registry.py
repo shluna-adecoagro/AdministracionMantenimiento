@@ -42,6 +42,8 @@ def test_todas_las_entidades_estan_en_el_registry():
         "empleados", "proveedores", "contactos_proveedor",
         "estados_activo", "tipos_activo", "categorias_activo", "tipos_unidad",
         "estados_sector", "estados_cuenta", "estados_recurso", "motivos_operacion",
+        "planes_preventivos", "plan_preventivo_tareas", "tareas_preventivo",
+        "planes_modelo", "plan_modelo_materiales",
     }
 
 

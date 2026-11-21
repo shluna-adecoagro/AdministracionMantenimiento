@@ -115,32 +115,44 @@ def _dependencias(campos: dict, overrides_campos: dict, pref: str, errores: list
 
     Inferido: el campo X (FK a M) depende del campo Y (FK a P) si M tiene una
     única columna hacia P. Ej: en activos, modelo_id → Modelo, que tiene
-    marca_id → Marca, y el activo también tiene marca_id → modelo_id depende de marca_id.
+    marca_id → Marca y categoria_activo_id → CategoriaActivo, y el activo también
+    tiene esos dos campos → modelo_id depende de marca_id y de categoria_activo_id.
+
+    En el override: {"depende_de": None} lo desactiva; un campo o una lista de
+    campos lo limita a esos (cada uno debe ser un padre posible).
     """
     resultado = dict(campos)
     for c, f in campos.items():
         if f.tipo != "fk" or f.fk_model is None:
             continue
-        declarado = "depende_de" in overrides_campos.get(c, {})
-        if declarado and f.depende_de is None:
+        cfg = overrides_campos.get(c, {})
+        declarado = "depende_de" in cfg
+        if declarado and not cfg["depende_de"]:
+            resultado[c] = replace(f, depende_de=(), depende_fk=())
             continue  # desactivado a propósito
-        candidatos = []
+        pedidos = None
+        if declarado:
+            pedidos = cfg["depende_de"]
+            pedidos = [pedidos] if isinstance(pedidos, str) else list(pedidos)
+        candidatos = {}
         for otro, g in campos.items():
             if otro == c or g.tipo != "fk" or g.fk_model is None:
                 continue
-            if declarado and otro != f.depende_de:
-                continue
             columnas = columnas_hacia(f.fk_model, g.fk_model)
             if len(columnas) == 1:
-                candidatos.append((otro, columnas[0]))
-        if declarado and not candidatos:
-            errores.append(
-                f"{pref} fields.{c}: depende_de '{f.depende_de}' no es un campo FK hacia una "
-                f"tabla a la que apunte {f.fk_model.__name__}.{_sugerir(f.depende_de, campos)}"
-            )
-        elif len(candidatos) == 1:
-            otro, columna = candidatos[0]
-            resultado[c] = replace(f, depende_de=otro, depende_fk=columna)
+                candidatos[otro] = columnas[0]
+        if pedidos is not None:
+            for otro in pedidos:
+                if otro not in candidatos:
+                    errores.append(
+                        f"{pref} fields.{c}: depende_de '{otro}' no es un campo FK hacia una "
+                        f"tabla a la que apunte {f.fk_model.__name__}.{_sugerir(otro, campos)}"
+                    )
+            elegidos = [o for o in pedidos if o in candidatos]
+        else:
+            elegidos = list(candidatos)
+        resultado[c] = replace(f, depende_de=tuple(elegidos),
+                               depende_fk=tuple(candidatos[o] for o in elegidos))
     return resultado
 
 
@@ -152,10 +164,10 @@ def _filtros_antes_de_su_hijo(campos: dict) -> dict:
     """
     orden = list(campos)
     for c, f in campos.items():
-        padre = f.depende_de
-        if padre and campos[padre].solo_lectura and orden.index(padre) > orden.index(c):
-            orden.remove(padre)
-            orden.insert(orden.index(c), padre)
+        for padre in f.depende_de:
+            if campos[padre].solo_lectura and orden.index(padre) > orden.index(c):
+                orden.remove(padre)
+                orden.insert(orden.index(c), padre)
     return {c: campos[c] for c in orden}
 
 
@@ -219,6 +231,8 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
             errores.append(f"{pref} fields.{c}: tipo '{f.tipo}' inválido (válidos: {sorted(TIPOS_CAMPO)})")
         if f.tipo == "fk" and f.fk_model is None:
             errores.append(f"{pref} fields.{c}: tipo 'fk' sin 'fk_model'")
+        if f.fk_filtro is not None and (f.tipo != "fk" or not callable(f.fk_filtro)):
+            errores.append(f"{pref} fields.{c}: fk_filtro debe ser una función, en un campo FK")
         if f.tipo == "select" and not f.options:
             errores.append(f"{pref} fields.{c}: tipo 'select' sin 'options'")
         if f.tipo == "datalist" and not (f.options or f.fk_model):

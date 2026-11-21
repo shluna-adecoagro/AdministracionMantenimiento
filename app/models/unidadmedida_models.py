@@ -21,6 +21,10 @@ class UnidadMedida(db.Model, ModelMixin, AuditMixin):
     nombre_unidad = db.Column(db.String(100), nullable=False,
                               info={"label": "Nombre"})
     abreviatura = db.Column(db.String(20), nullable=False)
+    # Qué instrumento mide en esta unidad (horas → «Horómetro», km → «Odómetro»).
+    # Solo las unidades con tipo de medidor se ofrecen en los medidores y en el
+    # período por uso de los planes preventivos.
+    tipo_medidor = db.Column(db.String(50), nullable=True, info={"label": "Tipo de medidor"})
     tipo_unidad_id = db.Column(
         db.Integer, db.ForeignKey("tipos_unidad.tipo_unidad_id"), nullable=False,
         info={"label": "Tipo"},

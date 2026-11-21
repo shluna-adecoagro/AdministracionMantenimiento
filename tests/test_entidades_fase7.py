@@ -36,7 +36,9 @@ def _guardar(db, *objetos):
 @pytest.fixture
 def modelo(db):
     marca = _guardar(db, Marca(nombre_marca="John Deere"))
-    return _guardar(db, Modelo(nombre_modelo="6110J", marca_id=marca.marca_id))
+    tractor = CategoriaActivo.query.filter_by(nombre_categoria="Tractor").one()
+    return _guardar(db, Modelo(nombre_modelo="6110J", marca_id=marca.marca_id,
+                               categoria_activo_id=tractor.categoria_activo_id))
 
 
 @pytest.fixture
@@ -241,9 +243,9 @@ def test_marca_en_uso_por_materiales_no_se_borra(client, db, material):
 
 
 def test_tipos_dependen_de_la_categoria(client):
-    """El formulario filtra los tipos según la categoría elegida (data-extra)."""
+    """El formulario filtra los tipos según la categoría elegida (data-deps)."""
     form = client.get("/materiales/crear").get_data(as_text=True)
-    assert 'data-extra="categoria_material_id"' in form
+    assert "data-deps='{\"categoria_material_id\": " in form
 
 
 # ---------------------------------------------------------------------------
@@ -262,8 +264,9 @@ def test_marca_con_modelo_en_uso_no_se_borra(client, activo):
 
 
 def test_modelo_unico_por_marca(client, modelo):
-    r = client.post(f"/modelos/crear?marca_id={modelo.marca_id}", data={"nombre_modelo": "6110J"})
-    assert r.status_code == 400
+    r = client.post(f"/modelos/crear?marca_id={modelo.marca_id}",
+                    data={"nombre_modelo": "6110J", "categoria_activo_id": modelo.categoria_activo_id})
+    assert r.status_code == 400 and "Ya existe" in r.get_data(as_text=True)
 
 
 # ---------------------------------------------------------------------------
@@ -345,9 +348,10 @@ def test_importar_materiales_por_nombre(app, db):
 
 def test_dependencias_inferidas_del_modelo():
     campos = REGISTRY["activos"].fields
-    assert (campos["modelo_id"].depende_de, campos["modelo_id"].depende_fk) == ("marca_id", "marca_id")
-    assert campos["ubicacion_id"].depende_de == "sector_id"
-    assert REGISTRY["materiales"].fields["tipo_material_id"].depende_de == "categoria_material_id"
+    assert campos["modelo_id"].depende_de == ("categoria_activo_id", "marca_id")
+    assert campos["modelo_id"].depende_fk == ("categoria_activo_id", "marca_id")
+    assert campos["ubicacion_id"].depende_de == ("sector_id",)
+    assert REGISTRY["materiales"].fields["tipo_material_id"].depende_de == ("categoria_material_id",)
 
 
 def test_ubicaciones_repetidas_se_distinguen_por_sector(client, db, ubicacion, estado_sector_activo):
@@ -359,7 +363,7 @@ def test_ubicaciones_repetidas_se_distinguen_por_sector(client, db, ubicacion, e
     _guardar(db, Ubicacion(nombre_ubicacion="Galpón 1", sector_id=otro.sector_id))
     form = client.get("/activos/crear").get_data(as_text=True)
     assert "Galpón 1 (Taller)" in form and "Galpón 1 (Depósito)" in form
-    assert f'data-extra="sector_id"' in form
+    assert "data-deps='{\"sector_id\": " in form
 
 
 def _datos_activo(**extra):
@@ -438,7 +442,7 @@ def test_tipo_de_activo_se_infiere_como_fk_calculada():
     campos = REGISTRY["activos"].fields
     tipo = campos["tipo_activo_id"]
     assert (tipo.tipo, tipo.fk_model, tipo.solo_lectura) == ("fk", TipoActivo, True)
-    assert campos["categoria_activo_id"].depende_de == "tipo_activo_id"
+    assert campos["categoria_activo_id"].depende_de == ("tipo_activo_id",)
     orden = list(campos)
     assert orden.index("tipo_activo_id") == orden.index("categoria_activo_id") - 1
 
@@ -447,7 +451,7 @@ def test_tipo_de_activo_filtra_las_categorias_sin_guardarse(client, activo):
     form = client.get("/activos/crear").get_data(as_text=True)
     assert 'id="tipo_activo_id"' in form
     assert 'name="tipo_activo_id"' not in form  # no se envía
-    assert 'data-extra="tipo_activo_id"' in form  # las categorías se filtran por tipo
+    assert "data-deps='{\"tipo_activo_id\": " in form  # las categorías se filtran por tipo
 
     # Al editar viene con el tipo de la categoría actual.
     form = client.get(f"/activos/{activo.activo_id}/editar").get_data(as_text=True)
@@ -466,7 +470,12 @@ def test_tipo_de_activo_en_listado_api_y_filtro(client, activo):
 
 def test_cambiar_de_categoria_cambia_el_tipo(client, activo):
     pickup = CategoriaActivo.query.filter_by(nombre_categoria="Pickup").one()
+    # Su modelo es de tractor: no puede pasar a pickup con ese modelo.
     r = client.patch(f"/api/activos/{activo.activo_id}", json={"categoria_activo_id": pickup.categoria_activo_id})
+    assert r.status_code == 400 and "modelo_id" in r.get_json()["errors"]
+
+    r = client.patch(f"/api/activos/{activo.activo_id}",
+                     json={"categoria_activo_id": pickup.categoria_activo_id, "modelo_id": None})
     assert r.status_code == 200
     assert r.get_json()["tipo_activo_id_label"] == "Vehículo"
 

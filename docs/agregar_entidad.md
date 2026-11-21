@@ -84,7 +84,13 @@ class Herramienta(db.Model, ModelMixin, AuditMixin):    # AuditMixin → pestañ
 **Selects dependientes (se infieren solos).** Si un campo apunta a una tabla que a su vez
 apunta a otro campo de la entidad, quedan vinculados. En el ejemplo, `Ubicacion` tiene
 `sector_id`, así que la ubicación se filtra por el sector elegido. Al elegir primero la
-ubicación, el sector se completa solo, y al guardar se verifica que coincidan.
+ubicación, el sector se completa solo, y al guardar se verifica que coincidan. Un campo
+puede depender de varios: el modelo de un activo se filtra por la categoría y por la
+marca, y al elegirlo se completan las dos.
+
+**Valores por defecto.** El `default` de una columna (ej: `vigente = db.Column(db.Boolean,
+nullable=False, default=True)`) aparece preseleccionado en el alta y, si el campo no es
+obligatorio (`"required": False` en el override), se usa cuando no se envía (API, CSV).
 
 **Campos calculados.** Un `column_property` del modelo (ej: `Material.stock_total`) se
 muestra en listado, detalle y API, pero no se edita. Si trae una FK (ej:
@@ -164,15 +170,16 @@ Lo mínimo es `{"model": MiModelo}`. Claves disponibles:
 | `fields: {campo: {...}}` | cambiar lo inferido de un campo (ver abajo) | `lecturas_medidor.origen` |
 | `excluir` | campos que no se exponen | — |
 | `tabs_extra` | pestañas con una tabla de solo lectura calculada por una función `funcion(registro) → {"columnas", "filas"}` | — |
-| `al_guardar` | función `(registro, operacion, cambiados)` que corre al crear o modificar, en la misma transacción (web, API e importación). Puede devolver un aviso para el usuario | copia del BOM del modelo al activo, `overrides/bom.py` |
+| `al_guardar` | función `(registro, operacion, cambiados)` que corre al crear o modificar, en la misma transacción (web, API e importación). Puede devolver un aviso para el usuario, o rechazar el cambio con `raise ErroresValidacion({campo: mensaje})` (no se guarda nada) | copia del BOM del modelo al activo, `overrides/bom.py`; reglas de los planes, `overrides/preventivos.py` |
 | `acciones` | botones del detalle que ejecutan una función sobre el registro (`id`, `label`, `funcion`, `seccion`, `confirmar`, `visible`) | «Traer ítems del modelo» en `overrides/bom.py` |
 | `auditoria`, `auditoria_ignorar` | activar o no el historial; campos que no se registran | — |
 
 Dentro de `fields`, cada campo acepta, entre otras: `label`, `tipo` (`text`, `number`,
 `textarea`, `date`, `select`, `fk`, `datalist`, `file`, `color`), `required`,
 `options` (para `select`), `alias` (otros nombres de columna al importar),
-`solo_lectura`, `oculto` y `depende_de` (`None` para desactivar un select dependiente
-inferido). Ejemplos:
+`solo_lectura`, `oculto`, `depende_de` (`None` para desactivar un select dependiente
+inferido, o un campo o una lista para limitarlo a esos) y `fk_filtro` (función que
+devuelve la condición que deben cumplir las opciones de una FK). Ejemplos:
 
 ```python
 "fields": {
@@ -183,6 +190,8 @@ inferido). Ejemplos:
     "usuario_asignado": {"tipo": "datalist", "fk_model": Empleado, "fk_label": "nombre_completo"},
     # se muestra pero no se edita
     "fecha_actualizacion": {"solo_lectura": True},
+    # solo las unidades que tienen tipo de medidor (filtra el select y se verifica al guardar)
+    "unidad_medida_id": {"fk_filtro": lambda: UnidadMedida.tipo_medidor.isnot(None)},
 }
 ```
 
