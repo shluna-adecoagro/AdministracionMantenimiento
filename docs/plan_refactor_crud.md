@@ -152,9 +152,9 @@ Decisiones del usuario:
   categorías de materiales vienen de SharePoint (se importan cuando esas entidades pasen
   al registry, Fase 7).
 - Interés en **mantener sincronizadas** la base local y SharePoint, como respaldo mutuo.
-  Leer SharePoint directo queda como última fase (12).
+  Leer SharePoint directo queda como última fase (13).
 
-**Dirección de la sincronización (Fase 12): decidida la opción A.** La app es la fuente de
+**Dirección de la sincronización (Fase 13): decidida la opción A.** La app es la fuente de
 verdad, donde se gestionan los datos; SharePoint es una copia para mostrar, que se
 actualiza exportando desde la app. El respaldo se completa con copias periódicas del
 archivo de la base.
@@ -305,7 +305,7 @@ en `padre` (nombre de la pestaña según el padre) y mensajes en pantalla (flash
 
 El menú lateral tiene secciones (`"grupo"` en el override; ver `GRUPOS` en
 `app/crud/meta/spec.py`). **Operaciones** (`"operativos"`) ya está declarada para las
-fases 9 a 11; no se muestra mientras no tenga entidades.
+fases 10 a 12; no se muestra mientras no tenga entidades.
 
 - **Datos maestros** (por defecto): activos, materiales, empleados, proveedores,
   sectores, cuentas, marcas.
@@ -317,14 +317,104 @@ fases 9 a 11; no se muestra mientras no tenga entidades.
 Widget `color` (inferido para columnas `color*`): selector de color en el formulario y
 muestra en listados. Los campos `select` se muestran con su texto (Sí/No, Alta...).
 
-## Fases operativas (9 a 11): diseño inicial
+## Fase 9: planes preventivos
+
+Diseño acordado con el usuario (noviembre 2026). Son datos maestros: definen **qué** se
+hace y **cada cuánto**; **cuándo** le toca a cada activo se calcula en la fase de OT.
+
+Ejemplo: las palas tienen un plan parcial cada 300 h (aceite de motor y filtros de
+aceite, aire y combustible) y uno completo cada 1200 h, que **incluye** al parcial y le
+agrega el aceite y los filtros hidráulicos. En los tractores, 350 h y 1400 h. Cuando
+coinciden (cada 4 ejecuciones), se hace solo el completo.
+
+```
+categorias_activo
+ └── planes_preventivos ─── incluye a ──► plan_preventivo (inferior)
+      ├── plan_preventivo_tareas ──► tareas_preventivo (catálogo)
+      └── planes_modelo ──► modelos
+           └── plan_modelo_materiales ──► materiales (y la tarea que lo usa)
+```
+
+| Entidad | Campos | Borrado | Menú / pestañas |
+|---|---|---|---|
+| `planes_preventivos` | `nombre_plan` (único, clave natural), `categoria_activo_id`, `periodo_uso` + `unidad_uso_id` (unidad de un medidor: h, km), `periodo_tiempo` + `unidad_tiempo_id` (tipo Tiempo: días, meses, años), `plan_inferior_id` «Incluye a» (opcional), `ciclo` (calculado), `vigente` | Cascada con la categoría; no se borra si otro plan lo incluye | Datos maestros; pestaña en la categoría de activo |
+| `tareas_preventivo` | `nombre_tarea` (único, clave natural), `descripcion`, `horas_estimadas` | No se borra si un plan la usa | Catálogos |
+| `plan_preventivo_tareas` | plan, tarea, `paso`; único y clave natural (plan, tarea) | Cascada con el plan | «Tareas» en el plan; «Usada en planes» en la tarea |
+| `planes_modelo` | plan, modelo, marca (calculada), `vigente`; único y clave natural (plan, modelo); se muestra «Parcial palas — JD 6110» | Cascada con el plan y con el modelo | «Modelos» en el plan; «Planes preventivos» en el modelo |
+| `plan_modelo_materiales` | plan del modelo, material, tarea (opcional), `cantidad`; unidad calculada del material; único y clave natural (plan del modelo, material) | Cascada con el plan del modelo; un material en uso no se borra | «Materiales» en el plan del modelo; «Usado en planes» en el material |
+
+Reglas:
+
+- **Período, no frecuencia**: se guarda cada cuánto (300 h), no cuántas veces.
+- **Lo que ocurra primero**: el plan tiene un período por uso, uno por tiempo o los dos
+  (vehículos: 10.000 km o 1 año). Cada período va con su unidad; al menos uno es obligatorio.
+- **Incluye a**: el plan superior es de la misma categoría, con las mismas unidades, y sus
+  períodos son múltiplos de los del inferior con el mismo factor, que es el **ciclo**
+  (1200 / 300 = 4). Un plan es incluido por un solo superior; se pueden encadenar niveles.
+- **Herencia**: las tareas y los materiales del superior son los del inferior más los
+  propios. Cada plan carga solo lo que agrega; una tarea o un material no puede figurar en
+  dos planes de la misma cadena. Pestañas calculadas «Todas las tareas» y «Todos los
+  materiales» muestran la lista completa (primero lo heredado).
+- **Período por categoría**: es el mismo para todos los modelos de la categoría (lo
+  definen los mecánicos); el plan del modelo solo agrega los materiales.
+- El modelo de un plan del modelo debe ser de la categoría del plan; la tarea de un
+  material debe estar en el plan (propia o heredada).
+
+Cambios en entidades existentes (decididos por el usuario):
+
+- **Modelo → categoría de activo** (`modelos.categoria_activo_id`, **obligatoria**). El
+  plan del modelo une un plan (que sabe su categoría) con un modelo: sin la categoría en el
+  modelo no se podría verificar que coincidan. En el activo, el modelo debe ser de su
+  categoría (si falta la categoría, se completa desde el modelo). Cambiar la categoría de
+  un modelo que tiene activos o planes de la anterior se rechaza.
+- **Tipo de medidor**: columna de texto `unidades_medida.tipo_medidor` (opcional; horas →
+  «Horómetro», km → «Odómetro», litros → «Caudalímetro», arranques → «Contador de
+  arranques»), con sugerencias: los habituales y los ya cargados. El medidor lo muestra
+  como campo calculado desde su unidad. Solo las unidades con tipo de medidor se ofrecen
+  en el medidor y en el período por uso del plan; el período por tiempo ofrece las de tipo
+  «Tiempo».
+
+## Notas de la Fase 9
+
+- Modelos en `app/models/preventivos_models.py`; reglas, pestañas calculadas y overrides
+  en `app/crud/meta/overrides/preventivos.py`; tests en `tests/test_preventivos.py`.
+- Menú: «Planes preventivos» en datos maestros, «Tareas de preventivo» en catálogos. El
+  plan del modelo y las tareas del plan son pestañas (del plan, del modelo, de la tarea y
+  del material).
+- Las reglas corren en `al_guardar` (web, API e importación) y rechazan el cambio con el
+  campo y el motivo: períodos, inclusión (misma categoría y unidades, múltiplos, sin
+  círculos), tareas o materiales repetidos en la cadena, categoría del modelo, tarea del
+  material. Cambiar el período del inferior también se verifica contra su superior.
+- **Migración**: la categoría de los modelos existentes se toma de sus activos (si son
+  todos de una categoría). Si queda alguno sin categoría, se detiene antes de tocar la base
+  y los lista.
+
+Framework (lo nuevo que se puede usar en cualquier entidad):
+
+- **Selects dependientes con varios padres**: `FieldSpec.depende_de` es una tupla. El
+  modelo del activo depende de la categoría y de la marca; el formulario filtra con todos
+  los elegidos y completa los vacíos al elegir el hijo. Antes, con dos candidatos no se
+  infería ninguno. En el override, `"depende_de"` acepta un campo, una lista o `None`.
+- **Opciones restringidas** (`fk_filtro` en el campo): una función que devuelve la
+  condición que deben cumplir las opciones de una FK (ej: unidades con tipo de medidor).
+  Filtra el select y se verifica al guardar.
+- **Valores por defecto**: un campo no obligatorio que no se envía toma el `default` de
+  su columna (ej: «Vigente» = Sí), y el formulario de alta lo muestra preseleccionado.
+
+Para la fase de OT: el aviso de service compara el medidor del activo de la misma unidad
+con la última ejecución del plan, y la fecha estimada se proyecta con la tasa de uso
+diario (como en `ml/scripts/horas_gasoil.py`). Con «lo que ocurra primero», qué nivel
+toca se decide **contando ejecuciones** (la 4.ª es el completo), no por coincidencia de
+horas: por eso el ciclo se guarda en el plan como dato calculado.
+
+## Fases operativas (10 a 12): diseño inicial
 
 Tercera sección del menú, **Operaciones**, para los datos del día a día: OT, pedidos,
 solicitudes de OC y documentos de proveedores. Se apoyan en los datos maestros (activos,
 recursos, materiales) y en los catálogos. Cada fase empieza revisando este diseño con el
 usuario.
 
-### Fase 9: órdenes de trabajo (OT)
+### Fase 10: órdenes de trabajo (OT)
 
 ```
 OT (activo, tipo, prioridad, estado, fechas, solicitante)
@@ -340,14 +430,14 @@ OT (activo, tipo, prioridad, estado, fechas, solicitante)
   (y cómo se registran los movimientos), y la relación con medidores (OT preventiva por
   horas de uso).
 
-### Fase 10: pedidos y solicitudes de orden de compra (OC)
+### Fase 11: pedidos y solicitudes de orden de compra (OC)
 
 - Pedidos (hoy hay un modelo `Pedido`/`PedidoDetalle` y rutas sin registrar, a revisar):
   quién pide qué materiales, para qué activo u OT.
 - Solicitud de OC: agrupa materiales a comprar; es lo que se cotiza a los proveedores.
 - A definir: estados, aprobaciones y si un pedido genera la solicitud de OC.
 
-### Fase 11: documentos de proveedores
+### Fase 12: documentos de proveedores
 
 Carga (y más adelante procesamiento automático) de presupuestos, remitos y facturas.
 
@@ -424,10 +514,11 @@ La API generada usa `GET/POST {url}` y `PUT/PATCH/DELETE {url}/{id}`.
 | **6. Carga de datos** | `flask importar` / `flask exportar` en CSV, con clave natural, FK por nombre, simulación y todo o nada. Ver «Carga de datos» más abajo. | ✅ Hecha |
 | **7. Migrar el resto** | Tras revisar su diseño: activos, medidores, lecturas, insumos, stock, unidades, marcas, modelos, recursos, BOM. Ver «Notas de la Fase 7». | ✅ Hecha |
 | **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. Ver «Notas de la Fase 8». | ✅ Hecha |
-| **9. Órdenes de trabajo** | OT → operaciones → recursos y materiales. Ver «Fases operativas». | Pendiente |
-| **10. Pedidos y solicitudes de OC** | Qué se pide, para qué activo u OT, y qué se cotiza a proveedores. | Pendiente |
-| **11. Documentos de proveedores** | Presupuestos, remitos y facturas (cabecera + ítems): ofertas por solicitud de OC y lista de precios de materiales. Procesamiento automático de PDF a definir. | Pendiente |
-| **12. Sincronización con SharePoint** | Opción A: exportar periódicamente de la app a SharePoint, más copias de seguridad automáticas de la base. Al final, escribir en SharePoint directo (Microsoft Graph) en lugar de pasar por CSV. | Pendiente |
+| **9. Planes preventivos** | Planes por categoría de activo (período por uso y/o por tiempo, plan que incluye a otro), tareas, materiales por modelo; categoría en el modelo y tipo de medidor. Ver «Fase 9: planes preventivos». | ✅ Hecha |
+| **10. Órdenes de trabajo** | OT → operaciones → recursos y materiales. Incluye cuándo le toca un plan a cada activo. Ver «Fases operativas». | Pendiente |
+| **11. Pedidos y solicitudes de OC** | Qué se pide, para qué activo u OT, y qué se cotiza a proveedores. | Pendiente |
+| **12. Documentos de proveedores** | Presupuestos, remitos y facturas (cabecera + ítems): ofertas por solicitud de OC y lista de precios de materiales. Procesamiento automático de PDF a definir. | Pendiente |
+| **13. Sincronización con SharePoint** | Opción A: exportar periódicamente de la app a SharePoint, más copias de seguridad automáticas de la base. Al final, escribir en SharePoint directo (Microsoft Graph) en lugar de pasar por CSV. | Pendiente |
 
 ## Cómo agregar o modificar una entidad
 

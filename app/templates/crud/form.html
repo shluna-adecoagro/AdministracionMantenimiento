@@ -28,8 +28,7 @@
         {% for campo, cfg in fields.items() %}
             {# Un campo de solo lectura del que depende otro (ej: tipo de activo → categoría)
                se muestra como filtro: sin name, así no se envía ni se guarda. #}
-            {% set es_filtro = cfg.get("solo_lectura") and cfg.tipo == "fk"
-                               and (fields.values() | selectattr("depende_de", "equalto", campo) | list) %}
+            {% set es_filtro = campo in campos_filtro %}
             {% if not cfg.get("virtual") and (not cfg.get("solo_lectura") or es_filtro) %}
 
                 <div class="form-group {% if errores and errores.get(campo) %}form-group--error{% endif %}">
@@ -66,9 +65,8 @@
                             {% if not cfg.required %}<option value="">—</option>{% endif %}
                             {% for opt in fk_data[campo] %}
                                 <option value="{{ opt.value }}"
-                                        {% if opt.extra_field %}
-                                        data-extra="{{ opt.extra_field }}"
-                                        data-extra-value="{{ opt.extra_value }}"
+                                        {% if opt.deps %}
+                                        data-deps='{{ opt.deps | tojson }}'
                                         data-grupo="{{ opt.grupo or '' }}"
                                         data-label="{{ opt.label }}"
                                         {% endif %}
@@ -144,12 +142,13 @@
 
         <script>
         /*
-         * Selects dependientes (ej: modelo según la marca, ubicación según el sector).
-         * Cada opción del select hijo lleva data-extra (id del select padre) y
-         * data-extra-value (valor del padre al que pertenece).
-         *  - Con un padre elegido, el hijo muestra solo sus opciones.
-         *  - Sin padre, muestra todas, con el padre entre paréntesis; al elegir
-         *    una, el padre se completa solo.
+         * Selects dependientes (ej: modelo según la marca y la categoría,
+         * ubicación según el sector). Cada opción del select hijo lleva data-deps:
+         * {id del select padre: valor del padre al que pertenece}.
+         *  - Con padres elegidos, el hijo muestra solo las opciones que coinciden
+         *    con todos.
+         *  - Si falta elegir algún padre, se ven los padres entre paréntesis; al
+         *    elegir una opción, los padres vacíos se completan solos.
          */
         document.addEventListener("DOMContentLoaded", function () {
             const form = document.getElementById("form-entidad");
@@ -159,21 +158,24 @@
                 originales[sel.id] = Array.from(sel.options).map(o => o.cloneNode(true));
             });
 
-            function padreDe(hijo) {
-                const conPadre = originales[hijo.id].find(o => o.dataset.extra);
-                return conPadre ? document.getElementById(conPadre.dataset.extra) : null;
+            const deps = o => (o && o.dataset.deps) ? JSON.parse(o.dataset.deps) : null;
+            const texto = v => (v === null || v === undefined) ? "" : String(v);
+
+            function padresDe(hijo) {
+                const d = deps(originales[hijo.id].find(o => o.dataset.deps));
+                return d ? Object.keys(d).map(id => document.getElementById(id)).filter(Boolean) : [];
             }
 
-            function filtrar(hijo, padre) {
-                const valorPadre = padre.value;
+            function filtrar(hijo, padres) {
+                const elegidos = padres.filter(p => p.value);
                 const actual = hijo.value;
                 hijo.innerHTML = "";
                 originales[hijo.id].forEach(o => {
-                    const esVacia = !o.dataset.extra;
-                    if (!esVacia && valorPadre && o.dataset.extraValue !== valorPadre) return;
+                    const d = deps(o);
+                    if (d && elegidos.some(p => texto(d[p.id]) !== p.value)) return;
                     const copia = o.cloneNode(true);
-                    if (!esVacia) {
-                        copia.textContent = (!valorPadre && o.dataset.grupo)
+                    if (d) {
+                        copia.textContent = (elegidos.length < padres.length && o.dataset.grupo)
                             ? `${o.dataset.label} (${o.dataset.grupo})`
                             : o.dataset.label;
                     }
@@ -184,17 +186,20 @@
             }
 
             selects.forEach(hijo => {
-                const padre = padreDe(hijo);
-                if (!padre) return;
+                const padres = padresDe(hijo);
+                if (!padres.length) return;
 
-                filtrar(hijo, padre);
-                padre.addEventListener("change", () => filtrar(hijo, padre));
+                filtrar(hijo, padres);
+                padres.forEach(p => p.addEventListener("change", () => filtrar(hijo, padres)));
                 hijo.addEventListener("change", () => {
-                    const elegida = hijo.options[hijo.selectedIndex];
-                    if (!padre.value && elegida && elegida.dataset.extraValue) {
-                        padre.value = elegida.dataset.extraValue;
-                        padre.dispatchEvent(new Event("change"));
-                    }
+                    const d = deps(hijo.options[hijo.selectedIndex]);
+                    if (!d) return;
+                    padres.forEach(p => {
+                        if (!p.value && texto(d[p.id])) {
+                            p.value = texto(d[p.id]);
+                            p.dispatchEvent(new Event("change"));
+                        }
+                    });
                 });
             });
         });

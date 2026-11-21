@@ -60,24 +60,32 @@ def opciones(cfg: dict) -> list[dict]:
     """
     Opciones de un <select> de FK.
 
-    En un select dependiente (cfg.depende_de, ej: modelo según la marca), cada
-    opción lleva el campo del que depende (`extra_field`), el valor que le
-    corresponde (`extra_value`, el ID de su marca) y el texto de ese valor
-    (`grupo`, el nombre de la marca) para distinguir nombres repetidos.
+    En un select dependiente (cfg.depende_de, ej: modelo según la marca y la
+    categoría), cada opción lleva `deps` = {campo del que depende: valor que le
+    corresponde} (ej: {"marca_id": 3, "categoria_activo_id": 5}) y `grupo`, el
+    texto de esos valores («John Deere, Tractor»), para distinguir nombres repetidos.
+    Con cfg.fk_filtro, solo las opciones que cumplen la condición.
     """
     fk_model = cfg["fk_model"]
     pk = fk_model.__mapper__.primary_key[0].name
-    depende_de, columna = cfg.get("depende_de"), cfg.get("depende_fk")
-    rel_padre = relacion(fk_model, columna, {}) if columna else None
+    pares = list(zip(cfg.get("depende_de") or (), cfg.get("depende_fk") or ()))
+    relaciones = {columna: relacion(fk_model, columna, {}) for _, columna in pares}
+
+    consulta = fk_model.query
+    if cfg.get("fk_filtro") is not None:
+        consulta = consulta.filter(cfg["fk_filtro"]())
 
     resultado = []
-    for obj in fk_model.query.all():
-        opcion = {"value": getattr(obj, pk), "label": etiqueta(obj, cfg),
-                  "extra_field": None, "extra_value": None, "grupo": None}
-        if depende_de:
-            padre = getattr(obj, rel_padre) if rel_padre else None
-            opcion.update(extra_field=depende_de, extra_value=getattr(obj, columna),
-                          grupo=etiqueta(padre, {}) if padre is not None else None)
+    for obj in consulta.all():
+        opcion = {"value": getattr(obj, pk), "label": etiqueta(obj, cfg), "deps": None, "grupo": None}
+        if pares:
+            opcion["deps"] = {padre: getattr(obj, columna) for padre, columna in pares}
+            nombres = []
+            for _, columna in pares:
+                padre = getattr(obj, relaciones[columna]) if relaciones[columna] else None
+                if padre is not None:
+                    nombres.append(str(etiqueta(padre, {})))
+            opcion["grupo"] = ", ".join(nombres) or None
         resultado.append(opcion)
     return sorted(resultado, key=lambda o: (str(o["grupo"] or ""), str(o["label"] or "")))
 
@@ -89,16 +97,17 @@ def opciones_de(fields: dict) -> dict[str, list[dict]]:
 def sugerencias_de(fields: dict) -> dict[str, list[str]]:
     """
     Sugerencias de los campos "datalist" (texto libre con lista de ayuda): las
-    opciones fijas o, si tiene fk_model, los nombres de ese modelo (ej: empleados).
+    opciones fijas más, si tiene fk_model, los valores de ese modelo (ej: los
+    empleados, o los tipos de medidor ya cargados en otras unidades).
     """
     resultado = {}
     for c, cfg in fields.items():
         if cfg.get("tipo") != "datalist":
             continue
+        textos = {str(o["label"]) for o in cfg.get("options") or ()}
         if cfg.get("fk_model") is not None:
-            textos = {str(etiqueta(o, cfg)) for o in cfg["fk_model"].query.all()}
-        else:
-            textos = {str(o["label"]) for o in cfg.get("options") or ()}
+            textos |= {str(e) for e in (etiqueta(o, cfg) for o in cfg["fk_model"].query.all())
+                       if e is not None}
         resultado[c] = sorted(t for t in textos if t)
     return resultado
 

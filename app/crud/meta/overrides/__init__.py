@@ -23,7 +23,8 @@ Dónde va cada dato:
       fields: {campo: {...}}                    widget, opciones, alias (otros nombres
                                                 de columna al importar), solo_lectura,
                                                 depende_de (None desactiva un select
-                                                dependiente inferido)...
+                                                dependiente inferido), fk_filtro (condición
+                                                de las opciones de una FK)...
       excluir: [campo, ...]                     campos inferidos que no se exponen
       clave_natural: [campo, ...]               cómo se identifica el registro al
                                                 importar (ej: el nombre)

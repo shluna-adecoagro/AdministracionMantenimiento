@@ -35,3 +35,13 @@ class Modelo(db.Model, ModelMixin, AuditMixin):
 
     # Relación inversa
     marca = db.relationship("Marca", back_populates="modelos")
+
+    # FK → CategoriaActivo: qué es (tractor, pala cargadora...). Los planes
+    # preventivos son por categoría: el plan de un modelo y los activos del
+    # modelo tienen que ser de esta categoría. Sin backref: una categoría con
+    # modelos no se puede borrar.
+    categoria_activo_id = db.Column(
+        db.Integer, db.ForeignKey("categorias_activo.categoria_activo_id"), nullable=False,
+        info={"label": "Categoría de activo"},
+    )
+    categoria_activo = db.relationship("CategoriaActivo", lazy="joined")

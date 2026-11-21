@@ -130,7 +130,8 @@ class ServicioCRUD:
         """
         Selects dependientes (ej: modelo_id depende de marca_id): verifica que el
         modelo sea de la marca elegida y, si no se eligió marca, la completa con
-        la del modelo. Devuelve los datos con lo completado; lanza
+        la del modelo. Un campo puede depender de varios (el modelo, de la marca
+        y de la categoría). Devuelve los datos con lo completado; lanza
         ErroresValidacion si no coinciden.
 
         Con `registro` (edición), los campos que no vienen en `datos` conservan
@@ -139,41 +140,66 @@ class ServicioCRUD:
         from app.core.db import db
 
         def valor(campo):
-            if campo in datos:
-                return datos[campo]
+            if campo in resultado:
+                return resultado[campo]
             return getattr(registro, campo) if registro is not None else None
 
         resultado, errores = dict(datos), {}
         for campo, cfg in self.fields.items():
-            padre = cfg.get("depende_de")
-            if not padre or valor(campo) is None:
+            if not cfg.get("depende_de") or valor(campo) is None:
                 continue
-            if self.fields[padre].get("solo_lectura"):
-                continue  # el padre se calcula del hijo (ej: tipo según la categoría)
-            if campo not in datos and padre not in datos:
-                continue  # no cambió ninguno de los dos
-            hijo = db.session.get(cfg["fk_model"], valor(campo))
-            if hijo is None:
-                continue  # la FK inexistente la informa validar_existencia
-            correcto = getattr(hijo, cfg["depende_fk"])
-            elegido = valor(padre)
-            if elegido is None:
-                resultado[padre] = correcto
-            elif correcto != elegido:
-                cfg_padre = self.fields[padre]
-                obj_padre = db.session.get(cfg_padre["fk_model"], elegido)
-                nombre_padre = fk.etiqueta(obj_padre, cfg_padre) if obj_padre is not None else elegido
-                errores[campo] = (
-                    f"{cfg.get('label', campo)}: «{fk.etiqueta(hijo, cfg)}» no pertenece a "
-                    f"«{nombre_padre}» ({cfg_padre.get('label', padre).lower()})."
-                )
+            for padre, columna in zip(cfg["depende_de"], cfg["depende_fk"]):
+                if self.fields[padre].get("solo_lectura"):
+                    continue  # el padre se calcula del hijo (ej: tipo según la categoría)
+                if campo not in datos and padre not in datos:
+                    continue  # no cambió ninguno de los dos
+                hijo = db.session.get(cfg["fk_model"], valor(campo))
+                if hijo is None:
+                    break  # la FK inexistente la informa validar_existencia
+                correcto = getattr(hijo, columna)
+                elegido = valor(padre)
+                if elegido is None:
+                    resultado[padre] = correcto
+                elif correcto != elegido and campo not in errores:
+                    cfg_padre = self.fields[padre]
+                    obj_padre = db.session.get(cfg_padre["fk_model"], elegido)
+                    nombre_padre = fk.etiqueta(obj_padre, cfg_padre) if obj_padre is not None else elegido
+                    errores[campo] = (
+                        f"{cfg.get('label', campo)}: «{fk.etiqueta(hijo, cfg)}» no pertenece a "
+                        f"«{nombre_padre}» ({cfg_padre.get('label', padre).lower()})."
+                    )
         if errores:
             raise ErroresValidacion(errores)
         return resultado
 
+    def verificar_opciones(self, datos: dict) -> None:
+        """
+        FK con opciones restringidas (fk_filtro, ej: solo las unidades que tienen
+        tipo de medidor): el valor elegido tiene que cumplir la condición.
+        """
+        errores = {}
+        for campo, cfg in self.fields.items():
+            filtro, elegido = cfg.get("fk_filtro"), datos.get(campo)
+            if filtro is None or elegido is None:
+                continue
+            destino = cfg["fk_model"]
+            pk = destino.__mapper__.primary_key[0]
+            if db.session.query(destino).filter(pk == elegido, filtro()).first() is None:
+                obj = db.session.get(destino, elegido)
+                if obj is not None:
+                    errores[campo] = f"{cfg.get('label', campo)}: «{fk.etiqueta(obj, cfg)}» no es una opción válida."
+        if errores:
+            raise ErroresValidacion(errores)
+
     # ------------------------------------------------------------------
     def crear(self, datos: dict, motivo: str | None = None, usuario: str = "sistema"):
         datos = self.completar_dependencias(datos)
+        self.verificar_opciones(datos)
+        # Un campo no obligatorio que no se envió toma el valor por defecto de
+        # su columna (ej: «Vigente» = Sí), en vez de quedar vacío.
+        columnas = sa_inspect(self.model).columns
+        datos = {c: v for c, v in datos.items()
+                 if not (v is None and c in columnas and columnas[c].default is not None)}
         registro = self.model(**datos)
         db.session.add(registro)
         self._confirmar("INSERT", registro, None, motivo, usuario, cambiados=set(datos))
@@ -181,6 +207,7 @@ class ServicioCRUD:
 
     def actualizar(self, registro, datos: dict, motivo: str | None = None, usuario: str = "sistema"):
         datos = self.completar_dependencias(datos, registro)
+        self.verificar_opciones(datos)
         anterior = self._estado(registro)
         cambiados = {c for c, v in datos.items() if getattr(registro, c) != v}
         for campo, valor in datos.items():

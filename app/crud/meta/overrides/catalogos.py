@@ -13,6 +13,9 @@ from app.models.recursos_models import EstadoRecurso
 from app.models.sectores_models import EstadoSector
 from app.models.unidadmedida_models import TipoUnidad, UnidadMedida
 
+# Tipos de medidor que se sugieren al cargar una unidad (además de los ya usados).
+TIPOS_MEDIDOR = ("Horómetro", "Odómetro", "Caudalímetro", "Contador de arranques")
+
 
 def _estado(model, nombre_campo, de, orden):
     return {
@@ -72,6 +75,13 @@ OVERRIDES = {
         "orden": 140,
         # También aparece como pestaña del tipo de unidad (ej: Tiempo → horas, días).
         "padre": {"entidad": "tipos_unidad", "fk": "tipo_unidad_id"},
+        "fields": {
+            # Texto libre, con sugerencias: los tipos habituales y los ya cargados.
+            "tipo_medidor": {
+                "tipo": "datalist", "fk_model": UnidadMedida, "fk_label": "tipo_medidor",
+                "options": [{"value": t, "label": t} for t in TIPOS_MEDIDOR],
+            },
+        },
         "clave_natural": ["nombre_unidad"],
     },
     # --- Otros -------------------------------------------------------------
