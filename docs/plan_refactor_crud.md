@@ -422,6 +422,8 @@ El diseño se acordó con el usuario y reemplaza el diseño inicial que estaba a
 - [`prompt_copilot_equivalencias.md`](prompt_copilot_equivalencias.md): prompt para que
   Copilot proponga equivalencias (activos, modelos, materiales) que el importador no
   resuelve con reglas.
+- [`prompt_copilot_documentos.md`](prompt_copilot_documentos.md): prompt para que Copilot
+  lea los PDF de ofertas, presupuestos, remitos, facturas y OC con las columnas del diseño.
 
 Cambios principales respecto del diseño inicial:
 

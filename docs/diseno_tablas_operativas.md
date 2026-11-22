@@ -1,8 +1,8 @@
 # Diseño de tablas: parte operativa (borrador para revisar)
 
-*Versión 5, 21/11/2026. Deriva de `docs/vision_conceptual.md` y del estado del repo al commit 45e4dc7 (fase 9, planes preventivos). Reemplaza el "diseño inicial" de las fases operativas de `docs/plan_refactor_crud.md`.*
+*Versión 5.1, 21/11/2026. Deriva de `docs/vision_conceptual.md` y del estado del repo al commit 45e4dc7 (fase 9, planes preventivos). Reemplaza el "diseño inicial" de las fases operativas de `docs/plan_refactor_crud.md`.*
 
-*Historial: v2 — primer tramo con pedidos, documentos de proveedores y solicitudes de OC; destinos de la línea de pedido (1 : N); tabla de adjudicaciones (N:M). v2.1 — reparto proporcional entre destinos. v3 — convivencia con el ERP; estados como opciones fijas en código. v3.1 — TSV de EAM a demanda; importadores como adaptadores; estado "Enviada a Administración". v4 — ajustes a partir de ejemplos reales (Excel de pedidos y TSV de solicitudes internas). v4.1 — estado histórico por color de pestaña, moneda por formato de celda, rol de Copilot. v5 — la OC entra al primer tramo: una OC por proveedor y, en la práctica, una por presupuesto adjudicado; el nº de OC cruza pedidos, ofertas y solicitudes.*
+*Historial: v2 — primer tramo con pedidos, documentos de proveedores y solicitudes de OC; destinos de la línea de pedido (1 : N); tabla de adjudicaciones (N:M). v2.1 — reparto proporcional entre destinos. v3 — convivencia con el ERP; estados como opciones fijas en código. v3.1 — TSV de EAM a demanda; importadores como adaptadores; estado "Enviada a Administración". v4 — ajustes a partir de ejemplos reales (Excel de pedidos y TSV de solicitudes internas). v4.1 — estado histórico por color de pestaña, moneda por formato de celda, rol de Copilot. v5 — la OC entra al primer tramo: una OC por proveedor y, en la práctica, una por presupuesto adjudicado; el nº de OC cruza pedidos, ofertas y solicitudes. v5.1 — columnas que necesita la lectura de PDF (`docs/prompt_copilot_documentos.md`): descuento global, total en USD informado, equipo y horas del medidor en documentos; precio de lista en líneas; presupuesto citado en la OC.*
 
 ## Convenciones (las del repo)
 
@@ -110,6 +110,10 @@ Ofertas, presupuestos de trabajos, remitos y facturas.
 | moneda_inferida | sí/no | La moneda se dedujo (histórico) y conviene revisarla |
 | tipo_cambio | decimal, opcional | |
 | total_sin_iva, iva, total | decimal | Tal cual figuran en el documento |
+| descuento_global_pct | decimal, opcional | Descuento general del documento (por ejemplo, 26,20 % en las ofertas de Lange) |
+| total_usd_informado | decimal, opcional | Total equivalente en dólares que informa el documento; con `total` da el tipo de cambio implícito |
+| equipo_texto | texto, opcional | Patente, serie, modelo o código de equipo tal como figura; sirve para identificar el activo |
+| horas_medidor | decimal, opcional | Horas del equipo al hacer el service ("SERVICIO 15644 HS"); alimenta la última ejecución del plan |
 | plazo_entrega_dias, validez_hasta | opcionales | Ofertas |
 | solicitud_trabajo_id | FK, opcional | Presupuesto del trabajo de un contratista |
 | nro_oc | texto, opcional | En ofertas y presupuestos: la OC que se emitió por ellos (una por presupuesto adjudicado). En remitos y facturas: la OC que referencian |
@@ -131,12 +135,13 @@ Derivadas: total de líneas, diferencia con el total (control de carga), total a
 | codigo_proveedor, descripcion_proveedor | texto | Tal cual vienen |
 | cantidad | decimal | En ofertas, lo ofertado (puede ser menor a lo pedido) |
 | unidad_medida_id | FK | |
-| precio_unitario | decimal | Neto, sin IVA |
-| descuento_pct | decimal, opcional | |
+| precio_lista | decimal, opcional | Unitario antes de descuentos, sin IVA |
+| descuento_pct | decimal, opcional | Descuento efectivo total sobre el precio de lista (de línea y global) |
+| precio_unitario | decimal | Neto, sin IVA, después de todos los descuentos. Es el que usa el historial de precios |
 | activo_id | FK, opcional | En presupuestos de service, si detalla el equipo |
 | confianza | decimal, opcional | Extracción automática |
 
-Derivada: subtotal = cantidad × precio × (1 − descuento).
+Derivada: subtotal = cantidad × precio_unitario (el descuento ya está aplicado en el precio neto; no se aplica dos veces).
 
 ### adjudicaciones (qué se compra de cada oferta, para qué línea de pedido)
 
@@ -272,6 +277,7 @@ Dueño: el ERP. Fuentes: el PDF de la OC que Compras manda por mail (leído con 
 | moneda | opción | |
 | total | decimal | |
 | observaciones | texto | Suelen citar el presupuesto u oferta |
+| presupuesto_citado | texto, opcional | Referencia al presupuesto tal como figura en las observaciones |
 | documento_id | FK documentos_proveedor, opcional | Presupuesto u oferta citada en las observaciones (sugerida; la confirma el gestor) |
 | archivo | archivo (PDF), opcional | La OC recibida por mail |
 | origen | opción | PDF / reporte |
@@ -330,7 +336,7 @@ La cuenta corporativa de Microsoft permite usar Copilot con datos reales. Se usa
 
 - El adaptador (código) lee el Excel y los TSV: estructura, celdas combinadas, colores de pestaña, formatos y claves. Es repetible e idempotente.
 - Lo que el adaptador no puede resolver con reglas (textos de "Detalles" sin coincidencia exacta, productos sin código) se exporta a una tabla de **equivalencias a revisar**. Copilot propone el activo, modelo o material con un nivel de confianza (ver `docs/prompt_copilot_equivalencias.md`); el gestor revisa; la importación usa la tabla revisada.
-- Los PDF de ofertas, presupuestos y OC se leen con Copilot y entran con `revisado` = no hasta que el gestor confirme.
+- Los PDF de ofertas, presupuestos, remitos, facturas y OC se leen con Copilot (ver `docs/prompt_copilot_documentos.md`) y entran con `revisado` = no hasta que el gestor confirme.
 
 ## Tramos siguientes (esquema, a detallar en su momento)
 
