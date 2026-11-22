@@ -275,9 +275,9 @@ Más adelante: OT importadas del ERP y completadas en la app, stock, facturas, c
 ## Pendientes
 
 - Dónde se alojan los datos.
-- Ejemplos de TSV de OT de EAM y, si existe, reporte de OC emitidas.
+- Ejemplos de TSV de OT de EAM.
+- Reporte de OC emitidas de Oracle: pedido a Administración y consulta a TI para poder generarlo desde EAM (semana del 23/11).
 - Estructura del Excel histórico de solicitudes de OC (el compartido).
-- Prompt de Copilot para leer PDF de ofertas, presupuestos y OC con las columnas del diseño.
 - Revisión de los materiales dudosos del maestro (en otra conversación).
 - Qué deja de cargarse en EAM (por ejemplo, los materiales utilizados en las OT pasan a cargarse solo en la app).
 - Documento y presentación del "antes".
