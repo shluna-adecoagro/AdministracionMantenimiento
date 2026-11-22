@@ -328,7 +328,12 @@ Dueño: el ERP. Fuentes: el PDF de la OC que Compras manda por mail (leído con 
 - `proveedores`: agregar `codigo_erp` (código interno del proveedor en el ERP, figura en la OC). El CUIT ya existe.
 - `categorias_material`: agregar `cuenta_id` (opcional), para sugerir la cuenta sin activo.
 - `materiales`: agregar `controla_stock` (sí/no). **El maestro no guarda precios** (ver «Costo de un material de stock»).
-- **Maestro de materiales (a proponer en la revisión de la fase 10, decidido 22/11 que cambia en la app):** agregar el código del ERP y el código del fabricante, y la relación entre un material **genérico** y sus **presentaciones comprables** (por ejemplo, `material_generico_id` en `materiales`: «Aceite 15W-40» y sus envases de 20 L y 205 L). Los modelos aplicables no son una columna: salen del BOM por modelo. Después, los prompts de Copilot usan el export de la app (`flask exportar materiales`) en lugar del maestro anterior.
+- **Maestro de materiales (decidido 22/11; se implementa en la fase 10):**
+  - `codigo` es el **número de parte** (código del fabricante) y sigue siendo la clave natural. Se agrega `codigo_erp` (código en EAM/SAP, opcional, único cuando está cargado).
+  - **Genérico y presentaciones:** el genérico es una fila de `materiales` marcada `es_generico` («Aceite 15W-40», en litros, sin envase; código con prefijo `GEN-`). Sus presentaciones comprables apuntan a él con `material_generico_id` («Aceite 15W-40 bidón 20 L», `presentacion_cantidad` 20 en litros). Un genérico no tiene genérico propio y la FK de una presentación solo acepta genéricos.
+  - **Dónde se usa cada uno:** el BOM y los planes preventivos pueden usar el genérico (la cantidad no depende del envase). Ofertas, stock y recepciones usan siempre la presentación. Una línea de pedido puede pedir cualquiera de los dos; la presentación se define al adjudicar.
+  - Los modelos aplicables no son una columna: salen del BOM por modelo.
+  - Después, los prompts de Copilot usan el export de la app (`flask exportar materiales`) en lugar del maestro anterior.
 - Borrar `Pedido` / `PedidoDetalle`, `pedidos_service.py`, `pedidos_routes.py` y su schema (nunca se registraron; los reemplaza este diseño).
 
 ## Importación del Excel histórico de pedidos
