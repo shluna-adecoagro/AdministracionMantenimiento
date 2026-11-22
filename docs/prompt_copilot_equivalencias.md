@@ -5,8 +5,10 @@ Uso: abrí Copilot (con tu cuenta corporativa), adjuntá los tres archivos indic
 **Archivos a adjuntar**
 
 1. `pendientes.csv`: los textos a resolver. Columnas: `id`, `tipo` (destino o material), `texto`, `contexto`, `veces`. Lo va a generar el importador de la app; mientras tanto, para probar, podés armarlo a mano copiando algunas filas de "Producto" (tipo material) y de "Detalles" (tipo destino) de pedidos reales. En `contexto` va la referencia del pedido y la otra columna de la misma fila (por ejemplo, para un destino, el producto; para un material, el detalle).
-2. `activos.csv`: la lista de activos exportada de SharePoint (número de activo, descripción, categoría, tipo, marca, modelo, número de serie, número de motor, año, sector, ubicación, usuario asignado, código de carga de gasoil, estado).
+2. `activos.csv`: la lista de activos exportada de la app con `flask --app run exportar activos activos.csv` (número de activo, descripción, categoría, tipo, marca, modelo, número de serie, número de motor, año, sector, ubicación, usuario asignado, código de carga de gasoil, estado).
 3. `maestro_materiales.csv`: el maestro de materiales.
+
+> La lista de SharePoint solo sirvió para la carga inicial: la fuente es la app. Las columnas de `maestro_materiales.csv` que usa este prompt (`numero_parte`, `codigo_erp`, `codigo_generico`, `presentaciones_disponibles`, `modelos_aplicables`) corresponden al maestro anterior; el prompt se ajusta al export de la app cuando el maestro cambie en la fase 10 (ver `diseno_tablas_operativas.md`, «Cambios a tablas existentes»).
 
 ---
 

@@ -5,7 +5,7 @@
 ## Cómo usarlo
 
 - En un chat de Copilot o como instrucciones de un agente de Copilot. Adjuntá **un documento por vez** al principio; cuando ande bien, probá con varios.
-- Adjuntá también `maestro_materiales.csv`: lo usa solo para sugerir el material cuando el código coincide exacto.
+- Adjuntá también `maestro_materiales.csv`: lo usa solo para sugerir el material cuando el código coincide exacto. Sus columnas (`numero_parte`, `codigo_erp`) son las del maestro anterior; cuando el maestro cambie en la app (fase 10), se usa `flask --app run exportar materiales` y el prompt se ajusta a sus columnas.
 - La salida son bloques de texto CSV. Copiá cada bloque a un archivo (`documentos.csv`, `documento_lineas.csv`, `ordenes_compra.csv`, `orden_compra_lineas.csv`) en la carpeta que lee el importador de la app. El importador identifica al proveedor (por CUIT, código del ERP o nombre), arma las claves definitivas y deja todo con `revisado` = no hasta que lo confirmes.
 
 ## Prompt
