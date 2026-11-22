@@ -1,14 +1,14 @@
 # Diseño de tablas: parte operativa (borrador para revisar)
 
-*Versión 5.1, 21/11/2026. Deriva de `docs/vision_conceptual.md` y del estado del repo al commit 45e4dc7 (fase 9, planes preventivos). Reemplaza el "diseño inicial" de las fases operativas de `docs/plan_refactor_crud.md`.*
+*Versión 5.2, 22/11/2026. Deriva de `docs/vision_conceptual.md` y del estado del repo al commit 45e4dc7 (fase 9, planes preventivos). Reemplaza el "diseño inicial" de las fases operativas de `docs/plan_refactor_crud.md`.*
 
-*Historial: v2 — primer tramo con pedidos, documentos de proveedores y solicitudes de OC; destinos de la línea de pedido (1 : N); tabla de adjudicaciones (N:M). v2.1 — reparto proporcional entre destinos. v3 — convivencia con el ERP; estados como opciones fijas en código. v3.1 — TSV de EAM a demanda; importadores como adaptadores; estado "Enviada a Administración". v4 — ajustes a partir de ejemplos reales (Excel de pedidos y TSV de solicitudes internas). v4.1 — estado histórico por color de pestaña, moneda por formato de celda, rol de Copilot. v5 — la OC entra al primer tramo: una OC por proveedor y, en la práctica, una por presupuesto adjudicado; el nº de OC cruza pedidos, ofertas y solicitudes. v5.1 — columnas que necesita la lectura de PDF (`docs/prompt_copilot_documentos.md`): descuento global, total en USD informado, equipo y horas del medidor en documentos; precio de lista en líneas; presupuesto citado en la OC.*
+*Historial: v2 — primer tramo con pedidos, documentos de proveedores y solicitudes de OC; destinos de la línea de pedido (1 : N); tabla de adjudicaciones (N:M). v2.1 — reparto proporcional entre destinos. v3 — convivencia con el ERP; estados como opciones fijas en código. v3.1 — TSV de EAM a demanda; importadores como adaptadores; estado "Enviada a Administración". v4 — ajustes a partir de ejemplos reales (Excel de pedidos y TSV de solicitudes internas). v4.1 — estado histórico por color de pestaña, moneda por formato de celda, rol de Copilot. v5 — la OC entra al primer tramo: una OC por proveedor y, en la práctica, una por presupuesto adjudicado; el nº de OC cruza pedidos, ofertas y solicitudes. v5.1 — columnas que necesita la lectura de PDF (`docs/prompt_copilot_documentos.md`): descuento global, total en USD informado, equipo y horas del medidor en documentos; precio de lista en líneas; presupuesto citado en la OC. v5.2 — estados de la línea de pedido: se guarda solo lo que no deja otro rastro y el resto se calcula; sector de una distribución con centro de costo compartido; costo de un material de stock sin precio en el maestro; cambios previstos al maestro de materiales.*
 
 ## Convenciones (las del repo)
 
 - Tablas en plural y snake_case; PK `<entidad>_id` autoincremental; `uuid`; `creado_en` / `actualizado_en`; `AuditMixin` en todo lo operativo (la auditoría da quién, qué y cuándo de cada cambio de estado).
 - Cabecera y líneas como entidad y subentidad (el framework ya lo resuelve).
-- **Estados de flujo como opciones fijas en código** (decidido 21/11): select con `opciones` en el override, no catálogo editable, porque las reglas de la app dependen de ellos.
+- **Estados de flujo como opciones fijas en código** (decidido 21/11): select con `options` en el override, no catálogo editable, porque las reglas de la app dependen de ellos.
 - **Cantidades derivadas sin columna:** ofertada, adjudicada, recibida y facturada se calculan sumando filas vinculadas (principio "recalcular, nunca incrementar"). Si hace falta por rendimiento, se agrega una caché que se recalcula, nunca un contador.
 - **Importación idempotente:** toda tabla que recibe histórico o reportes tiene `origen` (app / histórico / reporte / PDF) y `clave_origen` única (por ejemplo, hoja y fila del Excel, o número del ERP).
 - **Registros del ERP** (solicitudes de OC, OC, OT): columna `sistema` (EAM / SAP / app) y número del ERP, únicos juntos. Las columnas cuyo dueño es el ERP no se editan en la app: las actualiza la próxima importación. Un registro creado en la app (`sistema` = app) puede recibir después su número del ERP, y la importación lo reconoce en lugar de duplicarlo.
@@ -67,15 +67,33 @@ Es lo que ve Compras y lo que se cotiza: un material y una cantidad total.
 | material_id | FK materiales, opcional | Se identifica por código (por ejemplo, "84228488") o se asigna a mano |
 | descripcion | texto | Columna "Producto" tal cual ("Bolillero 32217", "8605140") |
 | unidad_medida_id | FK, opcional | Por defecto, la del material |
-| estado | opción | Solicitado / en cotización / oferta en validación / adjudicado / OC emitida / recibido / cerrado / anulado |
-| estado_salteado | sí/no | Marca cuando se saltó un estado (mide adopción) |
-| sin_conformidad | sí/no | Cerrado en el histórico sin registro de recepción |
+| estado | opción | **Guardado:** solicitado / en cotización / ofertas cargadas / anulado. Ver «Estado de la línea de pedido» |
+| sin_conformidad | sí/no | Cierre manual: cerrada en el histórico sin registro de recepción |
 | cantidad_cancelada | decimal, 0 | Con motivo |
 | motivo_operacion_id | FK motivos, opcional | Motivo de cancelación o anulación |
 | nro_oc | texto, opcional | OC con la que se compró (columna "OC" del Excel, o la que carga Compras). Una línea comprada a dos proveedores tiene dos OC: en ese caso el dato sale de las adjudicaciones |
 | observaciones | texto | |
 
-Derivadas: **solicitada** (suma de los destinos), ofertada, adjudicada, recibida, pendiente de comprar, pendiente de recibir.
+Derivadas: **solicitada** (suma de los destinos), ofertada, adjudicada, recibida, pendiente de comprar, pendiente de recibir y el **estado visible**.
+
+#### Estado de la línea de pedido (decidido 22/11)
+
+Se guarda solo lo que no deja otro rastro; lo demás se calcula de los datos.
+
+| Estado | Cómo se obtiene |
+|---|---|
+| Solicitado | Guardado (al crear la línea) |
+| En cotización | Guardado (lo marca Compras o el gestor) |
+| Ofertas cargadas | Guardado (Compras terminó de cargar las ofertas; las revisa el gestor) |
+| Anulado | Guardado, con motivo. Prevalece sobre todo lo demás |
+| Adjudicado | Calculado: tiene adjudicaciones con cantidad mayor que cero |
+| OC emitida | Calculado: tiene nº de OC (propio o de sus adjudicaciones) |
+| Recibido parcial / recibido | Calculado: tiene recepciones, por menos o por el total adjudicado |
+| Cerrado | Calculado: no queda nada pendiente de comprar ni de recibir, o `sin_conformidad` (cierre manual del histórico) |
+
+- **El estado visible es el calculado.** El guardado solo cuenta mientras no haya datos posteriores (adjudicaciones, OC, recepciones).
+- **Salteo de estados:** también se calcula (por ejemplo, una línea adjudicada que nunca pasó por «en cotización»). Ya no hay columna `estado_salteado`.
+- **Tiempos por etapa:** salen de la auditoría de los estados guardados y de las fechas de adjudicaciones, OC y recepciones.
 
 ### pedido_linea_destinos (adónde va y quién paga)
 
@@ -254,13 +272,15 @@ Se importan del TSV de distribuciones (dueño: ERP). En las solicitudes que nace
 | numero_cuenta | texto | Segmento 2 de la combinación |
 | centro_costo | texto | Segmento 6 de la combinación |
 | cuenta_id | FK, opcional | Identificada por el número |
-| sector_id | FK, opcional | Identificado por el centro de costo |
+| sector_id | FK, opcional | Identificado por el centro de costo **solo si corresponde a un único sector**; si no, vacío (decidido 22/11) |
 | cantidad | decimal | Como en el ERP: con una línea de cantidad 1, las fracciones (0,25 / 0,25 / 0,5) son los porcentajes |
 | udm | texto | |
 | origen | opción | ERP / app |
 | clave_origen | texto | Sistema + solicitud + línea + distribución |
 
 Derivados: porcentaje = cantidad / cantidad de la línea; importe = porcentaje × importe de la línea.
+
+**Centro de costo compartido:** dos sectores pueden compartir centro de costo (contablemente son lo mismo). En ese caso `sector_id` queda vacío y se conserva el texto (`centro_costo`); el sector para el análisis sale del destino del pedido o de la solicitud de trabajo.
 
 **Distribución propuesta:** la app la calcula (no se guarda) desde los destinos de lo adjudicado, agrupando por sector imputado y cuenta. Se muestra para cargarla en EAM y, después de importar, se compara con la real.
 
@@ -307,7 +327,8 @@ Dueño: el ERP. Fuentes: el PDF de la OC que Compras manda por mail (leído con 
 
 - `proveedores`: agregar `codigo_erp` (código interno del proveedor en el ERP, figura en la OC). El CUIT ya existe.
 - `categorias_material`: agregar `cuenta_id` (opcional), para sugerir la cuenta sin activo.
-- `materiales`: agregar `controla_stock` (sí/no).
+- `materiales`: agregar `controla_stock` (sí/no). **El maestro no guarda precios** (ver «Costo de un material de stock»).
+- **Maestro de materiales (a proponer en la revisión de la fase 10, decidido 22/11 que cambia en la app):** agregar el código del ERP y el código del fabricante, y la relación entre un material **genérico** y sus **presentaciones comprables** (por ejemplo, `material_generico_id` en `materiales`: «Aceite 15W-40» y sus envases de 20 L y 205 L). Los modelos aplicables no son una columna: salen del BOM por modelo. Después, los prompts de Copilot usan el export de la app (`flask exportar materiales`) en lugar del maestro anterior.
 - Borrar `Pedido` / `PedidoDetalle`, `pedidos_service.py`, `pedidos_routes.py` y su schema (nunca se registraron; los reemplaza este diseño).
 
 ## Importación del Excel histórico de pedidos
@@ -324,7 +345,7 @@ Dueño: el ERP. Fuentes: el PDF de la OC que Compras manda por mail (leído con 
 
 | Dato | Regla |
 |---|---|
-| Estado por color de pestaña | Verde → líneas **cerradas**, marcadas `sin_conformidad` (salvo que "Recibido?" diga lo contrario). Amarillo → **en proceso**: con OC, "OC emitida" (pendiente de confirmar la recepción); sin OC, "en cotización". Rojo → **anulado**. Sin color → **solicitado** (novedad). Colores que no encajen se listan para revisar. |
+| Estado por color de pestaña | Verde → líneas **cerradas**: `sin_conformidad` (cierre manual), salvo que "Recibido?" diga lo contrario. Amarillo → **en proceso**: con OC, el estado calculado es "OC emitida" (pendiente de confirmar la recepción); sin OC, se guarda "en cotización". Rojo → **anulado**. Sin color → **solicitado** (novedad). Colores que no encajen se listan para revisar. |
 | Ofertas | Con una columna por proveedor (GRUMAQ, JMG en el pedido 1104): una oferta por proveedor con sus precios unitarios; la adjudicación sale de "PROVEEDOR". Con una sola columna "IMPORTE": una oferta del proveedor elegido. La oferta adjudicada recibe el nº de OC de sus líneas. |
 | Moneda | Por el formato de la celda: con "$" → ARS; sin símbolo → USD (repuestos de John Deere y otras marcas de maquinaria), marcada `moneda_inferida` para revisar. |
 | Material | "Producto" se busca por código en el maestro (por ejemplo, 84228488); si no coincide, queda la descripción "a revisar". |
@@ -344,6 +365,7 @@ La cuenta corporativa de Microsoft permite usar Copilot con datos reales. Se usa
 
 - **OT:** cabecera del ERP (sistema, nº de OT, activo, descripción, tipo, fechas, estado corporativo), importada y no editable en la app; la app agrega operaciones → recursos ejecutantes y materiales (cantidad prevista y utilizada, origen: stock / comprado / provisto por el contratista), el vínculo con solicitudes de trabajo y con planes preventivos y medidores (fase 9). En EAM, una solicitud interna puede crearse desde la OT, y una o varias líneas pueden vincularse con una operación: la app replica ese vínculo con `solicitud_oc_lineas.nro_ot_erp` (y la operación, si el reporte la trae).
 - **material_proveedor:** equivalencias de códigos (material, proveedor, código y descripción del proveedor).
+- **Costo de un material de stock (decidido 22/11):** el último precio de factura; si no hay, el de la OC o la oferta adjudicada; si no hay ninguno, el consumo queda **«sin precio»** y marcado para revisar. El maestro de materiales no guarda precios.
 - **Stock:** `movimientos_stock` (material, ubicación, fecha, cantidad con signo, tipo, vínculo con la recepción o el consumo). El stock pasa a ser la suma de movimientos.
 - **Facturas:** documentos tipo factura vinculados a la OC y a las adjudicaciones, para el control ordenado contra recibido contra facturado.
 - **Préstamos de activos:** activo, sector usuario, desde, hasta.

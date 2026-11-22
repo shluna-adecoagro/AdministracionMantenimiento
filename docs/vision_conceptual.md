@@ -1,6 +1,6 @@
 # Visión conceptual del sistema de mantenimiento
 
-*Documento vivo. Última actualización: 21/11/2026. Nivel conceptual: no define tablas ni tecnología de alojamiento. El diseño de tablas está en `diseno_tablas_operativas.md`.*
+*Documento vivo. Última actualización: 22/11/2026. Nivel conceptual: no define tablas ni tecnología de alojamiento. El diseño de tablas está en `diseno_tablas_operativas.md`.*
 
 ## Propósito
 
@@ -165,18 +165,20 @@ Dos tipos de estado, en campos separados:
 
 ### Pedido de materiales (estado por línea; el pedido muestra un resumen, por ejemplo "3 de 5 recibidas")
 
+Se guarda solo lo que no deja otro rastro; el resto se calcula de los datos (decidido 22/11). El estado que se ve es el calculado.
+
 | Estado | Quién lo cambia | Significa |
 |---|---|---|
-| Solicitado | Mecánico o gestor | Se registró la necesidad |
-| En cotización | Compras | Pidió precios a proveedores |
-| Oferta en validación | Compras | Cargó las ofertas; las revisa el gestor |
-| Adjudicado | Gestor | Confirmó qué ítems y cantidades se compran a quién |
-| OC emitida | Compras | Vinculó el número de OC |
-| Recibido | Mecánico | Conformidad: registró la cantidad recibida |
-| Cerrado | Automático | No queda nada pendiente de comprar ni de recibir |
-| Anulado | Gestor | Ya no hace falta, con motivo |
+| Solicitado | Mecánico o gestor (guardado) | Se registró la necesidad |
+| En cotización | Compras (guardado) | Pidió precios a proveedores |
+| Ofertas cargadas | Compras (guardado) | Cargó las ofertas; las revisa el gestor |
+| Adjudicado | Calculado | Hay adjudicaciones: el gestor confirmó qué ítems y cantidades se compran a quién |
+| OC emitida | Calculado | Tiene número de OC |
+| Recibido parcial / recibido | Calculado | Hay recepciones (conformidad del mecánico) |
+| Cerrado | Calculado | No queda nada pendiente de comprar ni de recibir (o se cerró a mano en el histórico, sin conformidad) |
+| Anulado | Gestor (guardado) | Ya no hace falta, con motivo |
 
-Indicadores derivados (no son estados): pendiente de comprar, pendiente de recibir, con faltante.
+Indicadores derivados (no son estados): pendiente de comprar, pendiente de recibir, con faltante. Los tiempos por etapa salen de la auditoría y de las fechas de adjudicaciones, OC y recepciones.
 
 ### Solicitud de trabajo
 
@@ -225,7 +227,7 @@ El destino se define **por línea** (y una línea puede tener varios), no por pe
 - La cabecera de la OT viene del ERP; la app completa operaciones, recursos y materiales.
 - Cada material de una intervención tiene **cantidad prevista** (desde el plan o el BOM) y **cantidad utilizada**. Comparar plan contra realidad permite corregir los planes de mantenimiento y alimenta la predicción de services.
 - Origen del material: de stock, comprado para la intervención o provisto por el contratista.
-- **Costo de un material de stock:** el último precio de factura; si no hay, el del maestro.
+- **Costo de un material de stock:** el último precio de factura; si no hay, el de la OC o la oferta adjudicada; si no hay ninguno, queda «sin precio» y marcado para revisar. El maestro de materiales no guarda precios.
 - **Regla anti doble conteo:** en un trabajo interno, el costo es la suma de los materiales utilizados más la mano de obra. En un trabajo de contratista, el costo sale de su presupuesto o factura, y los materiales que trajo el contratista no se vuelven a sumar.
 
 ## Reportes previstos
