@@ -175,6 +175,8 @@ Comparando la fecha de recepción con la fecha de entrega comprometida en la OC 
 
 ### solicitudes_trabajo
 
+Aviso de un mecánico de que hay que llamar a un contratista (equivalente al aviso de SAP PM). Se implementa en la fase 11, junto con los presupuestos de trabajo.
+
 | Columna | Tipo | Notas |
 |---|---|---|
 | numero | texto, único | TRA-AAAA-NNNN |
