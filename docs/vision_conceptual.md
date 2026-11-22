@@ -61,6 +61,7 @@ Todo empieza con una solicitud, que expresa una necesidad.
 | Conformidad | **Después** de la OC: el mecánico registra lo recibido | **Antes** de la OC: el jefe de taller valida el trabajo hecho |
 
 - El trabajo de un contratista es una **intervención con recurso externo**, el mismo objeto que una intervención de un mecánico. Así el historial del activo queda completo.
+- La solicitud de trabajo cumple el papel del **aviso** de SAP PM: registra la necesidad antes de que exista la orden. Hoy cubre solo los trabajos de contratistas; cuando llegue SAP PM, conviene evaluar ampliarla a todo tipo de aviso (también reparaciones con mecánicos propios) y alinearla con los avisos de SAP, para no registrarlos dos veces.
 - La solicitud de trabajo es un registro liviano (activo, qué pasa, contratista llamado), no un paso de aprobación. Tiene que ser más fácil que el WhatsApp.
 - Si llega un presupuesto sin solicitud previa, la solicitud se crea a partir de él y queda marcada como **regularizada**. La proporción de regularizadas mide la adopción.
 - Registrar la solicitud aporta la **fecha del aviso**, con la que se pueden medir tiempos de respuesta, trabajos pendientes y correctivo hecho por contratistas.
