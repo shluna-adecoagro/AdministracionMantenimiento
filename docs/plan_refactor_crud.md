@@ -407,66 +407,31 @@ diario (como en `ml/scripts/horas_gasoil.py`). Con «lo que ocurra primero», qu
 toca se decide **contando ejecuciones** (la 4.ª es el completo), no por coincidencia de
 horas: por eso el ciclo se guarda en el plan como dato calculado.
 
-## Fases operativas (10 a 12): diseño inicial
+## Fases operativas (10 en adelante)
 
-Tercera sección del menú, **Operaciones**, para los datos del día a día: OT, pedidos,
-solicitudes de OC y documentos de proveedores. Se apoyan en los datos maestros (activos,
-recursos, materiales) y en los catálogos. Cada fase empieza revisando este diseño con el
-usuario.
+Tercera sección del menú, **Operaciones**, para los datos del día a día. Se apoyan en los
+datos maestros (activos, recursos, materiales) y en los catálogos.
 
-### Fase 10: órdenes de trabajo (OT)
+El diseño se acordó con el usuario y reemplaza el diseño inicial que estaba acá:
 
-```
-OT (activo, tipo, prioridad, estado, fechas, solicitante)
- └── operaciones (descripción, orden, estado, horas estimadas / reales)
-      ├── recursos asignados   (recurso: empleado o proveedor; horas, costo)
-      └── materiales usados    (material, cantidad; descuenta stock de una ubicación)
-```
+- [`vision_conceptual.md`](vision_conceptual.md): qué es el sistema, los circuitos de
+  pedidos y solicitudes de trabajo, la conformidad, la imputación contable, la
+  convivencia con el ERP (EAM hoy, SAP después) y los estados.
+- [`diseno_tablas_operativas.md`](diseno_tablas_operativas.md): tablas, columnas, dueño
+  de cada dato (ERP o app) y reglas de importación del histórico y de los reportes del ERP.
+- [`prompt_copilot_equivalencias.md`](prompt_copilot_equivalencias.md): prompt para que
+  Copilot proponga equivalencias (activos, modelos, materiales) que el importador no
+  resuelve con reglas.
 
-- Los recursos se eligen de la tabla común `recursos`. Se le agrega un `nombre_recurso`
-  **calculado** (nombre completo o razón social, no guardado dos veces), y el selector
-  muestra «Ana Pérez (Interno)» / «Repuestos SA (Externo)», con filtro Interno/Externo.
-- A definir: estados y transiciones de la OT, si el consumo de materiales mueve el stock
-  (y cómo se registran los movimientos), y la relación con medidores (OT preventiva por
-  horas de uso).
+Cambios principales respecto del diseño inicial:
 
-### Fase 11: pedidos y solicitudes de orden de compra (OC)
-
-- Pedidos (hoy hay un modelo `Pedido`/`PedidoDetalle` y rutas sin registrar, a revisar):
-  quién pide qué materiales, para qué activo u OT.
-- Solicitud de OC: agrupa materiales a comprar; es lo que se cotiza a los proveedores.
-- A definir: estados, aprobaciones y si un pedido genera la solicitud de OC.
-
-### Fase 12: documentos de proveedores
-
-Carga (y más adelante procesamiento automático) de presupuestos, remitos y facturas.
-
-```
-documentos_proveedor          (cabecera)
-  proveedor, tipo (presupuesto / remito / factura), número, fecha, moneda,
-  total, archivo (PDF), solicitud de OC relacionada (opcional), estado
- └── documento_proveedor_detalle   (ítems)
-       material (FK, opcional al cargar), descripción y código del proveedor,
-       cantidad, unidad, precio unitario, descuento, subtotal
-```
-
-Objetivos:
-
-1. **Ofertas comerciales por pedido**: los presupuestos de cada solicitud de OC, para
-   comparar proveedores.
-2. **Lista de precios de materiales**: se propone **calcularla** a partir de los ítems
-   (último precio por material y proveedor, con fecha y documento de origen) en lugar de
-   mantener otra tabla a mano; así cada precio tiene respaldo.
-
-A definir:
-
-- **Equivalencias de códigos**: tabla `material_proveedor` (material, proveedor, código
-  y descripción del proveedor) para que los ítems de un documento se asocien solos al
-  material, y los que no coinciden queden «a revisar».
-- **Procesamiento automático**: extraer cabecera e ítems del PDF (con un modelo de IA),
-  mostrarlos para revisión y recién entonces guardar. El framework ya permite adjuntar
-  PDF y tiene cabecera/detalle como entidad y subentidad.
-- Monedas y tipo de cambio; si el remito actualiza el stock al recibir.
+- **Orden:** primero pedidos, documentos de proveedores, solicitudes internas y OC (es lo
+  que reemplaza los Excel); las OT van después.
+- Lo que se cotiza es el **pedido**; la solicitud de OC viene después de adjudicar una
+  oferta, y su cabecera nace en el ERP y se importa.
+- Las cabeceras de OT, solicitudes internas y OC son del ERP: se importan (adaptador por
+  fuente) y la app completa lo que el ERP no registra.
+- Cada fase empieza revisando el diseño con el usuario.
 
 ## Arquitectura objetivo
 
@@ -515,9 +480,9 @@ La API generada usa `GET/POST {url}` y `PUT/PATCH/DELETE {url}/{id}`.
 | **7. Migrar el resto** | Tras revisar su diseño: activos, medidores, lecturas, insumos, stock, unidades, marcas, modelos, recursos, BOM. Ver «Notas de la Fase 7». | ✅ Hecha |
 | **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. Ver «Notas de la Fase 8». | ✅ Hecha |
 | **9. Planes preventivos** | Planes por categoría de activo (período por uso y/o por tiempo, plan que incluye a otro), tareas, materiales por modelo; categoría en el modelo y tipo de medidor. Ver «Fase 9: planes preventivos». | ✅ Hecha |
-| **10. Órdenes de trabajo** | OT → operaciones → recursos y materiales. Incluye cuándo le toca un plan a cada activo. Ver «Fases operativas». | Pendiente |
-| **11. Pedidos y solicitudes de OC** | Qué se pide, para qué activo u OT, y qué se cotiza a proveedores. | Pendiente |
-| **12. Documentos de proveedores** | Presupuestos, remitos y facturas (cabecera + ítems): ofertas por solicitud de OC y lista de precios de materiales. Procesamiento automático de PDF a definir. | Pendiente |
+| **10. Pedidos y documentos de proveedores** | Pedidos con líneas y destinos (imputación), ofertas y presupuestos (cabecera + líneas), adjudicación por cantidad, recepciones (conformidad). Importación del Excel histórico de pedidos. Ver «Fases operativas». | Pendiente |
+| **11. Solicitudes internas y OC** | Importación de los TSV de EAM (cabeceras, líneas, distribuciones) y de las OC; vínculo con los documentos adjudicados; distribución propuesta; detalle para Administración; conciliación por nº de OC. | Pendiente |
+| **12. Órdenes de trabajo** | Cabecera importada del ERP; la app agrega operaciones, recursos y materiales (previsto y utilizado). Incluye cuándo le toca un plan a cada activo. | Pendiente |
 | **13. Sincronización con SharePoint** | Opción A: exportar periódicamente de la app a SharePoint, más copias de seguridad automáticas de la base. Al final, escribir en SharePoint directo (Microsoft Graph) en lugar de pasar por CSV. | Pendiente |
 
 ## Cómo agregar o modificar una entidad
