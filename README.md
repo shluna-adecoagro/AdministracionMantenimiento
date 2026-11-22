@@ -38,6 +38,10 @@ lo que no se puede deducir del modelo (textos, columnas del listado, subentidade
 - **Cómo agregar o modificar una entidad**: [`docs/agregar_entidad.md`](docs/agregar_entidad.md)
   (modelo, migración, override y pruebas, con un ejemplo completo).
 - Diseño del framework, decisiones tomadas y fases: [`docs/plan_refactor_crud.md`](docs/plan_refactor_crud.md).
+La visión del sistema y el diseño de la parte operativa (pedidos, documentos de
+proveedores, solicitudes internas, OC y OT) están en
+[`docs/vision_conceptual.md`](docs/vision_conceptual.md) y
+[`docs/diseno_tablas_operativas.md`](docs/diseno_tablas_operativas.md).
 
 ### Estructura
 
