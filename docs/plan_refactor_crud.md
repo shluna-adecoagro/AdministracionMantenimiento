@@ -619,6 +619,75 @@ son independientes entre sí; los demás van en orden.
 - `openpyxl` en `requirements.txt` y `environment.yml`.
 - Tests: `tests/test_pedidos_historicos.py`.
 
+### Fase 11: división en PR (propuesta 23/11, a confirmar)
+
+Primero lo que no depende de archivos externos; los adaptadores, a medida que lleguen los
+ejemplos anonimizados. El reporte de OC de Oracle y el Excel histórico de solicitudes, al
+final. Cada PR empieza resolviendo sus dudas (abajo).
+
+| PR | Cubre | Depende de |
+|---|---|---|
+| **11.1 Solicitudes de trabajo** | `solicitudes_trabajo` (TRA-AAAA-NNNN) y `documentos_proveedor.solicitud_trabajo_id`. Estado guardado y visible calculado, validación del jefe de taller, anulación con motivo, sugerencia de sector imputado y cuenta, «a revisar». Acción «Crear solicitud regularizada» desde un presupuesto sin solicitud. Importe adjudicado de un presupuesto | Nada externo |
+| **11.2 Solicitudes internas: TSV de EAM** | `solicitudes_oc`, `solicitud_oc_lineas` y `solicitud_oc_distribuciones`, con las columnas del ERP de solo importación. Adaptador de los tres TSV (cabeceras, líneas, distribuciones) → formato interno común → servicio de importación (idempotente por sistema + número; todo o nada; `--simular`). Identificación de proveedor, cuenta y sector (centro de costo de un solo sector) | Ejemplos de los TSV |
+| **11.3 Solicitudes internas: circuito en la app** | Vínculo línea ↔ documento (un documento, una sola línea activa) y control importe del ERP contra adjudicado. Solicitud propuesta y distribución propuesta (calculadas) y comparación con la importada. Solicitudes que nacen en la app (`SOL-AAAA-NNNN`). Detalle para Administración con los documentos adjuntos. La solicitud de trabajo pasa a «con solicitud de OC» y «cerrada» | 11.1 y 11.2 |
+| **11.4 OC desde PDF** | `ordenes_compra` y `orden_compra_lineas`. Adaptador de los bloques C y D de `prompt_copilot_documentos.md` (revisado, no se reimporta lo revisado). Presupuesto citado → documento sugerido. Cumplimiento de entrega (fecha comprometida contra recepciones) | PDF de ejemplo (independiente de 11.2 y 11.3) |
+| **11.5 Conciliación por nº de OC** | OC sin pedido ni solicitud, pedidos o solicitudes con una OC que no existe, diferencias entre adjudicado, solicitado y ordenado. Moneda de las ofertas históricas desde la OC. Propuestas de OC para las líneas históricas sin OC (las 111 de hojas con varias OC), que el gestor acepta | 11.2 a 11.4 |
+| **11.6 Reporte de OC de Oracle y Excel histórico de solicitudes** | Un adaptador por fuente, sobre los servicios de 11.2 y 11.4; se vuelve a correr la conciliación | Esos archivos |
+
+#### Dudas de la fase 11 (23/11)
+
+Solicitudes de trabajo (11.1):
+
+1. **Estado guardado y calculado**, como en las líneas de pedido: guardar registrada /
+   validada / observada / anulada; calcular «presupuesto recibido» (tiene un presupuesto
+   vinculado), «con solicitud de OC» (su presupuesto está en una línea de solicitud) y
+   «cerrada» (esa línea tiene nº de OC). El diseño lo tiene como una sola opción guardada.
+2. **Presupuestos por solicitud:** con la FK en el documento, una solicitud admite varios
+   presupuestos (uno observado y su reemplazo) y un presupuesto, una sola solicitud. ¿Un
+   presupuesto puede cubrir varios trabajos (varios avisos)?
+3. **Solo presupuestos de trabajo** se vinculan a una solicitud, y del mismo proveedor que
+   el contratista llamado (si no coincide, se rechaza o se avisa).
+4. **Regularizada:** al crearla desde el presupuesto, ¿qué fecha de aviso lleva? La del
+   presupuesto falsea los tiempos de respuesta; propuesta: vacía y obligatoria solo en las
+   no regularizadas.
+5. **Trabajos sin activo** (instalaciones): sin activo no hay de dónde sugerir sector ni
+   cuenta. Propuesta: `ubicacion_id` opcional (sugiere el sector) y, si no hay, «a revisar».
+6. **Anulación con motivo** de tipo «Anulación» (falta la columna en el diseño), como en los
+   pedidos.
+7. **Importe adjudicado de un presupuesto:** su total sin IVA (las líneas de la solicitud de
+   EAM, ¿van sin IVA?). Hoy el «total adjudicado» del documento solo suma adjudicaciones de
+   ofertas.
+
+Solicitudes internas (11.2 y 11.3):
+
+8. **Estado de la solicitud calculado:** todo se puede deducir (nº del ERP → cargada;
+   `fecha_envio_administracion` → enviada; todas las líneas con OC → OC emitida); solo
+   «anulada» se guardaría (con motivo, o «Cancelado» del ERP). El diseño lo guarda.
+9. **`importe_adjudicado` copiado** contradice «recalcular, nunca incrementar» y queda viejo
+   si cambia la adjudicación. Propuesta: calculado desde el documento vinculado, con la
+   diferencia contra el importe del ERP (en la divisa del documento si es USD).
+10. **`pedido_id` en la cabecera:** una solicitud puede cubrir varios pedidos y el vínculo
+    real sale de línea → documento → adjudicaciones. Propuesta: guardar solo el pedido
+    citado en la descripción como sugerencia, o quitarlo.
+11. **`sistema` «Excel histórico»:** las convenciones dicen EAM / SAP / app. Se decide al
+    ver el Excel (11.6): ¿esas solicitudes se cargaban también en EAM?
+12. Confirmar: ¿una OC puede reunir líneas de varias solicitudes del mismo proveedor?
+    (abierto en el diseño).
+
+OC y conciliación (11.4 y 11.5):
+
+13. **Dirección, localidad y contacto** del proveedor: el prompt de Copilot ya los extrae.
+    ¿Se guardan en la OC?
+14. **PDF y reporte de la misma OC:** cuando llegue el reporte, ¿actualiza una OC leída del
+    PDF y ya revisada? Propuesta: el reporte manda en los datos, el PDF queda como archivo.
+15. **Propuestas para las 111 líneas sin OC:** se proponen, no se escriben solas; el
+    gestor las acepta. Hoy **reimportar el Excel borra el nº de OC** que se cargue en la app
+    (solo se protege el material): hay que protegerlo antes de aceptar propuestas.
+16. **Anonimización consistente:** `herramientas/anonimizar.py` no reutiliza los alias de
+    una corrida anterior; para cruzar proveedores entre el Excel ya anonimizado y los TSV,
+    o se anonimiza todo junto o se agrega una opción para partir de
+    `equivalencias_NO_COMPARTIR.csv`.
+
 ## Arquitectura objetivo
 
 ```
@@ -667,7 +736,7 @@ La API generada usa `GET/POST {url}` y `PUT/PATCH/DELETE {url}/{id}`.
 | **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. Ver «Notas de la Fase 8». | ✅ Hecha |
 | **9. Planes preventivos** | Planes por categoría de activo (período por uso y/o por tiempo, plan que incluye a otro), tareas, materiales por modelo; categoría en el modelo y tipo de medidor. Ver «Fase 9: planes preventivos». | ✅ Hecha |
 | **10. Pedidos y documentos de proveedores** | Pedidos con líneas y destinos (imputación), ofertas y presupuestos (cabecera + líneas), adjudicación por cantidad, recepciones (conformidad). Importación del Excel histórico de pedidos. Ver «Fases operativas». | ✅ Hecha |
-| **11. Solicitudes de trabajo, solicitudes internas y OC** | Solicitudes de trabajo (avisos de los mecánicos para llamar a un contratista) y su vínculo con los presupuestos (`documentos_proveedor.solicitud_trabajo_id`). Importación de los TSV de EAM (cabeceras, líneas, distribuciones) y de las OC; vínculo con los documentos adjudicados; distribución propuesta; detalle para Administración; conciliación por nº de OC. | Pendiente |
+| **11. Solicitudes de trabajo, solicitudes internas y OC** | Solicitudes de trabajo (avisos de los mecánicos para llamar a un contratista) y su vínculo con los presupuestos (`documentos_proveedor.solicitud_trabajo_id`). Importación de los TSV de EAM (cabeceras, líneas, distribuciones) y de las OC; vínculo con los documentos adjudicados; distribución propuesta; detalle para Administración; conciliación por nº de OC. Ver «Fase 11: división en PR». | En diseño |
 | **12. Órdenes de trabajo** | Cabecera importada del ERP; la app agrega operaciones, recursos y materiales (previsto y utilizado). Incluye cuándo le toca un plan a cada activo. | Pendiente |
 | **13. Sincronización con SharePoint** | Opción A: exportar periódicamente de la app a SharePoint, más copias de seguridad automáticas de la base. Al final, escribir en SharePoint directo (Microsoft Graph) en lugar de pasar por CSV. | Pendiente |
 
