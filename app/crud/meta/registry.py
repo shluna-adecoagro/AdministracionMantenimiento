@@ -61,6 +61,9 @@ CLAVES_ENTIDAD = frozenset({
     "tabs_extra",         # [{"id", "label", "funcion"}] pestañas calculadas en el detalle
     "acciones",           # [{"id", "label", "funcion", "seccion"...}] botones del detalle
     "al_guardar",         # función(registro, operacion, cambiados) tras guardar
+    "completar",          # función(datos, registro) -> datos, antes de guardar
+    "campos_alta",        # {campo: {...}} campos que solo se piden al crear (no son columnas)
+    "orden_campos",       # [campo, ...] primeros campos del formulario, en ese orden
     "clave_natural",      # [campo, ...] identifica el registro al importar (ej: nombre)
 })
 
@@ -129,7 +132,7 @@ def _dependencias(campos: dict, overrides_campos: dict, pref: str, errores: list
     """
     resultado = dict(campos)
     for c, f in campos.items():
-        if f.tipo != "fk" or f.fk_model is None:
+        if f.tipo != "fk" or f.fk_model is None or f.solo_alta:
             continue
         cfg = overrides_campos.get(c, {})
         declarado = "depende_de" in cfg
@@ -142,7 +145,7 @@ def _dependencias(campos: dict, overrides_campos: dict, pref: str, errores: list
             pedidos = [pedidos] if isinstance(pedidos, str) else list(pedidos)
         candidatos = {}
         for otro, g in campos.items():
-            if otro == c or g.tipo != "fk" or g.fk_model is None:
+            if otro == c or g.tipo != "fk" or g.fk_model is None or g.solo_alta:
                 continue
             columnas = columnas_hacia(f.fk_model, g.fk_model)
             if len(columnas) == 1:
@@ -248,6 +251,8 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
                 errores.append(f"{pref} fields.{c}: numeracion '{f.numeracion}' {e}")
             if f.tipo not in ("text", "number"):
                 errores.append(f"{pref} fields.{c}: numeracion solo aplica a un campo de texto o número")
+        if f.numeracion_por and (not f.numeracion or f.numeracion_por not in inferidos):
+            errores.append(f"{pref} fields.{c}: numeracion_por necesita numeracion y un campo de la entidad")
         if f.solo_importacion and f.solo_lectura:
             errores.append(f"{pref} fields.{c}: un campo calculado no puede ser también de solo importación")
         if f.tipo == "select" and not f.options:
@@ -256,21 +261,52 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
             errores.append(f"{pref} fields.{c}: tipo 'datalist' sin 'options' ni 'fk_model'")
         campos[c] = f
 
+    # --- campos de alta (no son columnas: los usa al_guardar) ---------------
+    for c, cfg in (ov.get("campos_alta") or {}).items():
+        if c in campos:
+            errores.append(f"{pref} campos_alta: '{c}' ya es un campo de {model.__name__}")
+            continue
+        desconocidas = sorted(set(cfg) - FieldSpec.claves_override())
+        for k in desconocidas:
+            errores.append(f"{pref} campos_alta.{c}: clave desconocida '{k}'.{_sugerir(k, FieldSpec.claves_override())}")
+        datos = {k: v for k, v in cfg.items() if k in FieldSpec.claves_override()}
+        datos.setdefault("label", c.replace("_", " ").capitalize())
+        datos.setdefault("tipo", "text")
+        if "options" in datos:
+            datos["options"] = tuple(dict(o) for o in datos["options"])
+        if datos["tipo"] == "fk" and datos.get("fk_model") is not None:
+            datos.setdefault("fk_label", getattr(datos["fk_model"], "__label_field__", None))
+        if datos["tipo"] not in {"text", "number", "select", "fk", "date"}:
+            errores.append(f"{pref} campos_alta.{c}: tipo '{datos['tipo']}' no admitido en un campo de alta")
+        if datos["tipo"] == "fk" and datos.get("fk_model") is None:
+            errores.append(f"{pref} campos_alta.{c}: tipo 'fk' sin 'fk_model'")
+        campos[c] = FieldSpec(name=c, solo_alta=True, **datos)
+
+    # --- orden del formulario ---------------------------------------------
+    primeros = list(ov.get("orden_campos") or [])
+    for c in primeros:
+        if c not in campos:
+            errores.append(f"{pref} orden_campos: '{c}' no es un campo de la entidad.{_sugerir(c, campos)}")
+    primeros = [c for c in primeros if c in campos]
+    campos = {**{c: campos[c] for c in primeros}, **{c: f for c, f in campos.items() if c not in primeros}}
+
     # --- selects dependientes (ej: modelo según la marca) -----------------
     campos = _dependencias(campos, overrides_campos, pref, errores)
     campos = _filtros_antes_de_su_hijo(campos)
 
     # --- listado y filtros ----------------------------------------------
     listado = tuple(ov.get("listado") or [
-        c for c, f in campos.items() if f.tipo in _TIPOS_LISTADO and not f.oculto
+        c for c, f in campos.items() if f.tipo in _TIPOS_LISTADO and not f.oculto and not f.solo_alta
     ])
     filtros = tuple(ov.get("filtros") or [
         c for c, f in campos.items()
-        if f.tipo in _TIPOS_FILTRO and not f.oculto and not f.solo_lectura
+        if f.tipo in _TIPOS_FILTRO and not f.oculto and not f.solo_lectura and not f.solo_alta
     ])
     for clave, lista in (("listado", listado), ("filtros", filtros)):
         for c in lista:
-            if c not in campos:
+            if c in campos and campos[c].solo_alta:
+                errores.append(f"{pref} {clave}: '{c}' es un campo de alta (no se guarda)")
+            elif c not in campos:
                 errores.append(f"{pref} {clave}: '{c}' no es un campo de la entidad.{_sugerir(c, campos)}")
 
     # --- padres (se validan contra el resto del registry más adelante) ---
@@ -311,6 +347,9 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
     al_guardar = ov.get("al_guardar")
     if al_guardar is not None and not callable(al_guardar):
         errores.append(f"{pref} al_guardar debe ser una función")
+    completar = ov.get("completar")
+    if completar is not None and not callable(completar):
+        errores.append(f"{pref} completar debe ser una función")
 
     # --- clave natural ---------------------------------------------------
     # Por defecto, la clave de origen de lo importado (OrigenMixin), si la hay.
@@ -349,6 +388,7 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
         tabs_extra=tuple(tabs),
         acciones=tuple(acciones),
         al_guardar=al_guardar,
+        completar=completar,
         clave_natural=clave_natural,
     )
     return spec, errores

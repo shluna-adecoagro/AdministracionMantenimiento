@@ -20,7 +20,7 @@ ARCHIVOS
 - pendientes.csv: textos a resolver. Columnas: id, tipo (destino o material), texto, contexto, veces.
 - activos.csv: activos de la empresa (número de activo, descripción, categoría, tipo, marca, modelo, número de serie, número de motor, sector, ubicación, entre otras).
 - materiales.csv: materiales. Columnas: «Código (número de parte)», «Descripción», «Código ERP», «Es genérico», «Genérico», «Marca», «Categoría», «Tipo», «Contenido por envase», «Unidad de medida». Un material con «Es genérico» = Sí agrupa sus presentaciones (por ejemplo, «Aceite 15W-40», código GEN-ACEITE-15W40); cada presentación es la fila que tiene ese genérico en la columna «Genérico» (por ejemplo, el bidón de 20 L: «Contenido por envase» 20, «Unidad de medida» Litros).
-- bom_modelos.csv: columnas «Material» (la descripción del material) y «Modelo». Dice qué materiales lleva cada modelo.
+- bom_modelos.csv: columnas «Material» («código — descripción», por ejemplo «RE504836 — Filtro de aceite») y «Modelo». Dice qué materiales lleva cada modelo.
 
 QUÉ HACER CON CADA FILA DE pendientes.csv
 
@@ -33,7 +33,7 @@ Si tipo = destino (el texto dice para qué equipo o lugar es la compra):
 
 Si tipo = material (el texto es el producto pedido):
 1. Normalizá el código: sin espacios, puntos ni guiones, sin distinguir mayúsculas, conservando los ceros iniciales. Buscalo en «Código (número de parte)» y en «Código ERP» de materiales.csv.
-2. Si el texto es una descripción sin código, buscá por descripción, y usá el contexto (equipo o modelo) para elegir entre candidatos con bom_modelos.csv (los materiales que lleva ese modelo). Como bom_modelos.csv nombra el material por su descripción, si hay varios materiales con la misma descripción la confianza es baja.
+2. Si el texto es una descripción sin código, buscá por descripción, y usá el contexto (equipo o modelo) para elegir entre candidatos con bom_modelos.csv (los materiales que lleva ese modelo; el código está antes del « — »).
 3. Para fluidos (aceites, refrigerantes): si el texto dice el envase (por ejemplo "bidón 20 L" o "tambor 205 L"), proponé esa presentación (la fila cuyo «Genérico» es el fluido y con ese «Contenido por envase»). Si no lo dice, proponé el genérico (la fila con «Es genérico» = Sí, código que empieza con "GEN-"): una línea de pedido puede pedir el genérico y la presentación se define al comprar.
 4. Si no existe en el maestro, el resultado es "material_nuevo": proponé una descripción en español con lo que dice el texto (sin agregar medidas ni especificaciones que no estén escritas), y una categoria, un tipo_material y una unidad_medida elegidos SOLO entre los valores que ya existen en las columnas «Categoría», «Tipo» y «Unidad de medida» de materiales.csv. Si ninguno encaja, poné "A definir".
 

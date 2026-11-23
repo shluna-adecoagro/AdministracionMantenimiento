@@ -29,7 +29,8 @@
             {# Un campo de solo lectura del que depende otro (ej: tipo de activo → categoría)
                se muestra como filtro: sin name, así no se envía ni se guarda. #}
             {% set es_filtro = campo in campos_filtro %}
-            {% if not cfg.get("virtual") and (not cfg.get("solo_lectura") or es_filtro) %}
+            {% if not cfg.get("virtual") and (not cfg.get("solo_lectura") or es_filtro)
+                  and not (cfg.solo_alta and tipo_operacion != "INSERT") %}
 
                 <div class="form-group {% if errores and errores.get(campo) %}form-group--error{% endif %}">
                     <label for="{{ campo }}">{{ cfg.label }}</label>

@@ -82,7 +82,11 @@ class StockMaterial(db.Model, ModelMixin, AuditMixin):
 
 class Material(db.Model, ModelMixin, AuditMixin):
     __tablename__ = "materiales"
-    __label_field__ = "descripcion"
+    # Se muestra como «RE504836 — Filtro de aceite» (las descripciones se repiten).
+    __label_field__ = "etiqueta"
+    # Al importar, una FK a un material se reconoce también por el código o por la
+    # descripción (si no se repite).
+    __buscar_por__ = ("codigo", "descripcion")
 
     material_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     uuid = db.Column(db.String(36), default=lambda: str(uuid.uuid4()), unique=True)
@@ -152,6 +156,9 @@ class Material(db.Model, ModelMixin, AuditMixin):
 
     # Foto del material
     foto = db.Column(db.String(300), nullable=True)
+
+    # Cómo se muestra en selects, listados y exportaciones.
+    etiqueta = column_property(codigo + " — " + descripcion, info={"label": "Material"})
 
     # Suma del stock en todas las ubicaciones (se calcula en la consulta).
     stock_total = column_property(

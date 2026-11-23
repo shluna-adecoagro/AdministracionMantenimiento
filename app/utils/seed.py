@@ -64,6 +64,15 @@ def seed_data():
         )
         print("✔ Motivos de operación precargados.")
 
+    # Motivos de anulación de líneas de pedido (fase 10). Aparte, para que se
+    # agreguen también a una base que ya tenía los demás motivos.
+    if MotivoOperacion.query.filter_by(tipo_operacion="ANULACION").count() == 0:
+        db.session.add_all([
+            MotivoOperacion(nombre_motivo=m, tipo_operacion="ANULACION")
+            for m in ("Ya no hace falta", "Pedido duplicado", "Se resolvió de otra forma")
+        ])
+        print("✔ Motivos de anulación precargados.")
+
     # ============================================================
     # ESTADOS DE CUENTA
     # ============================================================

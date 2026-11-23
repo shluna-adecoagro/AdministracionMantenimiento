@@ -2,7 +2,7 @@
 
 from app.models.auditoria_models import AuditLog
 from app.core.db import db
-from datetime import datetime
+from datetime import date, datetime
 
 
 IGNORAR_CAMPOS_GLOBALES = {
@@ -19,7 +19,7 @@ def clean_dict(data, ignore_fields=None):
 
     """
     Limpia el dict antes de guardarlo en auditoría:
-    - elimina campos datetime (no serializables)
+    - elimina campos datetime (no serializables) y pasa las fechas (date) a texto ISO
     - elimina campos globales que no deben auditarse
     """
     if data is None:
@@ -40,6 +40,10 @@ def clean_dict(data, ignore_fields=None):
         # Ignorar datetime (no serializable)
         if isinstance(v, datetime):
             continue
+
+        # Una fecha sin hora (ej: fecha del pedido) sí se audita, como texto ISO.
+        if isinstance(v, date):
+            v = v.isoformat()
 
         limpio[k] = v
 

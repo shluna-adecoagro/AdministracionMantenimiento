@@ -66,8 +66,13 @@ def _esquema_columna(columna) -> dict:
 
 def esquema_campo(spec: EntitySpec, campo: str) -> dict:
     f = spec.fields[campo]
-    columna = sa_inspect(spec.model).columns[campo]
-    esquema = {"title": f.label, **_esquema_columna(columna)}
+    columna = sa_inspect(spec.model).columns.get(campo)
+    if columna is not None:
+        esquema = {"title": f.label, **_esquema_columna(columna)}
+    else:
+        # Sin columna: un campo de alta o un calculado en Python.
+        tipo = {"number": "number", "fk": "integer"}.get(f.tipo, "string")
+        esquema = {"title": f.label, "type": tipo}
 
     if f.tipo == "fk":
         esquema["minimum"] = 1
@@ -98,6 +103,11 @@ def campos_api(spec: EntitySpec) -> list[str]:
             if f.tipo != "file" and not f.solo_lectura and not f.solo_importacion]
 
 
+def campos_entrada(spec: EntitySpec, modo: str) -> list[str]:
+    """Campos que acepta la API en un alta o una modificación (los de alta, solo al crear)."""
+    return [c for c in campos_api(spec) if modo != "modificar" or not spec.fields[c].solo_alta]
+
+
 # ---------------------------------------------------------------------------
 # Esquemas de la entidad
 # ---------------------------------------------------------------------------
@@ -107,7 +117,7 @@ def esquema_entrada(spec: EntitySpec, modo: str) -> dict:
         raise ValueError(f"modo inválido: {modo}")
 
     propiedades, requeridos = {}, []
-    for campo in campos_api(spec):
+    for campo in campos_entrada(spec, modo):
         f = spec.fields[campo]
         esquema = esquema_campo(spec, campo)
         if f.required and modo != "modificar":
@@ -140,6 +150,8 @@ def esquema_registro(spec: EntitySpec) -> dict:
         propiedades["uuid"] = {"type": "string", "format": "uuid", "readOnly": True}
 
     for campo, f in spec.fields.items():
+        if f.solo_alta:
+            continue  # solo existe en el alta; no es un dato del registro
         esquema = esquema_campo(spec, campo)
         if f.tipo == "file":
             esquema = {"title": f.label, "type": "string", "description": "Ruta pública del archivo"}
@@ -217,6 +229,8 @@ def validar(spec: EntitySpec, datos, modo: str) -> None:
             f = spec.fields.get(campo)
             if f is not None and f.solo_importacion:
                 errores[campo] = f"{f.label}: lo carga la importación; no se modifica por la API."
+            elif f is not None and f.solo_alta:
+                errores[campo] = f"{f.label}: solo se usa al crear el registro."
             elif f is not None and f.solo_lectura:
                 errores[campo] = f"{f.label}: es un dato calculado; no se envía."
             else:

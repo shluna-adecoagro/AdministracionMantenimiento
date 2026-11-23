@@ -103,6 +103,8 @@ OVERRIDES = {
                     {"value": "INSERT", "label": "Alta"},
                     {"value": "UPDATE", "label": "Modificación"},
                     {"value": "DELETE", "label": "Baja"},
+                    # Para anular o cancelar una línea de pedido (no es un motivo de auditoría).
+                    {"value": "ANULACION", "label": "Anulación"},
                 ],
             },
         },

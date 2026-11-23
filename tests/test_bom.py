@@ -205,9 +205,9 @@ def _pestanas(client, url):
 
 def test_pestanas_segun_el_padre(client, categorias_activo, plantilla):
     client.post("/activos/crear", data=_datos(categorias_activo, modelo_id=plantilla["modelo"].modelo_id))
-    assert _pestanas(client, f"/activos/{_activo().activo_id}") == ["Datos", "Historial", "Medidores", "BOM"]
+    assert _pestanas(client, f"/activos/{_activo().activo_id}") == ["Datos", "Historial", "Medidores", "BOM", "Pedidos"]
     assert _pestanas(client, f"/materiales/{plantilla['aceite'].material_id}") == [
-        "Datos", "Historial", "Usado en modelos", "Usado en activos", "Stock por ubicación", "Usado en planes"]
+        "Datos", "Historial", "Usado en modelos", "Usado en activos", "Stock por ubicación", "Pedidos", "Usado en planes"]
     assert _pestanas(client, f"/modelos/{plantilla['modelo'].modelo_id}") == [
         "Datos", "Historial", "BOM", "Planes preventivos"]
 

@@ -322,9 +322,16 @@ def inferir_entidad(model) -> dict:
 
         campos[key] = _inferir_campo(key, col, mapper)
 
+    # Calculados en Python: propiedades declaradas en __calculados__ = {nombre: etiqueta}.
+    for nombre, etiqueta in (getattr(model, "__calculados__", None) or {}).items():
+        campos[nombre] = {"label": etiqueta, "tipo": "text", "required": False,
+                          "solo_lectura": True, "calculado_python": True}
+
     # Orden: primero las columnas propias, después las heredadas (ej: el estado
     # de un empleado, que está en "recursos") y al final los valores calculados.
     def _orden(key):
+        if campos[key].get("calculado_python"):
+            return 3
         if campos[key].get("solo_lectura") and es_calculado(mapper.attrs[key]):
             return 2
         return 0 if mapper.attrs[key].columns[0].table is mapper.local_table else 1

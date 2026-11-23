@@ -116,7 +116,8 @@ class ServicioCRUD:
     """
 
     def __init__(self, model, fields: dict, auditoria: dict | None = None,
-                 etiqueta_tabla=None, confirmar: bool = True, al_guardar=None):
+                 etiqueta_tabla=None, confirmar: bool = True, al_guardar=None,
+                 completar=None):
         self.model = model
         self.fields = fields
         self.auditoria = auditoria or {"enabled": False}
@@ -124,6 +125,7 @@ class ServicioCRUD:
         self.etiqueta_tabla = etiqueta_tabla or _etiqueta_por_defecto
         self.confirmar = confirmar
         self.al_guardar = al_guardar
+        self.completar = completar
 
     # ------------------------------------------------------------------
     def completar_dependencias(self, datos: dict, registro=None) -> dict:
@@ -192,25 +194,42 @@ class ServicioCRUD:
             raise ErroresValidacion(errores)
 
     # ------------------------------------------------------------------
+    def _separar_alta(self, datos: dict) -> tuple[dict, dict]:
+        """(datos del registro, datos de los campos de alta)."""
+        alta = {c: datos[c] for c, cfg in self.fields.items() if cfg.get("solo_alta") and c in datos}
+        return {c: v for c, v in datos.items() if c not in alta}, alta
+
     def crear(self, datos: dict, motivo: str | None = None, usuario: str = "sistema"):
+        datos, alta = self._separar_alta(datos)
         datos = self.completar_dependencias(datos)
+        if self.completar is not None:
+            datos = self.completar(dict(datos), None)
         self.verificar_opciones(datos)
-        # Numeración automática: el campo vacío toma el siguiente número de su serie.
+        # Numeración automática: el campo vacío toma el siguiente número de su serie
+        # (dentro de cada valor de numeracion_por, si lo tiene).
         for campo, cfg in self.fields.items():
             if cfg.get("numeracion") and datos.get(campo) in (None, ""):
-                datos[campo] = numeracion.siguiente(self.model, campo, cfg["numeracion"])
+                por = cfg.get("numeracion_por")
+                datos[campo] = numeracion.siguiente(
+                    self.model, campo, cfg["numeracion"],
+                    filtro={por: datos.get(por)} if por else None,
+                )
         # Un campo no obligatorio que no se envió toma el valor por defecto de
         # su columna (ej: «Vigente» = Sí), en vez de quedar vacío.
         columnas = sa_inspect(self.model).columns
         datos = {c: v for c, v in datos.items()
                  if not (v is None and c in columnas and columnas[c].default is not None)}
         registro = self.model(**datos)
+        registro.datos_alta = alta  # para al_guardar (ej: el primer destino de una línea)
         db.session.add(registro)
         self._confirmar("INSERT", registro, None, motivo, usuario, cambiados=set(datos))
         return registro
 
     def actualizar(self, registro, datos: dict, motivo: str | None = None, usuario: str = "sistema"):
+        datos, _ = self._separar_alta(datos)  # los campos de alta no existen al modificar
         datos = self.completar_dependencias(datos, registro)
+        if self.completar is not None:
+            datos = self.completar(dict(datos), registro)
         self.verificar_opciones(datos)
         anterior = self._estado(registro)
         cambiados = {c for c, v in datos.items() if getattr(registro, c) != v}

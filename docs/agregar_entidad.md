@@ -94,7 +94,14 @@ nullable=False, default=True)`) aparece preseleccionado en el alta y, si el camp
 obligatorio (`"required": False` en el override), se usa cuando no se envía (API, CSV).
 
 **Campos calculados.** Un `column_property` del modelo (ej: `Material.stock_total`) se
-muestra en listado, detalle y API, pero no se edita. Si trae una FK (ej:
+muestra en listado, detalle y API, pero no se edita. Si el cálculo es más fácil en Python,
+se escribe una propiedad y se declara en `__calculados__ = {"resumen": "Resumen"}` (ej:
+`Pedido.resumen`): se ve en listado, detalle, API y exportación, pero no sirve de filtro.
+
+**Búsqueda al importar.** Una FK se busca por la etiqueta del destino (`__label_field__`)
+y, si el modelo declara `__buscar_por__` (ej: `Material`: código y descripción), también
+por esos atributos. Un texto que coincide con varios registros es ambiguo.
+ Si trae una FK (ej:
 `Activo.tipo_activo_id`, el tipo de la categoría), además funciona como filtro en el
 formulario.
 
@@ -179,6 +186,9 @@ Lo mínimo es `{"model": MiModelo}`. Claves disponibles:
 | `tabs_extra` | pestañas con una tabla de solo lectura calculada por una función `funcion(registro) → {"columnas", "filas"}` | — |
 | `al_guardar` | función `(registro, operacion, cambiados)` que corre al crear o modificar, en la misma transacción (web, API e importación). Puede devolver un aviso para el usuario, o rechazar el cambio con `raise ErroresValidacion({campo: mensaje})` (no se guarda nada) | copia del BOM del modelo al activo, `overrides/bom.py`; reglas de los planes, `overrides/preventivos.py` |
 | `acciones` | botones del detalle que ejecutan una función sobre el registro (`id`, `label`, `funcion`, `seccion`, `confirmar`, `visible`) | «Traer ítems del modelo» en `overrides/bom.py` |
+| `completar` | función `(datos, registro) -> datos` que corre **antes** de guardar (web, API e importación), para completar o normalizar datos; así la auditoría ya los registra. `registro` es `None` en un alta | sector y cuenta sugeridos del destino de un pedido, `overrides/pedidos.py` |
+| `campos_alta` | campos que solo se piden al crear (no son columnas): `{campo: {label, tipo, required, options, fk_model}}`. Llegan a `al_guardar` en `registro.datos_alta` | cantidad y destino principal de una línea de pedido |
+| `orden_campos` | primeros campos del formulario, en ese orden | la cantidad y el destino junto al material |
 | `auditoria`, `auditoria_ignorar` | activar o no el historial; campos que no se registran | — |
 
 Dentro de `fields`, cada campo acepta, entre otras: `label`, `tipo` (`text`, `number`,
@@ -217,6 +227,8 @@ lo rechaza con un mensaje). Ejemplos:
 
 El campo deja de ser obligatorio en el formulario y en la API (se completa solo), y un
 valor cargado a mano se respeta.
+Con `"numeracion_por": "pedido_id"` la serie se cuenta dentro de cada pedido (ej: el
+número de línea).
 
 ## 4. Probar
 

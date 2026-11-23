@@ -23,11 +23,16 @@ def valores(registro, *, calculados: bool = True) -> dict:
 
     Reemplaza a los to_dict() de cada modelo, que no siempre son serializables.
     """
-    return {
+    resultado = {
         attr.key: getattr(registro, attr.key)
         for attr in sa_inspect(type(registro)).column_attrs
         if calculados or isinstance(attr.columns[0], Column)
     }
+    if calculados:
+        # Calculados en Python (propiedades declaradas en __calculados__).
+        for nombre in getattr(type(registro), "__calculados__", None) or {}:
+            resultado[nombre] = getattr(registro, nombre)
+    return resultado
 
 
 def _columna(model, campo):

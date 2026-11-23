@@ -136,7 +136,8 @@ def test_presentacion_toma_la_unidad_del_generico(client, categoria, aceite, lit
     r = _presentacion(client, categoria, aceite)
     assert r.status_code == 201, r.get_json()
     d = r.get_json()
-    assert (d["unidad_medida_id"], d["material_generico_id_label"]) == (litros.unidad_medida_id, "Aceite 15W-40")
+    assert (d["unidad_medida_id"], d["material_generico_id_label"]) == (
+        litros.unidad_medida_id, "GEN-ACEITE-15W40 — Aceite 15W-40")
 
 
 def test_presentacion_con_otra_unidad(client, categoria, aceite, kilos):
@@ -230,6 +231,35 @@ def test_exportar_e_importar_presentaciones(app, client, categoria, aceite):
     for columna in ("Código (número de parte)", "Código ERP", "Es genérico", "Genérico",
                     "Contenido por envase", "Controla stock"):
         assert columna in encabezado
-    assert "AC-20;Aceite 15W-40 20 L;;No;Aceite 15W-40;" in csv
+    assert "AC-20;Aceite 15W-40 20 L;;No;GEN-ACEITE-15W40 — Aceite 15W-40;" in csv
     r = importar(REGISTRY["materiales"], csv.encode("utf-8"))
+    assert r.ok and r.sin_cambios == 2, r.resumen()
+
+
+# ---------------------------------------------------------------------------
+# Cómo se muestra y se busca un material
+# ---------------------------------------------------------------------------
+
+def test_material_se_muestra_con_codigo_y_descripcion(client, db, categoria, categorias_activo):
+    from app.models.marcas_modelos_models import Marca, Modelo
+
+    for codigo in ("RE504836", "RE509031"):
+        _guardar(db, Material(codigo=codigo, descripcion="Filtro de aceite",
+                              categoria_material_id=categoria.categoria_material_id))
+    form = client.get("/bom_modelo/crear").get_data(as_text=True)
+    assert "RE504836 — Filtro de aceite" in form and "RE509031 — Filtro de aceite" in form
+
+    marca = _guardar(db, Marca(nombre_marca="JD"))
+    _guardar(db, Modelo(nombre_modelo="6110J", marca_id=marca.marca_id,
+                        categoria_activo_id=categorias_activo["Tractor"].categoria_activo_id))
+    # Al importar se reconoce por el código, por la etiqueta o por la descripción si no se repite.
+    csv = ("Material;Modelo;Es equivalencia\n"
+           "RE504836;6110J;No\n"
+           "RE509031 — Filtro de aceite;6110J;No\n").encode()
+    r = importar(REGISTRY["bom_modelo"], csv)
+    assert r.ok and r.creados == 2, r.resumen()
+    r = importar(REGISTRY["bom_modelo"], "Material;Modelo;Es equivalencia\nFiltro de aceite;6110J;No\n".encode())
+    assert not r.ok and "hay 2 registros llamados «Filtro de aceite»" in r.errores[0][2]
+    # Reimportar lo exportado no cambia nada.
+    r = importar(REGISTRY["bom_modelo"], exportar(REGISTRY["bom_modelo"]))
     assert r.ok and r.sin_cambios == 2, r.resumen()

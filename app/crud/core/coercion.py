@@ -161,8 +161,15 @@ def datos_de_entrada(model, fields: dict, entrada, *, parcial: bool = False,
 
         crudo = entrada.get(campo)
         columna = columnas.get(campo)
+        if cfg.get("solo_alta") and parcial:
+            continue  # en una modificación, los campos de alta no existen
         try:
-            valor = convertir(columna, crudo) if columna is not None else crudo
+            if columna is not None:
+                valor = convertir(columna, crudo)
+            elif cfg.get("solo_alta"):
+                valor = convertir_sin_columna(cfg, crudo)
+            else:
+                valor = crudo
         except ValueError as e:
             errores[campo] = f"{cfg.get('label', campo)} {e}."
             continue
@@ -176,6 +183,39 @@ def datos_de_entrada(model, fields: dict, entrada, *, parcial: bool = False,
     if errores:
         raise ErroresValidacion(errores)
     return datos
+
+
+def convertir_sin_columna(cfg, valor):
+    """
+    Convierte el valor de un campo que no es una columna (campo de alta) según su
+    tipo: número, FK (entero), fecha o texto.
+    """
+    if valor is None or (isinstance(valor, str) and valor.strip() == ""):
+        return None
+    tipo = cfg.get("tipo")
+    if tipo == "number":
+        return convertir(_COLUMNA_NUMERO, valor)
+    if tipo == "fk":
+        return convertir(_COLUMNA_ENTERO, valor)
+    if tipo == "date":
+        return convertir(_COLUMNA_FECHA, valor)
+    if tipo == "select" and cfg.get("options"):
+        texto = str(valor).strip()
+        validos = {str(o["value"]): o["value"] for o in cfg["options"]}
+        if texto not in validos:
+            raise ValueError("no es una opción válida")
+        return validos[texto]
+    return str(valor).strip()
+
+
+class _Columna:
+    def __init__(self, tipo):
+        self.type = tipo
+
+
+_COLUMNA_NUMERO = _Columna(T.Float())
+_COLUMNA_ENTERO = _Columna(T.Integer())
+_COLUMNA_FECHA = _Columna(T.Date())
 
 
 def valor_para_formulario(cfg: dict, valor):

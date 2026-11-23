@@ -95,6 +95,7 @@ OVERRIDES = {
             "codigo", "descripcion", "codigo_erp", "marca_id", "categoria_material_id",
             "tipo_material_id", "material_generico_id", "es_generico", "controla_stock",
         ],
+        "excluir": ["etiqueta"],  # es código + descripción, que ya se muestran
         "clave_natural": ["codigo"],
         "al_guardar": al_guardar_material,
     },

@@ -503,6 +503,32 @@ son independientes entre sí; los demás van en orden.
   texto se resuelve al genérico; en documentos, nunca se sugiere un genérico.
 - Tests: `tests/test_materiales_fase10.py`.
 
+#### Notas del PR 10.3 (pedidos)
+
+- Tablas `pedidos`, `pedido_lineas` y `pedido_linea_destinos` (`app/models/pedidos_models.py`;
+  reglas en `app/crud/meta/overrides/pedidos.py`), con `OrigenMixin` para el histórico.
+  Menú «Operaciones» → Pedidos; las líneas son pestaña del pedido (y del material) y los
+  destinos, de la línea (y del activo).
+- **Pedido:** número de la serie continua (se numera solo), prioridad «normal» por
+  defecto, canal sin «histórico». Se identifica por el número al importar. El resumen
+  («3 líneas: 2 solicitadas, 1 en cotización») cuenta por estado guardado hasta el 10.5.
+- **Línea:** se numera sola dentro del pedido. Material o descripción tal como se pidió;
+  la unidad es la del material («Se cuenta en»: envases si es una presentación). El alta
+  pide la cantidad y el destino principal y crea el primer destino; la solicitada es la
+  suma de los destinos. Anular o cancelar pide un motivo de tipo «Anulación» (tres
+  precargados, también por la migración). El nº de OC se guarda sin espacios y en mayúsculas.
+- **Destino:** cada tipo pide su dato (activo, modelo, ubicación para stock). Sector
+  imputado y cuenta vacíos se completan con la sugerencia; si no hay de dónde, el
+  destino queda «a revisar».
+- **Material como «código — descripción»** en selects, listados y exportaciones (las
+  descripciones se repiten). Al importar, una FK a un material acepta el código, esa
+  forma o la descripción, si no se repite. El prompt de equivalencias ya lo aprovecha.
+- Framework: `completar` (antes de guardar), `campos_alta` (solo en el alta),
+  `orden_campos`, `numeracion_por`, `__calculados__` (calculados en Python) y
+  `__buscar_por__` (búsqueda al importar). La auditoría registra las fechas sin hora como
+  texto ISO.
+- Tests: `tests/test_pedidos.py`.
+
 ## Arquitectura objetivo
 
 ```

@@ -232,4 +232,5 @@ def test_el_detalle_muestra_como_imagen_solo_las_imagenes(app):
 
 def test_las_tablas_viejas_de_pedidos_no_existen(app):
     assert "pedido_detalle" not in _db.metadata.tables
-    assert "pedidos" not in _db.metadata.tables  # el nombre queda libre para el PR 10.3
+    # El nombre «pedidos» lo usa ahora la tabla nueva (PR 10.3).
+    assert "PedidoID" not in _db.metadata.tables["pedidos"].columns
