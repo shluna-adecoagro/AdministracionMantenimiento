@@ -474,6 +474,35 @@ son independientes entre sí; los demás van en orden.
 - Tests: `tests/test_framework_fase10.py`, con una entidad de prueba en una metadata
   propia (ninguna entidad real usa todavía estas piezas).
 
+#### Notas del PR 10.2 (maestro de materiales)
+
+- `materiales`: `codigo` es el número de parte (etiqueta «Código (número de parte)») y
+  sigue siendo la clave natural. Nuevos: `codigo_erp`, `es_generico`,
+  `material_generico_id` y `controla_stock`. `presentacion_cantidad` pasa a llamarse en
+  pantalla «Contenido por envase».
+- **Genérico y presentaciones** (reglas en `app/crud/meta/overrides/materiales.py`, al
+  guardar):
+  - un genérico no tiene genérico, ni envase, ni stock; necesita la unidad y su código
+    empieza con `GEN-`;
+  - una presentación elige su genérico de un select que solo ofrece genéricos, necesita
+    el contenido por envase y toma la unidad del genérico (select dependiente);
+  - un genérico con presentaciones no deja de serlo, no cambia de unidad y no se borra;
+  - el stock solo admite presentaciones; el BOM y los planes aceptan el genérico.
+- Las presentaciones son una pestaña del genérico («Presentaciones», solo en los
+  genéricos); «Nuevo» desde ahí llega con el genérico elegido.
+- `proveedores.codigo_erp` y `categorias_material.cuenta_id` (cuenta sugerida al comprar
+  sin activo; una cuenta en uso no se borra).
+- Códigos del ERP vacíos como NULL (la coerción ya lo hacía): la unicidad solo controla
+  los cargados.
+- La migración `90998dc6cc41` deja los materiales existentes como no genéricos y sin
+  control de stock.
+- Framework: `"visible"` en `padre` (la pestaña del hijo solo en algunos registros del
+  padre).
+- Prompts de Copilot: usan `flask exportar materiales` (y `bom_modelo` para los modelos
+  aplicables) con las etiquetas de la app. En equivalencias, un fluido sin envase en el
+  texto se resuelve al genérico; en documentos, nunca se sugiere un genérico.
+- Tests: `tests/test_materiales_fase10.py`.
+
 ## Arquitectura objetivo
 
 ```

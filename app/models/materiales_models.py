@@ -23,6 +23,12 @@ class CategoriaMaterial(db.Model, ModelMixin):
     nombre_categoria = db.Column(db.String(100), nullable=False, unique=True,
                                  info={"label": "Categoría"})
 
+    # Cuenta que se sugiere al comprar sin activo (para stock o gasto general).
+    # Sin backref: una cuenta usada por una categoría no se puede borrar.
+    cuenta_id = db.Column(db.Integer, db.ForeignKey("cuentas.cuenta_id"), nullable=True,
+                          info={"label": "Cuenta de imputación"})
+    cuenta = db.relationship("Cuenta")
+
 
 class TipoMaterial(db.Model, ModelMixin):
     __tablename__ = "tipos_material"
@@ -81,8 +87,30 @@ class Material(db.Model, ModelMixin, AuditMixin):
     material_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     uuid = db.Column(db.String(36), default=lambda: str(uuid.uuid4()), unique=True)
 
+    # Número de parte (código del fabricante). Los genéricos usan el prefijo GEN-.
     codigo = db.Column(db.String(50), nullable=False, unique=True, info={"label": "Código"})
     descripcion = db.Column(db.String(200), nullable=False, info={"label": "Descripción"})
+    # Código en el ERP (EAM / SAP). Vacío = NULL: la unicidad solo controla los cargados.
+    codigo_erp = db.Column(db.String(50), nullable=True, unique=True, info={"label": "Código ERP"})
+
+    # Genérico y presentaciones. El genérico («Aceite 15W-40», en litros, sin
+    # envase) agrupa las presentaciones comprables («bidón 20 L»: unidad L,
+    # presentación 20), que apuntan a él. El BOM y los planes pueden usar el
+    # genérico; ofertas, stock y recepciones, siempre la presentación. Reglas en
+    # app/crud/meta/overrides/materiales.py.
+    es_generico = db.Column(db.Boolean, nullable=False, default=False, info={"label": "Es genérico"})
+    # Sin backref: un genérico con presentaciones no se puede borrar.
+    material_generico_id = db.Column(
+        db.Integer, db.ForeignKey("materiales.material_id"), nullable=True,
+        info={"label": "Genérico"},
+    )
+    material_generico = db.relationship(
+        "Material", remote_side=[material_id], foreign_keys=[material_generico_id],
+    )
+
+    # Lo caro, lo crítico y lo que se usa en los services. El resto se da por
+    # consumido al recibirlo.
+    controla_stock = db.Column(db.Boolean, nullable=False, default=False, info={"label": "Controla stock"})
 
     marca_id = db.Column(db.Integer, db.ForeignKey("marcas.marca_id"), nullable=True)
     marca = db.relationship("Marca", backref=db.backref("materiales", passive_deletes="all"))
@@ -105,8 +133,9 @@ class Material(db.Model, ModelMixin, AuditMixin):
         "TipoMaterial", backref=db.backref("materiales", passive_deletes="all")
     )
 
+    # Contenido de cada envase, en la unidad de medida (bidón de 20 L → 20).
     presentacion_cantidad = db.Column(db.Float, nullable=True,
-                                      info={"label": "Cantidad por presentación"})
+                                      info={"label": "Contenido por envase"})
 
     unidad_medida_id = db.Column(
         db.Integer, db.ForeignKey("unidades_medida.unidad_medida_id"), nullable=True,

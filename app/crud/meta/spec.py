@@ -118,6 +118,9 @@ class ParentSpec:
     # hijo). Ej: el BOM de un activo se ve como «BOM» en el activo y como
     # «Usado en activos» en el material.
     label: str | None = None
+    # visible(registro_padre) -> bool: si la pestaña se muestra en ese padre
+    # (ej: «Presentaciones» solo en los materiales genéricos). Por defecto, siempre.
+    visible: object = None
 
 
 @dataclass(frozen=True)

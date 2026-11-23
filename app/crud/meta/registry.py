@@ -277,10 +277,13 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
     padres: list[ParentSpec] = []
     declarados = ov.get("padre", [])
     for p in (declarados if isinstance(declarados, (list, tuple)) else [declarados]):
-        if not isinstance(p, dict) or not {"entidad", "fk"} <= set(p) <= {"entidad", "fk", "label"}:
-            errores.append(f"{pref} padre debe ser {{'entidad': ..., 'fk': ..., 'label' (opcional)}} (o una lista de ellos)")
+        if not isinstance(p, dict) or not {"entidad", "fk"} <= set(p) <= {"entidad", "fk", "label", "visible"}:
+            errores.append(f"{pref} padre debe ser {{'entidad': ..., 'fk': ..., 'label' y 'visible' "
+                           "(opcionales)}} (o una lista de ellos)")
             continue
-        padre = ParentSpec(entidad=p["entidad"], fk=p["fk"], label=p.get("label"))
+        if p.get("visible") is not None and not callable(p["visible"]):
+            errores.append(f"{pref} padre.visible debe ser una función (registro del padre) -> bool")
+        padre = ParentSpec(entidad=p["entidad"], fk=p["fk"], label=p.get("label"), visible=p.get("visible"))
         if padre.fk not in campos:
             errores.append(f"{pref} padre.fk: '{padre.fk}' no es un campo de la entidad.{_sugerir(padre.fk, campos)}")
         if any(x.entidad == padre.entidad for x in padres):

@@ -1,14 +1,15 @@
 # Prompt para Copilot: equivalencias de pedidos históricos
 
-Uso: abrí Copilot (con tu cuenta corporativa), adjuntá los tres archivos indicados abajo y pegá el texto del recuadro. Si la lista de pendientes es larga, Copilot va a procesarla en tandas: pedile "seguí" hasta que termine.
+Uso: abrí Copilot (con tu cuenta corporativa), adjuntá los cuatro archivos indicados abajo y pegá el texto del recuadro. Si la lista de pendientes es larga, Copilot va a procesarla en tandas: pedile "seguí" hasta que termine.
 
 **Archivos a adjuntar**
 
 1. `pendientes.csv`: los textos a resolver. Columnas: `id`, `tipo` (destino o material), `texto`, `contexto`, `veces`. Lo va a generar el importador de la app; mientras tanto, para probar, podés armarlo a mano copiando algunas filas de "Producto" (tipo material) y de "Detalles" (tipo destino) de pedidos reales. En `contexto` va la referencia del pedido y la otra columna de la misma fila (por ejemplo, para un destino, el producto; para un material, el detalle).
 2. `activos.csv`: la lista de activos exportada de la app con `flask --app run exportar activos activos.csv` (número de activo, descripción, categoría, tipo, marca, modelo, número de serie, número de motor, año, sector, ubicación, usuario asignado, código de carga de gasoil, estado).
-3. `maestro_materiales.csv`: el maestro de materiales.
+3. `materiales.csv`: el maestro de materiales, exportado de la app con `flask --app run exportar materiales materiales.csv`.
+4. `bom_modelos.csv`: qué materiales lleva cada modelo, exportado con `flask --app run exportar bom_modelo bom_modelos.csv`.
 
-> La lista de SharePoint solo sirvió para la carga inicial: la fuente es la app. Las columnas de `maestro_materiales.csv` que usa este prompt (`numero_parte`, `codigo_erp`, `codigo_generico`, `presentaciones_disponibles`, `modelos_aplicables`) corresponden al maestro anterior; el prompt se ajusta al export de la app cuando el maestro cambie en la fase 10 (ver `diseno_tablas_operativas.md`, «Cambios a tablas existentes»).
+> La lista de SharePoint solo sirvió para la carga inicial: la fuente es la app. Los exports usan `;` como separador y las etiquetas de la app como encabezados.
 
 ---
 
@@ -18,7 +19,8 @@ Sos un asistente que ayuda a ordenar datos de mantenimiento de maquinaria agríc
 ARCHIVOS
 - pendientes.csv: textos a resolver. Columnas: id, tipo (destino o material), texto, contexto, veces.
 - activos.csv: activos de la empresa (número de activo, descripción, categoría, tipo, marca, modelo, número de serie, número de motor, sector, ubicación, entre otras).
-- maestro_materiales.csv: materiales. Columnas relevantes: numero_parte, descripcion, categoria, tipo_material, unidad_medida, marca, codigo_erp, codigo_generico, presentacion, presentaciones_disponibles, modelos_aplicables.
+- materiales.csv: materiales. Columnas: «Código (número de parte)», «Descripción», «Código ERP», «Es genérico», «Genérico», «Marca», «Categoría», «Tipo», «Contenido por envase», «Unidad de medida». Un material con «Es genérico» = Sí agrupa sus presentaciones (por ejemplo, «Aceite 15W-40», código GEN-ACEITE-15W40); cada presentación es la fila que tiene ese genérico en la columna «Genérico» (por ejemplo, el bidón de 20 L: «Contenido por envase» 20, «Unidad de medida» Litros).
+- bom_modelos.csv: columnas «Material» (la descripción del material) y «Modelo». Dice qué materiales lleva cada modelo.
 
 QUÉ HACER CON CADA FILA DE pendientes.csv
 
@@ -30,10 +32,10 @@ Si tipo = destino (el texto dice para qué equipo o lugar es la compra):
 5. Si nada coincide, el resultado es "sin_resolver".
 
 Si tipo = material (el texto es el producto pedido):
-1. Normalizá el código: sin espacios, puntos ni guiones, sin distinguir mayúsculas, conservando los ceros iniciales. Buscalo en numero_parte, en codigo_erp y en los códigos que aparecen dentro de presentaciones_disponibles.
-2. Si el texto es una descripción sin código, buscá por descripción, y usá el contexto (equipo o modelo) para elegir entre candidatos con modelos_aplicables.
-3. Para fluidos (aceites, refrigerantes), proponé una presentación concreta (por ejemplo, la de 20 L), nunca un código genérico que empiece con "GEN-". Si no se puede saber la presentación, confianza baja.
-4. Si no existe en el maestro, el resultado es "material_nuevo": proponé una descripción en español con lo que dice el texto (sin agregar medidas ni especificaciones que no estén escritas), y una categoria, un tipo_material y una unidad_medida elegidos SOLO entre los valores que ya existen en maestro_materiales.csv. Si ninguno encaja, poné "A definir".
+1. Normalizá el código: sin espacios, puntos ni guiones, sin distinguir mayúsculas, conservando los ceros iniciales. Buscalo en «Código (número de parte)» y en «Código ERP» de materiales.csv.
+2. Si el texto es una descripción sin código, buscá por descripción, y usá el contexto (equipo o modelo) para elegir entre candidatos con bom_modelos.csv (los materiales que lleva ese modelo). Como bom_modelos.csv nombra el material por su descripción, si hay varios materiales con la misma descripción la confianza es baja.
+3. Para fluidos (aceites, refrigerantes): si el texto dice el envase (por ejemplo "bidón 20 L" o "tambor 205 L"), proponé esa presentación (la fila cuyo «Genérico» es el fluido y con ese «Contenido por envase»). Si no lo dice, proponé el genérico (la fila con «Es genérico» = Sí, código que empieza con "GEN-"): una línea de pedido puede pedir el genérico y la presentación se define al comprar.
+4. Si no existe en el maestro, el resultado es "material_nuevo": proponé una descripción en español con lo que dice el texto (sin agregar medidas ni especificaciones que no estén escritas), y una categoria, un tipo_material y una unidad_medida elegidos SOLO entre los valores que ya existen en las columnas «Categoría», «Tipo» y «Unidad de medida» de materiales.csv. Si ninguno encaja, poné "A definir".
 
 REGLAS
 - Usá únicamente códigos que existan literalmente en los archivos. Nunca inventes un número de activo, de parte ni un modelo.
@@ -47,7 +49,7 @@ Devolvé una tabla con estas columnas, en este orden, separadas por punto y coma
 id;tipo;texto;resultado;codigos;descripcion_propuesta;categoria_propuesta;tipo_material_propuesto;unidad_propuesta;confianza;motivo
 
 - resultado: activo, varios_activos, modelo, sector, ubicacion, material_existente, material_nuevo o sin_resolver.
-- codigos: números de activo, nombre de modelo, sector, ubicación o numero_parte. Si son varios, separados por " | ".
+- codigos: números de activo, nombre de modelo, sector, ubicación o «Código (número de parte)» del material. Si son varios, separados por " | ".
 - Las columnas de "propuesta" solo se completan para material_nuevo.
 - motivo: una frase corta que explique la equivalencia o la duda.
 

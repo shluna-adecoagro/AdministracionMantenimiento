@@ -5,7 +5,7 @@
 ## Cómo usarlo
 
 - En un chat de Copilot o como instrucciones de un agente de Copilot. Adjuntá **un documento por vez** al principio; cuando ande bien, probá con varios.
-- Adjuntá también `maestro_materiales.csv`: lo usa solo para sugerir el material cuando el código coincide exacto. Sus columnas (`numero_parte`, `codigo_erp`) son las del maestro anterior; cuando el maestro cambie en la app (fase 10), se usa `flask --app run exportar materiales` y el prompt se ajusta a sus columnas.
+- Adjuntá también `materiales.csv`, exportado de la app con `flask --app run exportar materiales materiales.csv`: lo usa solo para sugerir el material cuando el código coincide exacto.
 - La salida son bloques de texto CSV. Copiá cada bloque a un archivo (`documentos.csv`, `documento_lineas.csv`, `ordenes_compra.csv`, `orden_compra_lineas.csv`) en la carpeta que lee el importador de la app. El importador identifica al proveedor (por CUIT, código del ERP o nombre), arma las claves definitivas y deja todo con `revisado` = no hasta que lo confirmes.
 
 ## Prompt
@@ -71,7 +71,7 @@ clave_documento;nro_linea;tipo_linea;codigo_proveedor;descripcion_proveedor;cant
 - descripcion_proveedor: tal cual, sin resumir ni corregir. Si hay un indicador de marca pegado (ej. JD), incluilo.
 - cantidad: número. En mano de obra o traslado sin cantidad: 1, con udm "gl".
 - udm: solo si figura (no asumas "un").
-- material_sugerido: si codigo_proveedor coincide EXACTAMENTE con un numero_parte o un codigo_erp de maestro_materiales.csv (sin distinguir mayúsculas, ignorando espacios y guiones), ese numero_parte. Si no, vacío. No busques por descripción.
+- material_sugerido: si codigo_proveedor coincide EXACTAMENTE con un «Código (número de parte)» o un «Código ERP» de materiales.csv (sin distinguir mayúsculas, ignorando espacios y guiones), el «Código (número de parte)» de esa fila. Si no, vacío. No busques por descripción. Nunca sugieras un genérico (código que empieza con GEN- o «Es genérico» = Sí): lo que se compra es una presentación.
 
 PRECIOS (todos sin IVA):
 - precio_lista: unitario antes de cualquier descuento.

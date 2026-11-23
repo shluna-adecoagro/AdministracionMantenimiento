@@ -369,6 +369,9 @@ class VistasEntidad:
             secciones.append({"id": "historial", "label": "Historial"})
         # Una pestaña por cada subentidad (hijos declarados con "padre")...
         for nombre_hijo in s.hijos:
+            rel = self.registry[nombre_hijo].padre_de_tipo(s.name)
+            if rel.visible is not None and not rel.visible(registro):
+                continue  # ej: «Presentaciones» solo en los genéricos
             secciones.append({"id": nombre_hijo, "label": self._label_hijo(self.registry[nombre_hijo])})
         # ...y una por cada pestaña calculada (tabs_extra).
         for tab in s.tabs_extra:
