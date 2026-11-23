@@ -119,8 +119,12 @@ def factor(linea_oferta, linea_pedido) -> float | None:
     Cuánto vale 1 unidad de la línea de oferta en la unidad de la línea de pedido
     (None si no se puede convertir). Ver «Unidades: genérico y presentación».
     """
+    return factor_material(linea_oferta.material, linea_pedido)
+
+
+def factor_material(ofertado, linea_pedido) -> float | None:
+    """Ídem, para un material (el ofertado, o el recibido en una recepción)."""
     pedido = linea_pedido.material
-    ofertado = linea_oferta.material
     if pedido is None or not pedido.es_generico:
         return 1.0  # material concreto o sin identificar: tal cual
     if ofertado is None:

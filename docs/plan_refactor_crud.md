@@ -555,6 +555,28 @@ son independientes entre sí; los demás van en orden.
   todas: la tabla desbordaba).
 - Tests: `tests/test_documentos.py`.
 
+#### Notas del PR 10.5 (recepciones y estado calculado)
+
+- Tabla `recepciones` (`app/models/recepciones_models.py`; reglas en
+  `app/crud/meta/overrides/recepciones.py`): pestaña del destino (y de la línea de un
+  remito); la línea de pedido tiene la pestaña calculada «Recepciones» con todas.
+- **Recepción:** material por defecto, el adjudicado (si hay uno solo) o el de la línea;
+  cantidad por defecto, lo pendiente del destino (envases enteros). Conversión a la
+  unidad de la línea como en la adjudicación. Recibir de más se acepta con aviso. Quién
+  recibió es opcional. Un destino con recepciones no se borra.
+- **Reparto entre destinos:** proporcional y calculado; `comprada_corregida` en el destino
+  manda sobre el cálculo. Redondeo a enteros con el resto al primero cuando se cuenta por
+  unidad. El destino muestra comprada, recibida y pendiente de recibir.
+- **Línea de pedido:** comprado (adjudicada; o, sin oferta, solicitada − cancelada si ya
+  hay OC o recepciones), recibida, pendientes de comprar y de recibir, **estado visible**
+  (en SQL: se puede filtrar y listar) y salteo de estados. El guardado se llama ahora
+  «Estado de seguimiento». El resumen del pedido cuenta por estado visible.
+- Importación: un encabezado que es la etiqueta de un calculado (ej: «Estado») se ignora,
+  aunque coincida con el nombre de otro campo.
+- Rendimiento: los calculados de la línea son subconsultas por fila; con los volúmenes
+  actuales no se nota, pero si los listados crecen mucho conviene paginar.
+- Tests: `tests/test_recepciones.py`.
+
 ## Arquitectura objetivo
 
 ```
@@ -602,7 +624,7 @@ La API generada usa `GET/POST {url}` y `PUT/PATCH/DELETE {url}/{id}`.
 | **7. Migrar el resto** | Tras revisar su diseño: activos, medidores, lecturas, insumos, stock, unidades, marcas, modelos, recursos, BOM. Ver «Notas de la Fase 7». | ✅ Hecha |
 | **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. Ver «Notas de la Fase 8». | ✅ Hecha |
 | **9. Planes preventivos** | Planes por categoría de activo (período por uso y/o por tiempo, plan que incluye a otro), tareas, materiales por modelo; categoría en el modelo y tipo de medidor. Ver «Fase 9: planes preventivos». | ✅ Hecha |
-| **10. Pedidos y documentos de proveedores** | Pedidos con líneas y destinos (imputación), ofertas y presupuestos (cabecera + líneas), adjudicación por cantidad, recepciones (conformidad). Importación del Excel histórico de pedidos. Ver «Fases operativas». | Pendiente |
+| **10. Pedidos y documentos de proveedores** | Pedidos con líneas y destinos (imputación), ofertas y presupuestos (cabecera + líneas), adjudicación por cantidad, recepciones (conformidad). Importación del Excel histórico de pedidos. Ver «Fases operativas». | En curso (10.1 a 10.5 hechos) |
 | **11. Solicitudes de trabajo, solicitudes internas y OC** | Solicitudes de trabajo (avisos de los mecánicos para llamar a un contratista) y su vínculo con los presupuestos (`documentos_proveedor.solicitud_trabajo_id`). Importación de los TSV de EAM (cabeceras, líneas, distribuciones) y de las OC; vínculo con los documentos adjudicados; distribución propuesta; detalle para Administración; conciliación por nº de OC. | Pendiente |
 | **12. Órdenes de trabajo** | Cabecera importada del ERP; la app agrega operaciones, recursos y materiales (previsto y utilizado). Incluye cuándo le toca un plan a cada activo. | Pendiente |
 | **13. Sincronización con SharePoint** | Opción A: exportar periódicamente de la app a SharePoint, más copias de seguridad automáticas de la base. Al final, escribir en SharePoint directo (Microsoft Graph) en lugar de pasar por CSV. | Pendiente |

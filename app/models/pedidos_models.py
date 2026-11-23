@@ -21,7 +21,7 @@ están en app/crud/meta/overrides/pedidos.py.
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import String, cast, func, select
+from sqlalchemy import String, case, cast, func, select
 from sqlalchemy.orm import column_property
 
 from app.core.db import db
@@ -56,11 +56,17 @@ DESTINOS = (
     {"value": "a_identificar", "label": "A identificar"},
 )
 
+# Estado visible → (singular, plural) para el resumen del pedido, en este orden.
 _ESTADO_PLURAL = {
-    "solicitado": ("solicitada", "solicitadas"),
-    "en_cotizacion": ("en cotización", "en cotización"),
-    "ofertas_cargadas": ("con ofertas cargadas", "con ofertas cargadas"),
-    "anulado": ("anulada", "anuladas"),
+    "Solicitado": ("solicitada", "solicitadas"),
+    "En cotización": ("en cotización", "en cotización"),
+    "Ofertas cargadas": ("con ofertas cargadas", "con ofertas cargadas"),
+    "Adjudicado": ("adjudicada", "adjudicadas"),
+    "OC emitida": ("con OC emitida", "con OC emitida"),
+    "Recibido parcial": ("recibida en parte", "recibidas en parte"),
+    "Recibido": ("recibida", "recibidas"),
+    "Cerrado": ("cerrada", "cerradas"),
+    "Anulado": ("anulada", "anuladas"),
 }
 
 
@@ -96,18 +102,17 @@ class Pedido(db.Model, ModelMixin, AuditMixin, OrigenMixin):
 
     @property
     def resumen(self) -> str:
-        """«5 líneas: 3 en cotización, 2 solicitadas» (hasta el PR 10.5, por estado guardado)."""
+        """«5 líneas: 3 recibidas, 1 adjudicada, 1 anulada» (por estado visible)."""
         lineas = self.lineas
         if not lineas:
             return "Sin líneas"
         conteo: dict[str, int] = {}
         for linea in lineas:
-            conteo[linea.estado] = conteo.get(linea.estado, 0) + 1
+            conteo[linea.estado_visible] = conteo.get(linea.estado_visible, 0) + 1
         partes = []
-        for opcion in ESTADOS_LINEA:
-            n = conteo.get(opcion["value"])
+        for estado, (singular, plural) in _ESTADO_PLURAL.items():
+            n = conteo.get(estado)
             if n:
-                singular, plural = _ESTADO_PLURAL[opcion["value"]]
                 partes.append(f"{n} {singular if n == 1 else plural}")
         total = len(lineas)
         return f"{total} línea{'s' if total != 1 else ''}: {', '.join(partes)}"
@@ -170,7 +175,8 @@ class PedidoLinea(db.Model, ModelMixin, AuditMixin, OrigenMixin):
 
 class PedidoLineaDestino(db.Model, ModelMixin, AuditMixin, OrigenMixin):
     __tablename__ = "pedido_linea_destinos"
-    __label_field__ = None
+    __label_field__ = "nombre"
+    __calculados__ = {"comprada": "Comprada", "recibida": "Recibida", "pendiente_recibir": "Pendiente de recibir"}
 
     pedido_linea_destino_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     uuid = db.Column(db.String(36), default=lambda: str(uuid.uuid4()), unique=True, nullable=False)
@@ -204,8 +210,26 @@ class PedidoLineaDestino(db.Model, ModelMixin, AuditMixin, OrigenMixin):
                           info={"label": "Cuenta"})
     cuenta = db.relationship("Cuenta")
 
+    # Lo comprado se reparte entre los destinos en proporción a sus cantidades; si
+    # el gestor carga este valor, manda sobre el reparto (y el resto se reparte
+    # entre los demás destinos). En la unidad de la línea.
+    comprada_corregida = db.Column(db.Float, nullable=True, info={"label": "Comprada (corregida)"})
+
     creado_en = db.Column(db.DateTime, default=datetime.utcnow)
     actualizado_en = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Comprada, recibida y pendiente de recibir del destino (en la unidad de la línea).
+    @property
+    def comprada(self) -> float:
+        return reparto(self.pedido_linea).get(self.pedido_linea_destino_id, 0.0)
+
+    @property
+    def recibida(self) -> float:
+        return sum(r.recibida_en_linea or 0 for r in getattr(self, "recepciones", []))
+
+    @property
+    def pendiente_recibir(self) -> float:
+        return self.comprada - self.recibida
 
     # «A revisar»: falta identificar el destino, el sector imputado o la cuenta.
     a_revisar = column_property(
@@ -245,4 +269,74 @@ PedidoLinea.nombre = column_property(
     .correlate_except(Pedido)
     .scalar_subquery(),
     info={"label": "Línea de pedido"},
+)
+
+
+# ---------------------------------------------------------------------------
+# Reparto de lo comprado entre los destinos
+# ---------------------------------------------------------------------------
+
+def se_cuenta_por_unidad(linea) -> bool:
+    """
+    La cantidad de la línea va en enteros: si el material es una presentación
+    (envases), si la unidad es de tipo «Cantidad» o si no tiene unidad.
+    """
+    m = linea.material
+    if m is not None and m.material_generico_id is not None:
+        return True
+    u = linea.unidad_medida
+    if u is None:
+        return True
+    return u.tipo_unidad is not None and u.tipo_unidad.nombre_tipo == "Cantidad"
+
+
+def reparto(linea) -> dict:
+    """
+    {destino_id: comprada} en la unidad de la línea. Los destinos con «comprada
+    (corregida)» toman ese valor; el resto de lo comprado se reparte entre los
+    demás en proporción a sus cantidades. Si la línea se cuenta por unidad, se
+    redondea a enteros y lo que sobra va al primer destino.
+    """
+    destinos = sorted(linea.destinos, key=lambda d: d.pedido_linea_destino_id)
+    total = max(linea.comprado or 0.0, 0.0)
+    resultado = {d.pedido_linea_destino_id: d.comprada_corregida for d in destinos
+                 if d.comprada_corregida is not None}
+    libres = [d for d in destinos if d.comprada_corregida is None]
+    resto = max(total - sum(resultado.values()), 0.0)
+    base = sum(d.cantidad for d in libres)
+    if not libres:
+        return resultado
+    if base <= 0:
+        return {**resultado, **{d.pedido_linea_destino_id: 0.0 for d in libres}}
+    partes = {d.pedido_linea_destino_id: resto * d.cantidad / base for d in libres}
+    if se_cuenta_por_unidad(linea):
+        enteras = {k: float(int(v + 1e-9)) for k, v in partes.items()}
+        enteras[libres[0].pedido_linea_destino_id] += round(resto - sum(enteras.values()), 9)
+        partes = enteras
+    return {**resultado, **partes}
+
+
+# Cómo se muestra un destino: «1104 / 1 — RE504836 — Filtro de aceite → Tractor 1».
+from app.models.activos_models import Activo  # noqa: E402
+from app.models.marcas_modelos_models import Modelo  # noqa: E402
+from app.models.ubicaciones_models import Ubicacion  # noqa: E402
+
+_DESTINO_TEXTO = case(*[(PedidoLineaDestino.destino == o["value"], o["label"]) for o in DESTINOS],
+                      else_=PedidoLineaDestino.destino)
+PedidoLineaDestino.nombre = column_property(
+    select(PedidoLinea.nombre.expression)
+    .where(PedidoLinea.pedido_linea_id == PedidoLineaDestino.pedido_linea_id)
+    .correlate_except(PedidoLinea)
+    .scalar_subquery()
+    + " → "
+    + func.coalesce(
+        select(Activo.descripcion).where(Activo.activo_id == PedidoLineaDestino.activo_id)
+        .correlate_except(Activo).scalar_subquery(),
+        select(Modelo.nombre_modelo).where(Modelo.modelo_id == PedidoLineaDestino.modelo_id)
+        .correlate_except(Modelo).scalar_subquery(),
+        select(Ubicacion.nombre_ubicacion).where(Ubicacion.ubicacion_id == PedidoLineaDestino.ubicacion_id)
+        .correlate_except(Ubicacion).scalar_subquery(),
+        _DESTINO_TEXTO,
+    ),
+    info={"label": "Destino"},
 )

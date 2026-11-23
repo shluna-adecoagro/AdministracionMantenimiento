@@ -1,8 +1,8 @@
 # Diseño de tablas: parte operativa (borrador para revisar)
 
-*Versión 5.6, 23/11/2026. Deriva de `docs/vision_conceptual.md` y del estado del repo al commit 45e4dc7 (fase 9, planes preventivos). Reemplaza el "diseño inicial" de las fases operativas de `docs/plan_refactor_crud.md`.*
+*Versión 5.7, 23/11/2026. Deriva de `docs/vision_conceptual.md` y del estado del repo al commit 45e4dc7 (fase 9, planes preventivos). Reemplaza el "diseño inicial" de las fases operativas de `docs/plan_refactor_crud.md`.*
 
-*Historial: v2 — primer tramo con pedidos, documentos de proveedores y solicitudes de OC; destinos de la línea de pedido (1 : N); tabla de adjudicaciones (N:M). v2.1 — reparto proporcional entre destinos. v3 — convivencia con el ERP; estados como opciones fijas en código. v3.1 — TSV de EAM a demanda; importadores como adaptadores; estado "Enviada a Administración". v4 — ajustes a partir de ejemplos reales (Excel de pedidos y TSV de solicitudes internas). v4.1 — estado histórico por color de pestaña, moneda por formato de celda, rol de Copilot. v5 — la OC entra al primer tramo: una OC por proveedor y, en la práctica, una por presupuesto adjudicado; el nº de OC cruza pedidos, ofertas y solicitudes. v5.1 — columnas que necesita la lectura de PDF (`docs/prompt_copilot_documentos.md`): descuento global, total en USD informado, equipo y horas del medidor en documentos; precio de lista en líneas; presupuesto citado en la OC. v5.2 — estados de la línea de pedido: se guarda solo lo que no deja otro rastro y el resto se calcula; sector de una distribución con centro de costo compartido; costo de un material de stock sin precio en el maestro; cambios previstos al maestro de materiales. v5.3 — unidades de las cantidades entre genérico y presentación; presentación recibida en las recepciones; códigos del ERP vacíos como NULL. v5.4 — una presentación se cuenta por envases; no se adjudica material sin identificar a una línea que pide un genérico. v5.5 — revisión del PR 10.3: el alta de la línea pide la cantidad y el destino principal; sector imputado y cuenta sugeridos y, si no hay de dónde, «a revisar»; motivos de tipo «Anulación»; canal sin «histórico»; el material se muestra como «código — descripción». v5.6 — revisión del PR 10.4: `origen` (del mixin) en lugar de `origen_carga`; proveedor y unidad tal como figuran; motivo de revisión de la lectura; `solicitud_trabajo_id` en la fase 11; acciones para vincular y adjudicar; los documentos revisados no se reimportan.*
+*Historial: v2 — primer tramo con pedidos, documentos de proveedores y solicitudes de OC; destinos de la línea de pedido (1 : N); tabla de adjudicaciones (N:M). v2.1 — reparto proporcional entre destinos. v3 — convivencia con el ERP; estados como opciones fijas en código. v3.1 — TSV de EAM a demanda; importadores como adaptadores; estado "Enviada a Administración". v4 — ajustes a partir de ejemplos reales (Excel de pedidos y TSV de solicitudes internas). v4.1 — estado histórico por color de pestaña, moneda por formato de celda, rol de Copilot. v5 — la OC entra al primer tramo: una OC por proveedor y, en la práctica, una por presupuesto adjudicado; el nº de OC cruza pedidos, ofertas y solicitudes. v5.1 — columnas que necesita la lectura de PDF (`docs/prompt_copilot_documentos.md`): descuento global, total en USD informado, equipo y horas del medidor en documentos; precio de lista en líneas; presupuesto citado en la OC. v5.2 — estados de la línea de pedido: se guarda solo lo que no deja otro rastro y el resto se calcula; sector de una distribución con centro de costo compartido; costo de un material de stock sin precio en el maestro; cambios previstos al maestro de materiales. v5.3 — unidades de las cantidades entre genérico y presentación; presentación recibida en las recepciones; códigos del ERP vacíos como NULL. v5.4 — una presentación se cuenta por envases; no se adjudica material sin identificar a una línea que pide un genérico. v5.5 — revisión del PR 10.3: el alta de la línea pide la cantidad y el destino principal; sector imputado y cuenta sugeridos y, si no hay de dónde, «a revisar»; motivos de tipo «Anulación»; canal sin «histórico»; el material se muestra como «código — descripción». v5.6 — revisión del PR 10.4: `origen` (del mixin) en lugar de `origen_carga`; proveedor y unidad tal como figuran; motivo de revisión de la lectura; `solicitud_trabajo_id` en la fase 11; acciones para vincular y adjudicar; los documentos revisados no se reimportan. v5.7 — revisión del PR 10.5: reparto con «comprada (corregida)»; material y cantidad por defecto de la recepción; recibir de más se acepta con aviso; «comprado» sin oferta; estado visible calculado; quién recibió, opcional.*
 
 ## Convenciones (las del repo)
 
@@ -92,6 +92,8 @@ Se guarda solo lo que no deja otro rastro; lo demás se calcula de los datos.
 | Recibido parcial / recibido | Calculado: tiene recepciones, por menos o por el total adjudicado |
 | Cerrado | Calculado: no queda nada pendiente de comprar ni de recibir, o `sin_conformidad` (cierre manual del histórico) |
 
+Prioridad del estado visible (decidido 23/11): anulado → cerrado → recibido → recibido parcial → OC emitida → adjudicado → el guardado. **Comprado** = la adjudicada si hay adjudicaciones; si no (compra directa o histórico), la solicitada menos la cancelada, pero solo si ya hay nº de OC o recepciones. Pendiente de comprar = solicitada − cancelada − comprado; pendiente de recibir = comprado − recibido. «OC emitida»: la línea o una oferta adjudicada tiene nº de OC. En la app, el guardado se llama «Estado de seguimiento» y el visible, «Estado».
+
 - **El estado visible es el calculado.** El guardado solo cuenta mientras no haya datos posteriores (adjudicaciones, OC, recepciones).
 - **Salteo de estados:** también se calcula (por ejemplo, una línea adjudicada que nunca pasó por «en cotización»). Ya no hay columna `estado_salteado`.
 - **Tiempos por etapa:** salen de la auditoría de los estados guardados y de las fechas de adjudicaciones, OC y recepciones.
@@ -115,7 +117,8 @@ Una línea de pedido tiene uno o más destinos. Ejemplos reales: "Carros de aren
 - Derivadas por destino: recibida y pendiente de recibir. Así cada taller da la conformidad de su parte; y **«a revisar»**: destino «a identificar», o sin sector imputado o sin cuenta (cuando no hubo de dónde sugerirlos).
 - **Alta de la línea (decidido 23/11):** el alta de una línea pide la cantidad y el destino principal (activo, modelo, stock con su ubicación, gasto general o a identificar) y crea su primer destino con toda la cantidad. Para repartir entre varios destinos se usa la pestaña «Destinos» de la línea.
 - El activo y la ubicación no corrigen el sector imputado: quien paga puede ser otro sector (préstamos).
-- **Compra parcial (decidido 21/11):** si se adjudica menos de lo solicitado, la app reparte lo adjudicado entre los destinos **en proporción** a sus cantidades; el gestor lo corrige. Para materiales que se cuentan por unidad, el reparto se redondea a enteros y el resto va al primer destino.
+- **Compra parcial (decidido 21/11):** si se adjudica menos de lo solicitado, la app reparte lo comprado entre los destinos **en proporción** a sus cantidades; el gestor lo corrige. Para materiales que se cuentan por unidad, el reparto se redondea a enteros y el resto va al primer destino.
+- **Corrección del reparto (decidido 23/11):** columna `comprada_corregida` (opcional) en el destino: si está cargada manda, y el resto se reparte entre los demás. Se cuenta por unidad si el material es una presentación (envases), si la unidad es de tipo «Cantidad» o si no hay unidad. El reparto no se guarda: se calcula.
 
 ### documentos_proveedor (cabecera)
 
@@ -203,13 +206,14 @@ Una fila por entrega y por destino; admite entregas parciales.
 |---|---|---|
 | pedido_linea_destino_id | FK | Qué destino recibe |
 | fecha | fecha | |
-| material_id | FK materiales | Lo que llegó: siempre una presentación. Por defecto, la adjudicada |
+| material_id | FK materiales | Lo que llegó: nunca un genérico. Si se deja vacío: la presentación adjudicada (si hay una sola) o el material de la línea (si es concreto); si no, se pide |
 | cantidad | decimal | **En la unidad de `material_id`** (por ejemplo, 2 bidones). Por defecto, lo pendiente de recibir del destino, convertido |
-| recibido_por_id | FK empleados | |
-| documento_linea_id | FK, opcional | Línea del remito |
+| recibido_por_id | FK empleados, opcional | El gestor puede cargarla sin saber quién recibió |
+| documento_linea_id | FK, opcional | Línea del remito (solo líneas de remitos) |
 | observaciones | texto | Faltantes, roturas |
 
-Comparando la fecha de recepción con la fecha de entrega comprometida en la OC se mide el **cumplimiento de entrega** de cada proveedor.
+- **Recibir de más (decidido 23/11):** se acepta, con un aviso: la conformidad es registrar lo que llegó.
+- Comparando la fecha de recepción con la fecha de entrega comprometida en la OC se mide el **cumplimiento de entrega** de cada proveedor (fase 11, cuando llegan las OC).
 
 ### solicitudes_trabajo
 

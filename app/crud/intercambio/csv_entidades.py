@@ -184,10 +184,15 @@ def importar(spec: EntitySpec, contenido: bytes, nombre_archivo: str = "archivo.
 
     # --- encabezados -----------------------------------------------------
     alias = _alias(spec)
+    # Encabezados que son la etiqueta de un calculado (ej: «Estado», el visible):
+    # se ignoran aunque coincidan con el nombre de otro campo.
+    calculados = {_norm(f.label) for f in spec.fields.values() if f.solo_lectura}
+    etiquetas = {_norm(f.label) for f in spec.fields.values() if not f.solo_lectura}
     columnas: list[tuple[int, str, str]] = []  # (índice, campo, modo)
     vistos: set[str] = set()
     for i, encabezado in enumerate(filas[0]):
-        destino = alias.get(_norm(encabezado))
+        clave = _norm(encabezado)
+        destino = None if clave in calculados and clave not in etiquetas else alias.get(clave)
         if destino is None:
             if encabezado.strip():
                 resultado.columnas_ignoradas.append(encabezado.strip())
