@@ -128,6 +128,21 @@ python run.py
 En Debian / Ubuntu, `python3 -m venv` necesita el paquete `python3-venv`
 (`sudo apt install python3-venv`).
 
+### Compartir datos de ejemplo
+
+Antes de pasar planillas o reportes reales a alguien externo (por ejemplo, ejemplos para
+diseñar un importador), anonimizarlos en la propia computadora:
+
+```bash
+python herramientas/anonimizar.py --listar pedidos.xlsx cabeceras.tsv      # ver hojas y columnas
+python herramientas/anonimizar.py pedidos.xlsx cabeceras.tsv -c "Proveedor=PROV" -c "Sector=SEC"
+```
+
+Reemplaza los valores de las columnas indicadas por alias consistentes (`PROV-001`…) en
+todos los archivos, sin tocar encabezados, importes ni el formato del Excel (colores de
+pestaña, celdas combinadas). Los archivos quedan en `anonimizado/` y la tabla de
+equivalencias en `equivalencias_NO_COMPARTIR.csv`, que no se comparte ni se sube al repo.
+
 ### Configuración (opcional)
 
 La base de datos es **SQLite**. Por defecto se crea en `instance/mantenimiento.db`. Para
