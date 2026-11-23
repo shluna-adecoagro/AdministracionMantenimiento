@@ -34,6 +34,8 @@ from app.models.pedidos_models import (
     PedidoLineaDestino,
 )
 from app.models.ubicaciones_models import Ubicacion
+# Lo comprado, recibido, pendientes y estado visible de la línea se definen ahí.
+import app.models.recepciones_models  # noqa: E402,F401
 
 TIPO_MOTIVO_ANULACION = "ANULACION"
 NO_SI = [{"value": False, "label": "No"}, {"value": True, "label": "Sí"}]
@@ -163,6 +165,8 @@ def al_guardar_destino(d, operacion: str, cambiados: set):
     errores = {}
     if d.cantidad is None or d.cantidad <= 0:
         errores["cantidad"] = "La cantidad tiene que ser mayor que cero."
+    if d.comprada_corregida is not None and d.comprada_corregida < 0:
+        errores["comprada_corregida"] = "La cantidad comprada no puede ser negativa."
     dato = DATO_DEL_DESTINO.get(d.destino)
     if dato and getattr(d, dato) is None:
         etiqueta = next(o["label"] for o in DESTINOS if o["value"] == d.destino).lower()
@@ -171,6 +175,12 @@ def al_guardar_destino(d, operacion: str, cambiados: set):
     if errores:
         raise ErroresValidacion(errores)
     return None
+
+
+def _tab_recepciones(linea):
+    from app.crud.meta.overrides.recepciones import tab_recepciones_de_la_linea
+
+    return tab_recepciones_de_la_linea(linea)
 
 
 # ---------------------------------------------------------------------------
@@ -210,7 +220,9 @@ OVERRIDES = {
         ],
         "fields": {
             "nro_linea": {"numeracion": "{n}", "numeracion_por": "pedido_id"},
-            "estado": {"tipo": "select", "options": ESTADOS_LINEA, "required": False},
+            # El que se guarda (lo marca una persona). El que se ve es «Estado» (calculado).
+            "estado": {"tipo": "select", "options": ESTADOS_LINEA, "required": False,
+                       "label": "Estado de seguimiento"},
             "sin_conformidad": {"required": False, "options": NO_SI},
             "cantidad_cancelada": {"required": False},
             "motivo_operacion_id": {"fk_filtro": motivos_de_anulacion},
@@ -227,10 +239,12 @@ OVERRIDES = {
         "orden_campos": ["pedido_id", "nro_linea", "material_id", "descripcion", "unidad_medida_id",
                          "cantidad", "destino", "activo_id", "modelo_id", "ubicacion_id"],
         "excluir": ["nombre"],
-        "listado": ["pedido_id", "nro_linea", "material_id", "descripcion", "solicitada", "ofertada",
-                    "adjudicada", "pendiente_comprar", "se_cuenta_en", "estado", "nro_oc"],
+        "listado": ["pedido_id", "nro_linea", "material_id", "descripcion", "solicitada", "adjudicada",
+                    "recibida", "pendiente_comprar", "pendiente_recibir", "se_cuenta_en", "estado_visible",
+                    "nro_oc"],
         "filtros": ["material_id", "descripcion", "estado", "nro_oc", "observaciones"],
         "clave_natural": ["pedido_id", "nro_linea"],
+        "tabs_extra": [{"id": "recepciones_linea", "label": "Recepciones", "funcion": _tab_recepciones}],
         "completar": completar_linea,
         "al_guardar": al_guardar_linea,
     },
@@ -250,8 +264,9 @@ OVERRIDES = {
             "activo_id": {"depende_de": None},
             "ubicacion_id": {"depende_de": None},
         },
+        "excluir": ["nombre"],
         "listado": ["pedido_linea_id", "cantidad", "destino", "activo_id", "modelo_id", "ubicacion_id",
-                    "sector_imputado_id", "cuenta_id", "a_revisar"],
+                    "sector_imputado_id", "cuenta_id", "comprada", "recibida", "pendiente_recibir", "a_revisar"],
         "completar": completar_destino,
         "al_guardar": al_guardar_destino,
     },

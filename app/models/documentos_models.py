@@ -260,11 +260,8 @@ PedidoLinea.adjudicada = column_property(
     .scalar_subquery(),
     info={"label": "Adjudicada"},
 )
-# Pendiente de comprar: solicitada − adjudicada − cancelada.
-PedidoLinea.pendiente_comprar = column_property(
-    PedidoLinea.solicitada.expression - PedidoLinea.adjudicada.expression - PedidoLinea.cantidad_cancelada,
-    info={"label": "Pendiente de comprar"},
-)
+# «Pendiente de comprar», «comprado», lo recibido y el estado visible de la línea
+# de pedido están en app/models/recepciones_models.py (dependen de las recepciones).
 
 # En el documento: total de sus líneas, diferencia con el total sin IVA (control
 # de carga) y total adjudicado.
