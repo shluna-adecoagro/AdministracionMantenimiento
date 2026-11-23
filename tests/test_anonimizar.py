@@ -77,3 +77,177 @@ def test_alias_consistentes_entre_archivos_y_no_toca_importes(anonimizar, monkey
     assert hoja["F8"].value == "PROV-001"  # mismo proveedor, mismo alias
     equivalencias = (tmp_path / "equivalencias_NO_COMPARTIR.csv").read_text(encoding="utf-8-sig")
     assert "PROV-001;Repuestos del Sur SA" in equivalencias
+
+
+def test_excel_con_celdas_combinadas(anonimizar, monkeypatch, tmp_path):
+    # Como la planilla de solicitudes: títulos de grupo combinados arriba del encabezado
+    # y valores combinados en varias filas dentro de las columnas a anonimizar
+    libro = openpyxl.Workbook()
+    hoja = libro.active
+    hoja.title = "Enero"
+    hoja.append(["Solicitud N°", "Para completar por quien solicita:", None, None, "Para completar por el comprador:"])
+    hoja.append([None, "Area", "Solicitó", "Importe", "Proveedor", "Comentarios"])
+    hoja.append([1, "Taller Norte", "Juan Pérez", 100, "Repuestos del Sur SA", "Pedido de Juan Pérez"])
+    hoja.append([2, None, None, 50, None, None])
+    hoja.merge_cells("A1:A2")
+    hoja.merge_cells("B1:D1")
+    hoja.merge_cells("B3:B4")
+    hoja.merge_cells("C3:C4")
+    hoja.merge_cells("E3:E4")
+    libro.save(tmp_path / "solicitudes.xlsx")
+
+    _correr(anonimizar, monkeypatch, tmp_path, "solicitudes.xlsx",
+            "-c", "Area=A", "-c", "Solicitó=SOL", "-c", "Proveedor=PROV")
+
+    hoja = openpyxl.load_workbook(tmp_path / "anonimizado" / "solicitudes.xlsx").active
+    assert [hoja[c].value for c in ("B3", "C3", "E3", "F3")] == ["A-001", "SOL-001", "PROV-001", "Pedido de SOL-001"]
+    assert hoja["D3"].value == 100 and hoja["B1"].value == "Para completar por quien solicita:"
+    assert "B3:B4" in {str(r) for r in hoja.merged_cells.ranges}  # la combinación se conserva
+
+
+def test_excel_borra_autor_del_archivo_y_anonimiza_comentarios(anonimizar, monkeypatch, tmp_path):
+    from openpyxl.comments import Comment
+
+    libro = openpyxl.Workbook()
+    hoja = libro.active
+    hoja.append(["Solicitó", "Proveedor", "Importe"])
+    hoja.append(["Juan Pérez", "Repuestos del Sur SA", 100])
+    hoja.append([None, None, None, "Ver con Ana Gómez"])
+    hoja["C2"].comment = Comment("Ana Gómez:\nConfirmar con Repuestos del Sur SA", "Ana Gómez")
+    hoja["A2"].comment = Comment("Juan Pérez:\nOK", "Juan Pérez")
+    libro.properties.creator = "Juan Pérez"
+    libro.properties.lastModifiedBy = "Ana Gómez"
+    libro.properties.title = "Compras de Ana Gómez"
+    libro.save(tmp_path / "solicitudes.xlsx")
+
+    _correr(anonimizar, monkeypatch, tmp_path, "solicitudes.xlsx", "-c", "Solicitó=SOL", "-c", "Proveedor=PROV")
+
+    libro = openpyxl.load_workbook(tmp_path / "anonimizado" / "solicitudes.xlsx")
+    hoja = libro.active
+    assert libro.properties.creator == "anonimizado"
+    assert libro.properties.lastModifiedBy is None and libro.properties.title is None
+    # Autor sin alias previo -> AUT-…; autor que ya figura en una columna -> el mismo alias
+    assert hoja["C2"].comment.author == "AUT-001"
+    assert hoja["C2"].comment.text == "AUT-001:\nConfirmar con PROV-001"
+    assert hoja["A2"].comment.author == "SOL-001"
+    assert hoja["A2"].comment.text == "SOL-001:\nOK"
+    assert hoja["D3"].value == "Ver con AUT-001"  # nombre del autor dentro de una celda
+    equivalencias = (tmp_path / "equivalencias_NO_COMPARTIR.csv").read_text(encoding="utf-8-sig")
+    assert "AUT-001;Ana Gómez" in equivalencias
+    # Nada del original queda en el archivo (celdas, comentarios ni propiedades)
+    import zipfile
+    with zipfile.ZipFile(tmp_path / "anonimizado" / "solicitudes.xlsx") as z:
+        contenido = "".join(z.read(n).decode("utf-8", "ignore") for n in z.namelist())
+    for original in ("Juan Pérez", "Ana Gómez", "Repuestos del Sur SA"):
+        assert original not in contenido
+
+
+def test_excel_borra_datos_guardados_de_vinculos_externos(anonimizar, monkeypatch, tmp_path):
+    # Copia oculta de una hoja «Tablas» de otro libro, como la que guarda Excel para las fórmulas
+    from openpyxl.packaging.relationship import Relationship
+    from openpyxl.workbook.external_link.external import (
+        ExternalBook, ExternalCell, ExternalLink, ExternalRow, ExternalSheetData,
+        ExternalSheetDataSet, ExternalSheetNames)
+
+    libro = openpyxl.Workbook()
+    hoja = libro.active
+    hoja.append(["Area", "Centro de costo"])
+    hoja.append(["Sector Uno", "=_xlfn.XLOOKUP(A2,[1]Tablas!$A:$A,[1]Tablas!$B:$B)"])
+    datos = ExternalSheetDataSet(sheetData=[ExternalSheetData(sheetId=0, row=[
+        ExternalRow(r=3, cell=[ExternalCell(r="A3", t="str", v="Sector Uno"), ExternalCell(r="B3", v="9001")])])])
+    vinculo = ExternalLink(externalBook=ExternalBook(
+        sheetNames=ExternalSheetNames(sheetName=["Tablas"]), sheetDataSet=datos, id="rId1"))
+    vinculo.file_link = Relationship(
+        type="externalLinkPath", Target="file:///C:/Users/jperez/Compras/Mantenimiento.xlsx", TargetMode="External")
+    libro._external_links.append(vinculo)
+    libro.save(tmp_path / "solicitudes.xlsx")
+
+    # Con las fórmulas conservadas el vínculo sigue en uso: hay que limpiarlo
+    _correr(anonimizar, monkeypatch, tmp_path, "solicitudes.xlsx", "-c", "Area=A", "--conservar-formulas")
+
+    import zipfile
+    with zipfile.ZipFile(tmp_path / "solicitudes.xlsx") as z:  # el original sí los tenía
+        assert any("9001" in z.read(n).decode("utf-8", "ignore") for n in z.namelist())
+    with zipfile.ZipFile(tmp_path / "anonimizado" / "solicitudes.xlsx") as z:
+        contenido = "".join(z.read(n).decode("utf-8", "ignore") for n in z.namelist())
+    for original in ("Sector Uno", "9001", "jperez"):
+        assert original not in contenido
+    hoja = openpyxl.load_workbook(tmp_path / "anonimizado" / "solicitudes.xlsx").active
+    assert hoja["A2"].value == "A-001" and hoja["B2"].value.startswith("=_xlfn.XLOOKUP")
+
+
+def test_excel_anonimiza_hipervinculos(anonimizar, monkeypatch, tmp_path):
+    from openpyxl.worksheet.hyperlink import Hyperlink
+
+    libro = openpyxl.Workbook()
+    hoja = libro.active
+    hoja.title = "Enero"
+    hoja.append(["Proveedor", "Descripción"])
+    hoja.append(["Repuestos del Sur SA", "Presupuesto de Juan Pérez"])
+    hoja.append(["Repuestos del Sur SA", "Ver enero"])
+    hoja["B2"].hyperlink = "Carpeta compras\\Repuestos del Sur SA\\Presupuesto Juan Pérez.PDF"
+    hoja["B2"].hyperlink.display = "Presupuesto de Juan Pérez"
+    hoja["B2"].hyperlink.tooltip = "Juan Pérez"
+    hoja["B3"].hyperlink = Hyperlink(ref="B3", location="'Enero'!A1", display="Ver enero")
+    libro.save(tmp_path / "solicitudes.xlsx")
+
+    (tmp_path / "terminos.txt").write_text("EMP;Juan Pérez\n", encoding="utf-8")
+    _correr(anonimizar, monkeypatch, tmp_path, "solicitudes.xlsx", "-c", "Proveedor=PROV",
+            "--terminos", "terminos.txt")
+
+    hoja = openpyxl.load_workbook(tmp_path / "anonimizado" / "solicitudes.xlsx").active
+    assert hoja["B2"].value == "Presupuesto de EMP-001"
+    assert hoja["B2"].hyperlink.target == "documento_0001.pdf"
+    assert hoja["B3"].hyperlink.location == "'Enero'!A1"  # vínculo interno, intacto
+    import zipfile
+    with zipfile.ZipFile(tmp_path / "anonimizado" / "solicitudes.xlsx") as z:
+        contenido = "".join(z.read(n).decode("utf-8", "ignore") for n in z.namelist())
+    for original in ("Juan Pérez", "Repuestos del Sur", "Carpeta compras"):
+        assert original not in contenido
+
+
+def _con_valores_calculados(ruta, valores):
+    """openpyxl no guarda el valor calculado de una fórmula: se lo agrega como haría Excel."""
+    import re
+    import zipfile
+
+    with zipfile.ZipFile(ruta) as z:
+        partes = {n: z.read(n) for n in z.namelist()}
+    xml = partes["xl/worksheets/sheet1.xml"].decode("utf-8")
+    for celda, (tipo, valor) in valores.items():
+        xml, n = re.subn(rf'<c r="{celda}"([^>]*)><f>(.*?)</f><v\s*/?>(</v>)?',
+                         rf'<c r="{celda}"\1 t="{tipo}"><f>\2</f><v>{valor}</v>', xml)
+        assert n == 1, celda
+    partes["xl/worksheets/sheet1.xml"] = xml.encode("utf-8")
+    with zipfile.ZipFile(ruta, "w") as z:
+        for nombre, datos in partes.items():
+            z.writestr(nombre, datos)
+
+
+def test_excel_reemplaza_formulas_por_su_valor_anonimizado(anonimizar, monkeypatch, tmp_path):
+    # Centro de costo calculado con un XLOOKUP a una hoja «Tablas» (que se borró antes de compartir)
+    libro = openpyxl.Workbook()
+    hoja = libro.active
+    hoja.append(["Area", "Centro de costo", "Proveedor sugerido", "Proveedor"])
+    hoja.append(["Sector Uno", '=_xlfn.XLOOKUP(A2,Tablas!A:A,Tablas!B:B,"Seleccionar área")',
+                 "Repuestos del Sur SA", "=C2"])
+    hoja.append(["Sector Dos", '=_xlfn.XLOOKUP(A3,Tablas!A:A,Tablas!B:B,"Seleccionar área")', None, "=C3"])
+    libro.save(tmp_path / "solicitudes.xlsx")
+    _con_valores_calculados(tmp_path / "solicitudes.xlsx", {
+        "B2": ("n", "9001"), "D2": ("str", "Repuestos del Sur SA"), "B3": ("e", "#REF!"), "D3": ("n", "0")})
+    reglas = ("-c", "Area=A", "-c", "Centro de costo=CC", "-c", "Proveedor sugerido=PROV", "-c", "Proveedor=PROV")
+
+    _correr(anonimizar, monkeypatch, tmp_path, "solicitudes.xlsx", *reglas)
+
+    hoja = openpyxl.load_workbook(tmp_path / "anonimizado" / "solicitudes.xlsx").active
+    assert [c.value for c in hoja[2]] == ["A-001", "CC-001", "PROV-001", "PROV-001"]
+    assert [c.value for c in hoja[3]] == ["A-002", "#REF!", None, 0]  # error y cero, sin alias
+    import zipfile
+    with zipfile.ZipFile(tmp_path / "anonimizado" / "solicitudes.xlsx") as z:
+        contenido = "".join(z.read(n).decode("utf-8", "ignore") for n in z.namelist())
+    assert "<f>" not in contenido and "Tablas" not in contenido and "9001" not in contenido
+
+    # Con --conservar-formulas quedan como estaban
+    _correr(anonimizar, monkeypatch, tmp_path, "solicitudes.xlsx", *reglas, "--conservar-formulas")
+    hoja = openpyxl.load_workbook(tmp_path / "anonimizado" / "solicitudes.xlsx").active
+    assert hoja["B2"].value.startswith("=_xlfn.XLOOKUP") and hoja["D2"].value == "=C2"

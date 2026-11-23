@@ -20,7 +20,17 @@ Uso:
      para textos que aparecen sueltos dentro de celdas (por ejemplo, un nombre
      escrito en una descripción o en el encabezado de una hoja de pedido).
 
-  Los archivos anonimizados quedan en la carpeta `anonimizado/`.
+  En los Excel, cada fórmula se reemplaza por el valor que tenía calculado, y ese valor se
+  anonimiza como cualquier otro (así no depende de hojas como «Tablas» ni quedan nombres
+  dentro de las fórmulas). Con --conservar-formulas se dejan las fórmulas, sin anonimizar.
+
+  Los archivos anonimizados quedan en la carpeta `anonimizado/`. En los Excel también se
+  borran el autor y demás propiedades del archivo, y los comentarios de celda pasan por los
+  mismos reemplazos (su autor recibe un alias AUT-…, o el que ya tenga en otra columna).
+  De los vínculos a otros libros se borran la ruta y la copia oculta de sus datos, y los
+  hipervínculos pasan a apuntar a documento_0001.pdf… (se conserva solo la extensión).
+  Si después abrís el resultado en Excel, cerralo sin guardar: Excel vuelve a poner tu
+  nombre en las propiedades y la ruta de tu carpeta.
   Requiere openpyxl para los .xlsx (ya está en el entorno del proyecto).
 """
 import argparse
@@ -31,6 +41,7 @@ from pathlib import Path
 
 CODIFICACIONES = ("utf-8-sig", "utf-16", "cp1252", "latin-1")
 FILAS_BUSCAR_ENCABEZADO = 15
+ERRORES_EXCEL = {"#REF!", "#N/A", "#VALUE!", "#DIV/0!", "#NAME?", "#NUM!", "#NULL!", "#SPILL!", "#CALC!"}
 
 
 def norm(texto):
@@ -51,6 +62,10 @@ class Alias:
     def alias(self, prefijo, valor):
         if valor is None or str(valor).strip() == "":
             return valor
+        if str(valor).strip().upper() in ERRORES_EXCEL:
+            return valor  # un error de fórmula no es un dato
+        if isinstance(valor, (int, float)) and not isinstance(valor, bool) and valor == 0:
+            return valor  # lo que da una fórmula como «=M3» con la celda de origen vacía
         if norm(valor).rstrip(":").strip() in self.protegidos:
             return valor
         clave = (prefijo, norm(valor))
@@ -161,10 +176,131 @@ def procesar_tabla(ruta, reglas, terminos, alias, salida):
 
 # ---------- Excel ----------
 
-def procesar_excel(ruta, reglas, terminos, alias, salida):
+PROPIEDADES_TEXTO = ("creator", "lastModifiedBy", "title", "subject", "description",
+                     "keywords", "category", "contentStatus", "identifier")
+
+
+def limpiar_propiedades(libro):
+    """Borra autor, último en modificar y demás textos de las propiedades del archivo."""
+    from openpyxl.packaging.custom import CustomPropertyList
+
+    for nombre in PROPIEDADES_TEXTO:
+        setattr(libro.properties, nombre, None)
+    libro.properties.creator = "anonimizado"
+    libro.custom_doc_props = CustomPropertyList()
+
+
+def limpiar_vinculos_externos(libro):
+    """Vínculos a otros libros: borra la copia de sus datos que Excel guarda y la ruta.
+
+    Excel guarda, invisible, una copia de las celdas que usan las fórmulas del libro
+    vinculado (por ejemplo, una hoja «Tablas» con sectores y centros de costo) aunque esa
+    hoja se haya borrado. Las fórmulas quedan como están; al abrir, Excel avisa que no
+    encuentra el archivo vinculado.
+    """
+    vinculos = getattr(libro, "_external_links", [])
+    for i, vinculo in enumerate(vinculos, 1):
+        if vinculo.externalBook is not None:
+            vinculo.externalBook.sheetDataSet = None
+        if vinculo.file_link is not None:
+            vinculo.file_link.Target = f"vinculo_externo_{i}.xlsx"
+    return len(vinculos)
+
+
+def anonimizar_hipervinculos(libro):
+    """Hipervínculos: la dirección (ruta o URL, que suele tener nombres de proveedores o
+    personas) pasa a `documento_0001.pdf`…, conservando la extensión; el texto que se
+    muestra pasa a ser el valor ya anonimizado de la celda. Los vínculos a otra hoja del
+    mismo libro no se tocan.
+    """
+    from urllib.parse import unquote
+
+    n = 0
+    for hoja in libro.worksheets:
+        for fila in hoja.iter_rows():
+            for c in fila:
+                vinculo = getattr(c, "hyperlink", None)
+                if not vinculo:
+                    continue
+                if vinculo.target:
+                    n += 1
+                    nombre = unquote(vinculo.target).replace("\\", "/").rsplit("/", 1)[-1]
+                    extension = re.search(r"\.\w{1,5}$", nombre)
+                    vinculo.target = f"documento_{n:04d}{extension.group(0).lower() if extension else ''}"
+                vinculo.display = c.value if isinstance(c.value, str) else None
+                vinculo.tooltip = None
+    return n
+
+
+def comentarios(libro):
+    return [c.comment for hoja in libro.worksheets for fila in hoja.iter_rows()
+            for c in fila if getattr(c, "comment", None)]
+
+
+def alias_autores(libro, alias):
+    """Autor de cada comentario -> alias: el que ya tenga en alguna columna, o uno AUT-…."""
+    autores = {}
+    for com in comentarios(libro):
+        autor = (com.author or "").strip()
+        if autor and autor not in autores:
+            autores[autor] = alias.por_valor.get(norm(autor)) or alias.alias("AUT", autor)
+    return autores
+
+
+def anonimizar_comentarios(libro, autores, terminos, alias):
+    """El texto de cada comentario pasa por los mismos reemplazos que las celdas.
+
+    Excel suele empezar el texto con «Autor:», así que el nombre del autor se reemplaza
+    también dentro del texto, aunque sea corto.
+    """
+    lista = comentarios(libro)
+    for com in lista:
+        texto = com.text or ""
+        for autor in sorted(autores, key=len, reverse=True):
+            texto = re.sub(r"(?<!\w)" + re.escape(autor) + r"(?!\w)", autores[autor], texto, flags=re.IGNORECASE)
+        com.text = aplicar_terminos(reemplazo_en_texto(texto, alias), terminos, alias)
+        com.author = autores.get((com.author or "").strip(), "")
+    return len(lista)
+
+
+def es_formula(celda):
+    return celda.data_type == "f" or (isinstance(celda.value, str) and celda.value.startswith("="))
+
+
+def formulas_a_valores(ruta, libro):
+    """Reemplaza cada fórmula por el valor que Excel guardó la última vez que la calculó.
+
+    Así el resultado no depende de otras hojas o libros (por ejemplo, un XLOOKUP a una hoja
+    «Tablas» con los centros de costo), el valor se anonimiza como cualquier otro y no
+    quedan textos sin anonimizar dentro de las fórmulas.
+    """
     import openpyxl
 
+    valores = openpyxl.load_workbook(ruta, data_only=True)
+    n = 0
+    for hoja in libro.worksheets:
+        calculada = valores[hoja.title]
+        for fila in hoja.iter_rows():
+            for c in fila:
+                if editable_celda(c) and es_formula(c):
+                    c.value = calculada[c.coordinate].value
+                    n += 1
+    return n
+
+
+def editable_celda(celda):
+    from openpyxl.cell.cell import MergedCell
+
+    # En un rango combinado solo la primera celda tiene valor; las demás son de solo lectura
+    return not isinstance(celda, MergedCell)
+
+
+def procesar_excel(ruta, reglas, terminos, alias, salida, conservar_formulas=False):
+    import openpyxl
+
+    editable = editable_celda
     libro = openpyxl.load_workbook(ruta)
+    n_formulas = 0 if conservar_formulas else formulas_a_valores(ruta, libro)
     for hoja in libro.worksheets:
         # Busca una fila de encabezado con alguna de las columnas pedidas
         cols, fila_enc = {}, None
@@ -183,7 +319,7 @@ def procesar_excel(ruta, reglas, terminos, alias, salida):
                 inicio_datos = fila_enc + 2
             for fila in hoja.iter_rows(min_row=inicio_datos):
                 for c in fila:
-                    if c.column - 1 in cols and not str(c.value or "").startswith("="):
+                    if c.column - 1 in cols and editable(c) and not str(c.value or "").startswith("="):
                         c.value = alias.alias(cols[c.column - 1], c.value)
         # Etiquetas tipo "Proveedor:" con el valor en la celda de al lado
         for fila in hoja.iter_rows():
@@ -194,18 +330,28 @@ def procesar_excel(ruta, reglas, terminos, alias, salida):
                 for col, prefijo in reglas.items():
                     if etiqueta == norm(col) and c.column < hoja.max_column:
                         vecina = hoja.cell(row=c.row, column=c.column + 1)
-                        if vecina.value not in (None, "") and not str(vecina.value).startswith("="):
+                        if (editable(vecina) and vecina.value not in (None, "")
+                                and not str(vecina.value).startswith("=")):
                             vecina.value = alias.alias(prefijo, vecina.value)
+    # Autores de comentarios: después de las columnas (para reusar sus alias) y antes de la
+    # segunda pasada (para que sus nombres también se reemplacen dentro de las celdas)
+    autores = alias_autores(libro, alias)
     # Segunda pasada: valores ya conocidos y términos sueltos en cualquier celda
     for hoja in libro.worksheets:
         for fila in hoja.iter_rows():
             for c in fila:
                 if isinstance(c.value, str) and c.value.startswith("="):
                     continue
-                if c.value is not None:
+                if c.value is not None and editable(c):
                     c.value = aplicar_terminos(reemplazo_en_texto(reemplazo_global(c.value, alias), alias), terminos, alias)
+    n_comentarios = anonimizar_comentarios(libro, autores, terminos, alias)
+    limpiar_propiedades(libro)
+    n_vinculos = limpiar_vinculos_externos(libro)
+    n_hipervinculos = anonimizar_hipervinculos(libro)
     libro.save(salida / ruta.name)
-    print(f"  {ruta.name}: {len(libro.worksheets)} hojas procesadas")
+    formulas = f"{n_formulas} fórmulas pasadas a valor" if not conservar_formulas else "fórmulas conservadas"
+    print(f"  {ruta.name}: {len(libro.worksheets)} hojas procesadas, {formulas}, {n_comentarios} comentarios,"
+          f" {n_hipervinculos} hipervínculos, {n_vinculos} vínculos externos; autor del archivo borrado")
 
 
 # ---------- Listado ----------
@@ -235,6 +381,8 @@ def main():
     p.add_argument("--listar", action="store_true", help="Solo mostrar hojas y columnas")
     p.add_argument("-c", "--columna", action="append", default=[], metavar="COLUMNA=PREFIJO")
     p.add_argument("--terminos", type=Path, help="Archivo con líneas PREFIJO;texto")
+    p.add_argument("--conservar-formulas", action="store_true",
+                   help="No reemplazar las fórmulas por su valor (el texto de las fórmulas no se anonimiza)")
     a = p.parse_args()
 
     faltan = [r for r in a.archivos if not r.exists()]
@@ -267,7 +415,7 @@ def main():
     orden = sorted(a.archivos, key=lambda r: r.suffix.lower() in (".xlsx", ".xlsm"))
     for ruta in orden:
         if ruta.suffix.lower() in (".xlsx", ".xlsm"):
-            procesar_excel(ruta, reglas, terminos, alias, salida)
+            procesar_excel(ruta, reglas, terminos, alias, salida, a.conservar_formulas)
         elif ruta.suffix.lower() == ".xls":
             print(f"  {ruta.name}: formato .xls viejo; guardalo como .xlsx y volvé a correr")
         else:
