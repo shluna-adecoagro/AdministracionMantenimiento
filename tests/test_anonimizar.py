@@ -77,3 +77,29 @@ def test_alias_consistentes_entre_archivos_y_no_toca_importes(anonimizar, monkey
     assert hoja["F8"].value == "PROV-001"  # mismo proveedor, mismo alias
     equivalencias = (tmp_path / "equivalencias_NO_COMPARTIR.csv").read_text(encoding="utf-8-sig")
     assert "PROV-001;Repuestos del Sur SA" in equivalencias
+
+
+def test_excel_con_celdas_combinadas(anonimizar, monkeypatch, tmp_path):
+    # Como la planilla de solicitudes: títulos de grupo combinados arriba del encabezado
+    # y valores combinados en varias filas dentro de las columnas a anonimizar
+    libro = openpyxl.Workbook()
+    hoja = libro.active
+    hoja.title = "Enero"
+    hoja.append(["Solicitud N°", "Para completar por quien solicita:", None, None, "Para completar por el comprador:"])
+    hoja.append([None, "Area", "Solicitó", "Importe", "Proveedor", "Comentarios"])
+    hoja.append([1, "Taller Norte", "Juan Pérez", 100, "Repuestos del Sur SA", "Pedido de Juan Pérez"])
+    hoja.append([2, None, None, 50, None, None])
+    hoja.merge_cells("A1:A2")
+    hoja.merge_cells("B1:D1")
+    hoja.merge_cells("B3:B4")
+    hoja.merge_cells("C3:C4")
+    hoja.merge_cells("E3:E4")
+    libro.save(tmp_path / "solicitudes.xlsx")
+
+    _correr(anonimizar, monkeypatch, tmp_path, "solicitudes.xlsx",
+            "-c", "Area=A", "-c", "Solicitó=SOL", "-c", "Proveedor=PROV")
+
+    hoja = openpyxl.load_workbook(tmp_path / "anonimizado" / "solicitudes.xlsx").active
+    assert [hoja[c].value for c in ("B3", "C3", "E3", "F3")] == ["A-001", "SOL-001", "PROV-001", "Pedido de SOL-001"]
+    assert hoja["D3"].value == 100 and hoja["B1"].value == "Para completar por quien solicita:"
+    assert "B3:B4" in {str(r) for r in hoja.merged_cells.ranges}  # la combinación se conserva

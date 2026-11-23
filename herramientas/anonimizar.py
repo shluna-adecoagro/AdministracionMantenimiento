@@ -163,6 +163,11 @@ def procesar_tabla(ruta, reglas, terminos, alias, salida):
 
 def procesar_excel(ruta, reglas, terminos, alias, salida):
     import openpyxl
+    from openpyxl.cell.cell import MergedCell
+
+    def editable(celda):
+        # En un rango combinado solo la primera celda tiene valor; las demás son de solo lectura
+        return not isinstance(celda, MergedCell)
 
     libro = openpyxl.load_workbook(ruta)
     for hoja in libro.worksheets:
@@ -183,7 +188,7 @@ def procesar_excel(ruta, reglas, terminos, alias, salida):
                 inicio_datos = fila_enc + 2
             for fila in hoja.iter_rows(min_row=inicio_datos):
                 for c in fila:
-                    if c.column - 1 in cols and not str(c.value or "").startswith("="):
+                    if c.column - 1 in cols and editable(c) and not str(c.value or "").startswith("="):
                         c.value = alias.alias(cols[c.column - 1], c.value)
         # Etiquetas tipo "Proveedor:" con el valor en la celda de al lado
         for fila in hoja.iter_rows():
@@ -194,7 +199,8 @@ def procesar_excel(ruta, reglas, terminos, alias, salida):
                 for col, prefijo in reglas.items():
                     if etiqueta == norm(col) and c.column < hoja.max_column:
                         vecina = hoja.cell(row=c.row, column=c.column + 1)
-                        if vecina.value not in (None, "") and not str(vecina.value).startswith("="):
+                        if (editable(vecina) and vecina.value not in (None, "")
+                                and not str(vecina.value).startswith("=")):
                             vecina.value = alias.alias(prefijo, vecina.value)
     # Segunda pasada: valores ya conocidos y términos sueltos en cualquier celda
     for hoja in libro.worksheets:
@@ -202,7 +208,7 @@ def procesar_excel(ruta, reglas, terminos, alias, salida):
             for c in fila:
                 if isinstance(c.value, str) and c.value.startswith("="):
                     continue
-                if c.value is not None:
+                if c.value is not None and editable(c):
                     c.value = aplicar_terminos(reemplazo_en_texto(reemplazo_global(c.value, alias), alias), terminos, alias)
     libro.save(salida / ruta.name)
     print(f"  {ruta.name}: {len(libro.worksheets)} hojas procesadas")
