@@ -140,3 +140,66 @@ def test_excel_borra_autor_del_archivo_y_anonimiza_comentarios(anonimizar, monke
         contenido = "".join(z.read(n).decode("utf-8", "ignore") for n in z.namelist())
     for original in ("Juan Pérez", "Ana Gómez", "Repuestos del Sur SA"):
         assert original not in contenido
+
+
+def test_excel_borra_datos_guardados_de_vinculos_externos(anonimizar, monkeypatch, tmp_path):
+    # Copia oculta de una hoja «Tablas» de otro libro, como la que guarda Excel para las fórmulas
+    from openpyxl.packaging.relationship import Relationship
+    from openpyxl.workbook.external_link.external import (
+        ExternalBook, ExternalCell, ExternalLink, ExternalRow, ExternalSheetData,
+        ExternalSheetDataSet, ExternalSheetNames)
+
+    libro = openpyxl.Workbook()
+    hoja = libro.active
+    hoja.append(["Area", "Centro de costo"])
+    hoja.append(["Sector Uno", "=_xlfn.XLOOKUP(A2,[1]Tablas!$A:$A,[1]Tablas!$B:$B)"])
+    datos = ExternalSheetDataSet(sheetData=[ExternalSheetData(sheetId=0, row=[
+        ExternalRow(r=3, cell=[ExternalCell(r="A3", t="str", v="Sector Uno"), ExternalCell(r="B3", v="9001")])])])
+    vinculo = ExternalLink(externalBook=ExternalBook(
+        sheetNames=ExternalSheetNames(sheetName=["Tablas"]), sheetDataSet=datos, id="rId1"))
+    vinculo.file_link = Relationship(
+        type="externalLinkPath", Target="file:///C:/Users/jperez/Compras/Mantenimiento.xlsx", TargetMode="External")
+    libro._external_links.append(vinculo)
+    libro.save(tmp_path / "solicitudes.xlsx")
+
+    _correr(anonimizar, monkeypatch, tmp_path, "solicitudes.xlsx", "-c", "Area=A")
+
+    import zipfile
+    with zipfile.ZipFile(tmp_path / "solicitudes.xlsx") as z:  # el original sí los tenía
+        assert any("9001" in z.read(n).decode("utf-8", "ignore") for n in z.namelist())
+    with zipfile.ZipFile(tmp_path / "anonimizado" / "solicitudes.xlsx") as z:
+        contenido = "".join(z.read(n).decode("utf-8", "ignore") for n in z.namelist())
+    for original in ("Sector Uno", "9001", "jperez"):
+        assert original not in contenido
+    hoja = openpyxl.load_workbook(tmp_path / "anonimizado" / "solicitudes.xlsx").active
+    assert hoja["A2"].value == "A-001" and hoja["B2"].value.startswith("=_xlfn.XLOOKUP")
+
+
+def test_excel_anonimiza_hipervinculos(anonimizar, monkeypatch, tmp_path):
+    from openpyxl.worksheet.hyperlink import Hyperlink
+
+    libro = openpyxl.Workbook()
+    hoja = libro.active
+    hoja.title = "Enero"
+    hoja.append(["Proveedor", "Descripción"])
+    hoja.append(["Repuestos del Sur SA", "Presupuesto de Juan Pérez"])
+    hoja.append(["Repuestos del Sur SA", "Ver enero"])
+    hoja["B2"].hyperlink = "Carpeta compras\\Repuestos del Sur SA\\Presupuesto Juan Pérez.PDF"
+    hoja["B2"].hyperlink.display = "Presupuesto de Juan Pérez"
+    hoja["B2"].hyperlink.tooltip = "Juan Pérez"
+    hoja["B3"].hyperlink = Hyperlink(ref="B3", location="'Enero'!A1", display="Ver enero")
+    libro.save(tmp_path / "solicitudes.xlsx")
+
+    (tmp_path / "terminos.txt").write_text("EMP;Juan Pérez\n", encoding="utf-8")
+    _correr(anonimizar, monkeypatch, tmp_path, "solicitudes.xlsx", "-c", "Proveedor=PROV",
+            "--terminos", "terminos.txt")
+
+    hoja = openpyxl.load_workbook(tmp_path / "anonimizado" / "solicitudes.xlsx").active
+    assert hoja["B2"].value == "Presupuesto de EMP-001"
+    assert hoja["B2"].hyperlink.target == "documento_0001.pdf"
+    assert hoja["B3"].hyperlink.location == "'Enero'!A1"  # vínculo interno, intacto
+    import zipfile
+    with zipfile.ZipFile(tmp_path / "anonimizado" / "solicitudes.xlsx") as z:
+        contenido = "".join(z.read(n).decode("utf-8", "ignore") for n in z.namelist())
+    for original in ("Juan Pérez", "Repuestos del Sur", "Carpeta compras"):
+        assert original not in contenido

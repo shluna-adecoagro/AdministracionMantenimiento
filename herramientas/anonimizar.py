@@ -23,6 +23,10 @@ Uso:
   Los archivos anonimizados quedan en la carpeta `anonimizado/`. En los Excel también se
   borran el autor y demás propiedades del archivo, y los comentarios de celda pasan por los
   mismos reemplazos (su autor recibe un alias AUT-…, o el que ya tenga en otra columna).
+  De los vínculos a otros libros se borran la ruta y la copia oculta de sus datos, y los
+  hipervínculos pasan a apuntar a documento_0001.pdf… (se conserva solo la extensión).
+  Si después abrís el resultado en Excel, cerralo sin guardar: Excel vuelve a poner tu
+  nombre en las propiedades y la ruta de tu carpeta.
   Requiere openpyxl para los .xlsx (ya está en el entorno del proyecto).
 """
 import argparse
@@ -177,6 +181,48 @@ def limpiar_propiedades(libro):
     libro.custom_doc_props = CustomPropertyList()
 
 
+def limpiar_vinculos_externos(libro):
+    """Vínculos a otros libros: borra la copia de sus datos que Excel guarda y la ruta.
+
+    Excel guarda, invisible, una copia de las celdas que usan las fórmulas del libro
+    vinculado (por ejemplo, una hoja «Tablas» con sectores y centros de costo) aunque esa
+    hoja se haya borrado. Las fórmulas quedan como están; al abrir, Excel avisa que no
+    encuentra el archivo vinculado.
+    """
+    vinculos = getattr(libro, "_external_links", [])
+    for i, vinculo in enumerate(vinculos, 1):
+        if vinculo.externalBook is not None:
+            vinculo.externalBook.sheetDataSet = None
+        if vinculo.file_link is not None:
+            vinculo.file_link.Target = f"vinculo_externo_{i}.xlsx"
+    return len(vinculos)
+
+
+def anonimizar_hipervinculos(libro):
+    """Hipervínculos: la dirección (ruta o URL, que suele tener nombres de proveedores o
+    personas) pasa a `documento_0001.pdf`…, conservando la extensión; el texto que se
+    muestra pasa a ser el valor ya anonimizado de la celda. Los vínculos a otra hoja del
+    mismo libro no se tocan.
+    """
+    from urllib.parse import unquote
+
+    n = 0
+    for hoja in libro.worksheets:
+        for fila in hoja.iter_rows():
+            for c in fila:
+                vinculo = getattr(c, "hyperlink", None)
+                if not vinculo:
+                    continue
+                if vinculo.target:
+                    n += 1
+                    nombre = unquote(vinculo.target).replace("\\", "/").rsplit("/", 1)[-1]
+                    extension = re.search(r"\.\w{1,5}$", nombre)
+                    vinculo.target = f"documento_{n:04d}{extension.group(0).lower() if extension else ''}"
+                vinculo.display = c.value if isinstance(c.value, str) else None
+                vinculo.tooltip = None
+    return n
+
+
 def comentarios(libro):
     return [c.comment for hoja in libro.worksheets for fila in hoja.iter_rows()
             for c in fila if getattr(c, "comment", None)]
@@ -262,9 +308,11 @@ def procesar_excel(ruta, reglas, terminos, alias, salida):
                     c.value = aplicar_terminos(reemplazo_en_texto(reemplazo_global(c.value, alias), alias), terminos, alias)
     n_comentarios = anonimizar_comentarios(libro, autores, terminos, alias)
     limpiar_propiedades(libro)
+    n_vinculos = limpiar_vinculos_externos(libro)
+    n_hipervinculos = anonimizar_hipervinculos(libro)
     libro.save(salida / ruta.name)
-    print(f"  {ruta.name}: {len(libro.worksheets)} hojas procesadas, {n_comentarios} comentarios;"
-          " autor del archivo borrado")
+    print(f"  {ruta.name}: {len(libro.worksheets)} hojas procesadas, {n_comentarios} comentarios,"
+          f" {n_hipervinculos} hipervínculos, {n_vinculos} vínculos externos; autor del archivo borrado")
 
 
 # ---------- Listado ----------
