@@ -103,3 +103,40 @@ def test_excel_con_celdas_combinadas(anonimizar, monkeypatch, tmp_path):
     assert [hoja[c].value for c in ("B3", "C3", "E3", "F3")] == ["A-001", "SOL-001", "PROV-001", "Pedido de SOL-001"]
     assert hoja["D3"].value == 100 and hoja["B1"].value == "Para completar por quien solicita:"
     assert "B3:B4" in {str(r) for r in hoja.merged_cells.ranges}  # la combinación se conserva
+
+
+def test_excel_borra_autor_del_archivo_y_anonimiza_comentarios(anonimizar, monkeypatch, tmp_path):
+    from openpyxl.comments import Comment
+
+    libro = openpyxl.Workbook()
+    hoja = libro.active
+    hoja.append(["Solicitó", "Proveedor", "Importe"])
+    hoja.append(["Juan Pérez", "Repuestos del Sur SA", 100])
+    hoja.append([None, None, None, "Ver con Ana Gómez"])
+    hoja["C2"].comment = Comment("Ana Gómez:\nConfirmar con Repuestos del Sur SA", "Ana Gómez")
+    hoja["A2"].comment = Comment("Juan Pérez:\nOK", "Juan Pérez")
+    libro.properties.creator = "Juan Pérez"
+    libro.properties.lastModifiedBy = "Ana Gómez"
+    libro.properties.title = "Compras de Ana Gómez"
+    libro.save(tmp_path / "solicitudes.xlsx")
+
+    _correr(anonimizar, monkeypatch, tmp_path, "solicitudes.xlsx", "-c", "Solicitó=SOL", "-c", "Proveedor=PROV")
+
+    libro = openpyxl.load_workbook(tmp_path / "anonimizado" / "solicitudes.xlsx")
+    hoja = libro.active
+    assert libro.properties.creator == "anonimizado"
+    assert libro.properties.lastModifiedBy is None and libro.properties.title is None
+    # Autor sin alias previo -> AUT-…; autor que ya figura en una columna -> el mismo alias
+    assert hoja["C2"].comment.author == "AUT-001"
+    assert hoja["C2"].comment.text == "AUT-001:\nConfirmar con PROV-001"
+    assert hoja["A2"].comment.author == "SOL-001"
+    assert hoja["A2"].comment.text == "SOL-001:\nOK"
+    assert hoja["D3"].value == "Ver con AUT-001"  # nombre del autor dentro de una celda
+    equivalencias = (tmp_path / "equivalencias_NO_COMPARTIR.csv").read_text(encoding="utf-8-sig")
+    assert "AUT-001;Ana Gómez" in equivalencias
+    # Nada del original queda en el archivo (celdas, comentarios ni propiedades)
+    import zipfile
+    with zipfile.ZipFile(tmp_path / "anonimizado" / "solicitudes.xlsx") as z:
+        contenido = "".join(z.read(n).decode("utf-8", "ignore") for n in z.namelist())
+    for original in ("Juan Pérez", "Ana Gómez", "Repuestos del Sur SA"):
+        assert original not in contenido

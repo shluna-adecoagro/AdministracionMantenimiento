@@ -140,8 +140,10 @@ python herramientas/anonimizar.py pedidos.xlsx cabeceras.tsv -c "Proveedor=PROV"
 
 Reemplaza los valores de las columnas indicadas por alias consistentes (`PROV-001`…) en
 todos los archivos, sin tocar encabezados, importes ni el formato del Excel (colores de
-pestaña, celdas combinadas). Los archivos quedan en `anonimizado/` y la tabla de
-equivalencias en `equivalencias_NO_COMPARTIR.csv`, que no se comparte ni se sube al repo.
+pestaña, celdas combinadas). En los Excel también borra el autor y demás propiedades del
+archivo y anonimiza los comentarios de celda (texto y autor). Los archivos quedan en
+`anonimizado/` y la tabla de equivalencias en `equivalencias_NO_COMPARTIR.csv`, que no se
+comparte ni se sube al repo.
 
 ### Configuración (opcional)
 

@@ -20,7 +20,9 @@ Uso:
      para textos que aparecen sueltos dentro de celdas (por ejemplo, un nombre
      escrito en una descripción o en el encabezado de una hoja de pedido).
 
-  Los archivos anonimizados quedan en la carpeta `anonimizado/`.
+  Los archivos anonimizados quedan en la carpeta `anonimizado/`. En los Excel también se
+  borran el autor y demás propiedades del archivo, y los comentarios de celda pasan por los
+  mismos reemplazos (su autor recibe un alias AUT-…, o el que ya tenga en otra columna).
   Requiere openpyxl para los .xlsx (ya está en el entorno del proyecto).
 """
 import argparse
@@ -161,6 +163,51 @@ def procesar_tabla(ruta, reglas, terminos, alias, salida):
 
 # ---------- Excel ----------
 
+PROPIEDADES_TEXTO = ("creator", "lastModifiedBy", "title", "subject", "description",
+                     "keywords", "category", "contentStatus", "identifier")
+
+
+def limpiar_propiedades(libro):
+    """Borra autor, último en modificar y demás textos de las propiedades del archivo."""
+    from openpyxl.packaging.custom import CustomPropertyList
+
+    for nombre in PROPIEDADES_TEXTO:
+        setattr(libro.properties, nombre, None)
+    libro.properties.creator = "anonimizado"
+    libro.custom_doc_props = CustomPropertyList()
+
+
+def comentarios(libro):
+    return [c.comment for hoja in libro.worksheets for fila in hoja.iter_rows()
+            for c in fila if getattr(c, "comment", None)]
+
+
+def alias_autores(libro, alias):
+    """Autor de cada comentario -> alias: el que ya tenga en alguna columna, o uno AUT-…."""
+    autores = {}
+    for com in comentarios(libro):
+        autor = (com.author or "").strip()
+        if autor and autor not in autores:
+            autores[autor] = alias.por_valor.get(norm(autor)) or alias.alias("AUT", autor)
+    return autores
+
+
+def anonimizar_comentarios(libro, autores, terminos, alias):
+    """El texto de cada comentario pasa por los mismos reemplazos que las celdas.
+
+    Excel suele empezar el texto con «Autor:», así que el nombre del autor se reemplaza
+    también dentro del texto, aunque sea corto.
+    """
+    lista = comentarios(libro)
+    for com in lista:
+        texto = com.text or ""
+        for autor in sorted(autores, key=len, reverse=True):
+            texto = re.sub(r"(?<!\w)" + re.escape(autor) + r"(?!\w)", autores[autor], texto, flags=re.IGNORECASE)
+        com.text = aplicar_terminos(reemplazo_en_texto(texto, alias), terminos, alias)
+        com.author = autores.get((com.author or "").strip(), "")
+    return len(lista)
+
+
 def procesar_excel(ruta, reglas, terminos, alias, salida):
     import openpyxl
     from openpyxl.cell.cell import MergedCell
@@ -202,6 +249,9 @@ def procesar_excel(ruta, reglas, terminos, alias, salida):
                         if (editable(vecina) and vecina.value not in (None, "")
                                 and not str(vecina.value).startswith("=")):
                             vecina.value = alias.alias(prefijo, vecina.value)
+    # Autores de comentarios: después de las columnas (para reusar sus alias) y antes de la
+    # segunda pasada (para que sus nombres también se reemplacen dentro de las celdas)
+    autores = alias_autores(libro, alias)
     # Segunda pasada: valores ya conocidos y términos sueltos en cualquier celda
     for hoja in libro.worksheets:
         for fila in hoja.iter_rows():
@@ -210,8 +260,11 @@ def procesar_excel(ruta, reglas, terminos, alias, salida):
                     continue
                 if c.value is not None and editable(c):
                     c.value = aplicar_terminos(reemplazo_en_texto(reemplazo_global(c.value, alias), alias), terminos, alias)
+    n_comentarios = anonimizar_comentarios(libro, autores, terminos, alias)
+    limpiar_propiedades(libro)
     libro.save(salida / ruta.name)
-    print(f"  {ruta.name}: {len(libro.worksheets)} hojas procesadas")
+    print(f"  {ruta.name}: {len(libro.worksheets)} hojas procesadas, {n_comentarios} comentarios;"
+          " autor del archivo borrado")
 
 
 # ---------- Listado ----------
