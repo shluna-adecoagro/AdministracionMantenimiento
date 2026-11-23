@@ -2,7 +2,7 @@
 
 *23/11/2026. Hecho sobre el Excel completo anonimizado (`Pedidos_Anonimizado.xlsx`), antes de
 codificar el adaptador. Complementa la sección «Importación del Excel histórico de pedidos» de
-`diseno_tablas_operativas.md`. Las dudas del final están pendientes de respuesta del gestor.*
+`diseno_tablas_operativas.md`. Las dudas del final ya tienen respuesta (ver «Respuestas del gestor»).*
 
 ## Lo que hay
 
@@ -99,3 +99,17 @@ codificar el adaptador. Complementa la sección «Importación del Excel histór
     centro de costo, con el modelo o «a identificar» y el texto de detalles).
 11. **Dos OC en una celda** («100777817 - 100777819»): la primera en `nro_oc` y la celda completa
     en observaciones, «a revisar».
+
+## Respuestas del gestor (23/11)
+
+1. **Colores:** los verdes son cerrados, sin importar la tonalidad; el naranja equivale al
+   amarillo (en proceso); el azul también es cerrado. Rojos → anulados y sin color →
+   solicitado, como se recomendó (los sin color viejos quedan abiertos y se ven en el informe).
+2. **Verdes sin OC en algunas filas:** el comprador completó la OC en una sola celda, pero vale
+   para el resto de las líneas. Regla: con una sola OC en la hoja, para todas; con varias, para
+   las del mismo proveedor (si ese proveedor tiene una sola); si no, a revisar. Solo en hojas
+   cerradas (verdes y azul). Las 73 hojas verdes sin ninguna OC: cierre manual, sin OC.
+3. **«Recibido?» = ok:** se acepta la recomendación (cierre manual, sin recepción).
+4. **Moneda:** se termina de resolver al cruzar los pedidos con sus OC (fase 11); mientras
+   tanto, la regla de la duda 5 con `moneda_inferida`.
+5. Dudas 4 y 6 a 11: se aceptan las recomendaciones.

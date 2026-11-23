@@ -10,6 +10,8 @@ Comandos de consola: `flask --app run <comando>`.
     flask inspect-db     muestra tablas, columnas y claves
     flask importar <entidad> archivo.csv [--simular]   carga datos desde CSV
     flask exportar <entidad> archivo.csv               descarga datos a CSV
+    flask importar-pedidos Pedidos.xlsx [--equivalencias equivalencias_revisadas.csv] [--simular]
+                                                       carga el Excel histórico de pedidos
 """
 import os
 
@@ -120,6 +122,40 @@ def registrar_comandos(app):
         click.echo(resultado.resumen())
         if not resultado.ok:
             raise SystemExit(1)
+
+    @app.cli.command("importar-pedidos")
+    @click.argument("excel", type=click.Path(exists=True, dir_okay=False))
+    @click.option("--equivalencias", type=click.Path(exists=True, dir_okay=False),
+                  help="equivalencias_revisadas.csv (la tabla de Copilot, ya revisada).")
+    @click.option("--pendientes", default="pendientes.csv", show_default=True,
+                  type=click.Path(dir_okay=False, writable=True),
+                  help="Dónde dejar los textos sin identificar (para Copilot).")
+    @click.option("--informe", default="informe_pedidos.csv", show_default=True,
+                  type=click.Path(dir_okay=False, writable=True),
+                  help="Dónde dejar los avisos para revisar, por hoja y fila.")
+    @click.option("--simular", is_flag=True, help="Valida y muestra el resultado sin guardar nada.")
+    @click.option("--usuario", default="importación", show_default=True,
+                  help="Usuario que figura en la auditoría.")
+    def importar_pedidos(excel, equivalencias, pendientes, informe, simular, usuario):
+        """Importa el Excel histórico de pedidos (una hoja por pedido)."""
+        from app.crud.intercambio.pedidos_historicos import importar_pedidos_historicos
+
+        eq = None
+        if equivalencias:
+            with open(equivalencias, "rb") as f:
+                eq = f.read()
+        with open(excel, "rb") as f:
+            resultado = importar_pedidos_historicos(f.read(), nombre=os.path.basename(excel), equivalencias=eq,
+                                                    simular=simular, usuario=usuario)
+        click.echo(resultado.resumen())
+        if not resultado.ok:
+            raise SystemExit(1)
+        with open(pendientes, "wb") as f:
+            f.write(resultado.pendientes_csv())
+        with open(informe, "wb") as f:
+            f.write(resultado.informe_csv())
+        click.echo(f"✔ Pendientes para Copilot: {pendientes}")
+        click.echo(f"✔ Informe: {informe}")
 
     @app.cli.command("exportar")
     @click.argument("entidad")

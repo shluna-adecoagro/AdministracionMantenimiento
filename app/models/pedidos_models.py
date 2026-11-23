@@ -95,7 +95,10 @@ class Pedido(db.Model, ModelMixin, AuditMixin, OrigenMixin):
     canal = db.Column(db.String(20), nullable=True, info={"label": "Canal"})
     prioridad = db.Column(db.String(20), nullable=False, default="normal", info={"label": "Prioridad"})
     fecha_requerida = db.Column(db.Date, nullable=True, info={"label": "Fecha requerida"})
-    observaciones = db.Column(db.String(300), nullable=True)
+    # En el histórico, también las filas del Excel que no son líneas (notas, cantidades sin interpretar).
+    observaciones = db.Column(db.String(2000), nullable=True)
+    # Lo que la importación no pudo interpretar (el gestor lo borra al revisarlo).
+    motivo_revision = db.Column(db.String(1000), nullable=True, info={"label": "A revisar (importación)"})
 
     creado_en = db.Column(db.DateTime, default=datetime.utcnow)
     actualizado_en = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -157,7 +160,9 @@ class PedidoLinea(db.Model, ModelMixin, AuditMixin, OrigenMixin):
     motivo = db.relationship("MotivoOperacion")
     # OC con la que se compró (sin espacios y en mayúsculas: es la llave de cruce).
     nro_oc = db.Column(db.String(30), nullable=True, info={"label": "Nº de OC"})
-    observaciones = db.Column(db.String(300), nullable=True)
+    observaciones = db.Column(db.String(1000), nullable=True)
+    # Lo que la importación no pudo interpretar (el gestor lo borra al revisarlo).
+    motivo_revision = db.Column(db.String(1000), nullable=True, info={"label": "A revisar (importación)"})
 
     creado_en = db.Column(db.DateTime, default=datetime.utcnow)
     actualizado_en = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
