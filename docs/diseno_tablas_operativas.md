@@ -1,8 +1,8 @@
 # Diseño de tablas: parte operativa (borrador para revisar)
 
-*Versión 5.3, 23/11/2026. Deriva de `docs/vision_conceptual.md` y del estado del repo al commit 45e4dc7 (fase 9, planes preventivos). Reemplaza el "diseño inicial" de las fases operativas de `docs/plan_refactor_crud.md`.*
+*Versión 5.4, 23/11/2026. Deriva de `docs/vision_conceptual.md` y del estado del repo al commit 45e4dc7 (fase 9, planes preventivos). Reemplaza el "diseño inicial" de las fases operativas de `docs/plan_refactor_crud.md`.*
 
-*Historial: v2 — primer tramo con pedidos, documentos de proveedores y solicitudes de OC; destinos de la línea de pedido (1 : N); tabla de adjudicaciones (N:M). v2.1 — reparto proporcional entre destinos. v3 — convivencia con el ERP; estados como opciones fijas en código. v3.1 — TSV de EAM a demanda; importadores como adaptadores; estado "Enviada a Administración". v4 — ajustes a partir de ejemplos reales (Excel de pedidos y TSV de solicitudes internas). v4.1 — estado histórico por color de pestaña, moneda por formato de celda, rol de Copilot. v5 — la OC entra al primer tramo: una OC por proveedor y, en la práctica, una por presupuesto adjudicado; el nº de OC cruza pedidos, ofertas y solicitudes. v5.1 — columnas que necesita la lectura de PDF (`docs/prompt_copilot_documentos.md`): descuento global, total en USD informado, equipo y horas del medidor en documentos; precio de lista en líneas; presupuesto citado en la OC. v5.2 — estados de la línea de pedido: se guarda solo lo que no deja otro rastro y el resto se calcula; sector de una distribución con centro de costo compartido; costo de un material de stock sin precio en el maestro; cambios previstos al maestro de materiales. v5.3 — unidades de las cantidades entre genérico y presentación; presentación recibida en las recepciones; códigos del ERP vacíos como NULL.*
+*Historial: v2 — primer tramo con pedidos, documentos de proveedores y solicitudes de OC; destinos de la línea de pedido (1 : N); tabla de adjudicaciones (N:M). v2.1 — reparto proporcional entre destinos. v3 — convivencia con el ERP; estados como opciones fijas en código. v3.1 — TSV de EAM a demanda; importadores como adaptadores; estado "Enviada a Administración". v4 — ajustes a partir de ejemplos reales (Excel de pedidos y TSV de solicitudes internas). v4.1 — estado histórico por color de pestaña, moneda por formato de celda, rol de Copilot. v5 — la OC entra al primer tramo: una OC por proveedor y, en la práctica, una por presupuesto adjudicado; el nº de OC cruza pedidos, ofertas y solicitudes. v5.1 — columnas que necesita la lectura de PDF (`docs/prompt_copilot_documentos.md`): descuento global, total en USD informado, equipo y horas del medidor en documentos; precio de lista en líneas; presupuesto citado en la OC. v5.2 — estados de la línea de pedido: se guarda solo lo que no deja otro rastro y el resto se calcula; sector de una distribución con centro de costo compartido; costo de un material de stock sin precio en el maestro; cambios previstos al maestro de materiales. v5.3 — unidades de las cantidades entre genérico y presentación; presentación recibida en las recepciones; códigos del ERP vacíos como NULL. v5.4 — una presentación se cuenta por envases; no se adjudica material sin identificar a una línea que pide un genérico.*
 
 ## Convenciones (las del repo)
 
@@ -152,7 +152,7 @@ Derivadas: total de líneas, diferencia con el total (control de carga), total a
 | tipo_linea | opción | Material / mano de obra / traslado / otro |
 | material_id | FK, opcional | Vacía si no se identificó: queda "a revisar" |
 | codigo_proveedor, descripcion_proveedor | texto | Tal cual vienen |
-| cantidad | decimal | En ofertas, lo ofertado (puede ser menor a lo pedido) |
+| cantidad | decimal | En ofertas, lo ofertado (puede ser menor a lo pedido). Si el material es una presentación, en envases |
 | unidad_medida_id | FK | |
 | precio_lista | decimal, opcional | Unitario antes de descuentos, sin IVA |
 | descuento_pct | decimal, opcional | Descuento efectivo total sobre el precio de lista (de línea y global) |
@@ -171,7 +171,7 @@ Relación N:M entre líneas de oferta y líneas de pedido. Cubre una oferta que 
 | documento_linea_id | FK documento_lineas | Línea de una oferta |
 | pedido_linea_id | FK pedido_lineas | |
 | cantidad_ofertada | decimal, opcional | Si la oferta reparte su renglón entre líneas de pedido |
-| cantidad_adjudicada | decimal, 0 | Lo que el gestor confirma. 0 = cotizado, no comprado |
+| cantidad_adjudicada | decimal, 0 | Lo que el gestor confirma, en la unidad de la línea de oferta (envases, si es una presentación). 0 = cotizado, no comprado |
 
 - `cantidad_adjudicada` está en la unidad de la línea de oferta (la presentación ofertada). La adjudicada de la línea de pedido es la suma de esas cantidades **convertidas a la unidad de la línea de pedido** (ver «Unidades: genérico y presentación»).
 - Total adjudicado de una oferta = suma de `cantidad_adjudicada × precio neto` de sus líneas.
@@ -184,6 +184,8 @@ Relación N:M entre líneas de oferta y líneas de pedido. Cubre una oferta que 
 - Si la línea pide un **genérico** y se adjudica o se recibe una **presentación**, la cantidad se convierte con `presentacion_cantidad`: 2 bidones de 20 L = 40 L.
 - Si la línea pide la misma presentación que se adjudica, no hay conversión.
 - Para que la conversión sea posible, la unidad de una presentación es la de su genérico (se verifica en el maestro de materiales).
+- **Una presentación se cuenta por envases.** Su `unidad_medida` es la del **contenido** y `presentacion_cantidad` es cuánto contiene cada envase: «bidón 20 L» tiene unidad L y `presentacion_cantidad` 20. En una oferta o una recepción de esa presentación, «2» son **dos bidones** (40 L). Por eso, cuando el material es una presentación, la pantalla de ofertas y de recepciones rotula la cantidad **«Cantidad (envases)»**.
+- **Material sin identificar:** una línea de oferta sin `material_id` («a revisar») **no se puede adjudicar a una línea de pedido que pide un genérico**, porque no hay de dónde convertir; primero hay que identificar el material. Si la línea de pedido pide un material concreto (no genérico), sí se puede, y la cantidad se toma tal cual (sin conversión).
 
 ### recepciones (conformidad de materiales)
 
