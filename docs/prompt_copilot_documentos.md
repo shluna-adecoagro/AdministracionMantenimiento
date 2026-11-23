@@ -6,7 +6,15 @@
 
 - En un chat de Copilot o como instrucciones de un agente de Copilot. Adjuntá **un documento por vez** al principio; cuando ande bien, probá con varios.
 - Adjuntá también `materiales.csv`, exportado de la app con `flask --app run exportar materiales materiales.csv`: lo usa solo para sugerir el material cuando el código coincide exacto.
-- La salida son bloques de texto CSV. Copiá cada bloque a un archivo (`documentos.csv`, `documento_lineas.csv`, `ordenes_compra.csv`, `orden_compra_lineas.csv`) en la carpeta que lee el importador de la app. El importador identifica al proveedor (por CUIT, código del ERP o nombre), arma las claves definitivas y deja todo con `revisado` = no hasta que lo confirmes.
+- La salida son bloques de texto CSV. Copiá cada bloque a un archivo (`documentos.csv`, `documento_lineas.csv`, `ordenes_compra.csv`, `orden_compra_lineas.csv`). El importador identifica al proveedor (por CUIT o nombre), identifica el material por `material_sugerido` y deja todo con `revisado` = no hasta que lo confirmes. Los documentos ya revisados no se vuelven a importar.
+- Para cargar ofertas, presupuestos, remitos y facturas (bloques A y B), primero simulá y después importá:
+
+```bash
+flask --app run importar-documentos documentos.csv documento_lineas.csv --simular
+flask --app run importar-documentos documentos.csv documento_lineas.csv
+```
+
+  Las OC (bloques C y D) se importan en la fase 11.
 
 ## Prompt
 

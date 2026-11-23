@@ -1,8 +1,8 @@
 # Diseño de tablas: parte operativa (borrador para revisar)
 
-*Versión 5.5, 23/11/2026. Deriva de `docs/vision_conceptual.md` y del estado del repo al commit 45e4dc7 (fase 9, planes preventivos). Reemplaza el "diseño inicial" de las fases operativas de `docs/plan_refactor_crud.md`.*
+*Versión 5.6, 23/11/2026. Deriva de `docs/vision_conceptual.md` y del estado del repo al commit 45e4dc7 (fase 9, planes preventivos). Reemplaza el "diseño inicial" de las fases operativas de `docs/plan_refactor_crud.md`.*
 
-*Historial: v2 — primer tramo con pedidos, documentos de proveedores y solicitudes de OC; destinos de la línea de pedido (1 : N); tabla de adjudicaciones (N:M). v2.1 — reparto proporcional entre destinos. v3 — convivencia con el ERP; estados como opciones fijas en código. v3.1 — TSV de EAM a demanda; importadores como adaptadores; estado "Enviada a Administración". v4 — ajustes a partir de ejemplos reales (Excel de pedidos y TSV de solicitudes internas). v4.1 — estado histórico por color de pestaña, moneda por formato de celda, rol de Copilot. v5 — la OC entra al primer tramo: una OC por proveedor y, en la práctica, una por presupuesto adjudicado; el nº de OC cruza pedidos, ofertas y solicitudes. v5.1 — columnas que necesita la lectura de PDF (`docs/prompt_copilot_documentos.md`): descuento global, total en USD informado, equipo y horas del medidor en documentos; precio de lista en líneas; presupuesto citado en la OC. v5.2 — estados de la línea de pedido: se guarda solo lo que no deja otro rastro y el resto se calcula; sector de una distribución con centro de costo compartido; costo de un material de stock sin precio en el maestro; cambios previstos al maestro de materiales. v5.3 — unidades de las cantidades entre genérico y presentación; presentación recibida en las recepciones; códigos del ERP vacíos como NULL. v5.4 — una presentación se cuenta por envases; no se adjudica material sin identificar a una línea que pide un genérico. v5.5 — revisión del PR 10.3: el alta de la línea pide la cantidad y el destino principal; sector imputado y cuenta sugeridos y, si no hay de dónde, «a revisar»; motivos de tipo «Anulación»; canal sin «histórico»; el material se muestra como «código — descripción».*
+*Historial: v2 — primer tramo con pedidos, documentos de proveedores y solicitudes de OC; destinos de la línea de pedido (1 : N); tabla de adjudicaciones (N:M). v2.1 — reparto proporcional entre destinos. v3 — convivencia con el ERP; estados como opciones fijas en código. v3.1 — TSV de EAM a demanda; importadores como adaptadores; estado "Enviada a Administración". v4 — ajustes a partir de ejemplos reales (Excel de pedidos y TSV de solicitudes internas). v4.1 — estado histórico por color de pestaña, moneda por formato de celda, rol de Copilot. v5 — la OC entra al primer tramo: una OC por proveedor y, en la práctica, una por presupuesto adjudicado; el nº de OC cruza pedidos, ofertas y solicitudes. v5.1 — columnas que necesita la lectura de PDF (`docs/prompt_copilot_documentos.md`): descuento global, total en USD informado, equipo y horas del medidor en documentos; precio de lista en líneas; presupuesto citado en la OC. v5.2 — estados de la línea de pedido: se guarda solo lo que no deja otro rastro y el resto se calcula; sector de una distribución con centro de costo compartido; costo de un material de stock sin precio en el maestro; cambios previstos al maestro de materiales. v5.3 — unidades de las cantidades entre genérico y presentación; presentación recibida en las recepciones; códigos del ERP vacíos como NULL. v5.4 — una presentación se cuenta por envases; no se adjudica material sin identificar a una línea que pide un genérico. v5.5 — revisión del PR 10.3: el alta de la línea pide la cantidad y el destino principal; sector imputado y cuenta sugeridos y, si no hay de dónde, «a revisar»; motivos de tipo «Anulación»; canal sin «histórico»; el material se muestra como «código — descripción». v5.6 — revisión del PR 10.4: `origen` (del mixin) en lugar de `origen_carga`; proveedor y unidad tal como figuran; motivo de revisión de la lectura; `solicitud_trabajo_id` en la fase 11; acciones para vincular y adjudicar; los documentos revisados no se reimportan.*
 
 ## Convenciones (las del repo)
 
@@ -124,7 +124,8 @@ Ofertas, presupuestos de trabajos, remitos y facturas.
 | Columna | Tipo | Notas |
 |---|---|---|
 | tipo | opción | Oferta / presupuesto de trabajo / remito / factura |
-| proveedor_id | FK proveedores | |
+| proveedor_id | FK proveedores, opcional | Identificado por CUIT, código del ERP o razón social. Sin él, el documento no se puede marcar revisado |
+| proveedor_texto, proveedor_cuit | texto | Tal como figuran (decidido 23/11: si no se identifica, no se descarta) |
 | numero | texto, opcional | Único por proveedor y tipo cuando existe. Las ofertas reconstruidas del histórico no tienen número |
 | fecha | fecha | |
 | moneda | opción | ARS / USD |
@@ -136,11 +137,12 @@ Ofertas, presupuestos de trabajos, remitos y facturas.
 | equipo_texto | texto, opcional | Patente, serie, modelo o código de equipo tal como figura; sirve para identificar el activo |
 | horas_medidor | decimal, opcional | Horas del equipo al hacer el service ("SERVICIO 15644 HS"); alimenta la última ejecución del plan |
 | plazo_entrega_dias, validez_hasta | opcionales | Ofertas |
-| solicitud_trabajo_id | FK, opcional | Presupuesto del trabajo de un contratista |
+| solicitud_trabajo_id | FK, opcional | Presupuesto del trabajo de un contratista. **Se agrega en la fase 11**, con la tabla de solicitudes de trabajo |
 | nro_oc | texto, opcional | En ofertas y presupuestos: la OC que se emitió por ellos (una por presupuesto adjudicado). En remitos y facturas: la OC que referencian |
 | archivo | archivo (PDF) | El framework ya permite adjuntos |
-| origen_carga | opción | Manual / IA / mail / histórico |
-| revisado | sí/no | "La IA propone, una persona confirma" |
+| origen, clave_origen | | Del mixin (decidido 23/11, reemplaza a `origen_carga`): manual o mail → app; IA → PDF (clave = `clave_documento` de Copilot); histórico → histórico |
+| revisado | sí/no | "La IA propone, una persona confirma". Pide proveedor identificado, fecha y moneda. **Un documento revisado no se reimporta** |
+| motivo_revision | texto | La columna `revisar` de la lectura con Copilot |
 | observaciones | texto | |
 
 Derivadas: total de líneas, diferencia con el total (control de carga), total adjudicado.
@@ -155,12 +157,14 @@ Derivadas: total de líneas, diferencia con el total (control de carga), total a
 | material_id | FK, opcional | Vacía si no se identificó: queda "a revisar" |
 | codigo_proveedor, descripcion_proveedor | texto | Tal cual vienen |
 | cantidad | decimal | En ofertas, lo ofertado (puede ser menor a lo pedido). Si el material es una presentación, en envases |
-| unidad_medida_id | FK | |
+| udm_texto | texto | La unidad tal como figura |
+| unidad_medida_id | FK, opcional | La del material (se completa sola). Una línea de oferta nunca tiene un genérico |
 | precio_lista | decimal, opcional | Unitario antes de descuentos, sin IVA |
 | descuento_pct | decimal, opcional | Descuento efectivo total sobre el precio de lista (de línea y global) |
 | precio_unitario | decimal | Neto, sin IVA, después de todos los descuentos. Es el que usa el historial de precios |
 | activo_id | FK, opcional | En presupuestos de service, si detalla el equipo |
 | confianza | decimal, opcional | Extracción automática |
+| motivo_revision | texto | La columna `revisar` de la lectura; también «el material sugerido no está en el maestro» |
 
 Derivada: subtotal = cantidad × precio_unitario (el descuento ya está aplicado en el precio neto; no se aplica dos veces).
 
@@ -177,6 +181,8 @@ Relación N:M entre líneas de oferta y líneas de pedido. Cubre una oferta que 
 
 - `cantidad_adjudicada` está en la unidad de la línea de oferta (la presentación ofertada). La adjudicada de la línea de pedido es la suma de esas cantidades **convertidas a la unidad de la línea de pedido** (ver «Unidades: genérico y presentación»).
 - Total adjudicado de una oferta = suma de `cantidad_adjudicada × precio neto` de sus líneas.
+- **Acciones del documento (decidido 23/11):** «Vincular con pedidos» crea en 0 las adjudicaciones con las líneas de pedido abiertas del mismo material (o del genérico de la presentación); «Adjudicar lo vinculado» pone lo que falta comprar, sin superar lo ofertado y en envases enteros si es una presentación. El gestor corrige después.
+- **Reparto entre destinos:** lo adjudicado se calcula por línea; el reparto proporcional por destino llega con las recepciones (PR 10.5).
 - **En el histórico, el nº de OC reconstruye la adjudicación:** una línea de pedido con OC X se vincula con la oferta del mismo proveedor que tiene OC X (o que la OC X cita en sus observaciones).
 
 ### Unidades: genérico y presentación (decidido 23/11)
