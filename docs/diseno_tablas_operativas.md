@@ -1,8 +1,8 @@
 # Diseño de tablas: parte operativa (borrador para revisar)
 
-*Versión 5.4, 23/11/2026. Deriva de `docs/vision_conceptual.md` y del estado del repo al commit 45e4dc7 (fase 9, planes preventivos). Reemplaza el "diseño inicial" de las fases operativas de `docs/plan_refactor_crud.md`.*
+*Versión 5.5, 23/11/2026. Deriva de `docs/vision_conceptual.md` y del estado del repo al commit 45e4dc7 (fase 9, planes preventivos). Reemplaza el "diseño inicial" de las fases operativas de `docs/plan_refactor_crud.md`.*
 
-*Historial: v2 — primer tramo con pedidos, documentos de proveedores y solicitudes de OC; destinos de la línea de pedido (1 : N); tabla de adjudicaciones (N:M). v2.1 — reparto proporcional entre destinos. v3 — convivencia con el ERP; estados como opciones fijas en código. v3.1 — TSV de EAM a demanda; importadores como adaptadores; estado "Enviada a Administración". v4 — ajustes a partir de ejemplos reales (Excel de pedidos y TSV de solicitudes internas). v4.1 — estado histórico por color de pestaña, moneda por formato de celda, rol de Copilot. v5 — la OC entra al primer tramo: una OC por proveedor y, en la práctica, una por presupuesto adjudicado; el nº de OC cruza pedidos, ofertas y solicitudes. v5.1 — columnas que necesita la lectura de PDF (`docs/prompt_copilot_documentos.md`): descuento global, total en USD informado, equipo y horas del medidor en documentos; precio de lista en líneas; presupuesto citado en la OC. v5.2 — estados de la línea de pedido: se guarda solo lo que no deja otro rastro y el resto se calcula; sector de una distribución con centro de costo compartido; costo de un material de stock sin precio en el maestro; cambios previstos al maestro de materiales. v5.3 — unidades de las cantidades entre genérico y presentación; presentación recibida en las recepciones; códigos del ERP vacíos como NULL. v5.4 — una presentación se cuenta por envases; no se adjudica material sin identificar a una línea que pide un genérico.*
+*Historial: v2 — primer tramo con pedidos, documentos de proveedores y solicitudes de OC; destinos de la línea de pedido (1 : N); tabla de adjudicaciones (N:M). v2.1 — reparto proporcional entre destinos. v3 — convivencia con el ERP; estados como opciones fijas en código. v3.1 — TSV de EAM a demanda; importadores como adaptadores; estado "Enviada a Administración". v4 — ajustes a partir de ejemplos reales (Excel de pedidos y TSV de solicitudes internas). v4.1 — estado histórico por color de pestaña, moneda por formato de celda, rol de Copilot. v5 — la OC entra al primer tramo: una OC por proveedor y, en la práctica, una por presupuesto adjudicado; el nº de OC cruza pedidos, ofertas y solicitudes. v5.1 — columnas que necesita la lectura de PDF (`docs/prompt_copilot_documentos.md`): descuento global, total en USD informado, equipo y horas del medidor en documentos; precio de lista en líneas; presupuesto citado en la OC. v5.2 — estados de la línea de pedido: se guarda solo lo que no deja otro rastro y el resto se calcula; sector de una distribución con centro de costo compartido; costo de un material de stock sin precio en el maestro; cambios previstos al maestro de materiales. v5.3 — unidades de las cantidades entre genérico y presentación; presentación recibida en las recepciones; códigos del ERP vacíos como NULL. v5.4 — una presentación se cuenta por envases; no se adjudica material sin identificar a una línea que pide un genérico. v5.5 — revisión del PR 10.3: el alta de la línea pide la cantidad y el destino principal; sector imputado y cuenta sugeridos y, si no hay de dónde, «a revisar»; motivos de tipo «Anulación»; canal sin «histórico»; el material se muestra como «código — descripción».*
 
 ## Convenciones (las del repo)
 
@@ -49,7 +49,7 @@ pedidos ──< pedido_lineas ──< pedido_linea_destinos ──< recepciones
 | solicitante_id | FK empleados, opcional | Quién lo pidió |
 | solicitante_texto | texto, opcional | En el histórico suele estar vacío |
 | sector_id | FK sectores, opcional | Sector o taller que pide (sugiere el destino de las líneas) |
-| canal | opción | WhatsApp / mail / site / app / histórico |
+| canal | opción | WhatsApp / mail / site / app. En el histórico queda vacío (el origen ya dice que es histórico) |
 | prioridad | opción | Normal / urgente |
 | fecha_requerida | fecha, opcional | |
 | observaciones | texto | |
@@ -67,11 +67,11 @@ Es lo que ve Compras y lo que se cotiza: un material y una cantidad total.
 | nro_linea | entero | Único por pedido |
 | material_id | FK materiales, opcional | Se identifica por código (por ejemplo, "84228488") o se asigna a mano |
 | descripcion | texto | Columna "Producto" tal cual ("Bolillero 32217", "8605140") |
-| unidad_medida_id | FK, opcional | Por defecto, la del material |
+| unidad_medida_id | FK, opcional | La del material (se completa sola); a mano solo si no hay material. Si el material es una presentación, la cantidad se cuenta en envases |
 | estado | opción | **Guardado:** solicitado / en cotización / ofertas cargadas / anulado. Ver «Estado de la línea de pedido» |
 | sin_conformidad | sí/no | Cierre manual: cerrada en el histórico sin registro de recepción |
 | cantidad_cancelada | decimal, 0 | Con motivo |
-| motivo_operacion_id | FK motivos, opcional | Motivo de cancelación o anulación |
+| motivo_operacion_id | FK motivos, opcional | Motivo de cancelación o anulación: solo motivos de tipo «Anulación». Obligatorio si la línea está anulada o tiene cantidad cancelada |
 | nro_oc | texto, opcional | OC con la que se compró (columna "OC" del Excel, o la que carga Compras). Una línea comprada a dos proveedores tiene dos OC: en ese caso el dato sale de las adjudicaciones |
 | observaciones | texto | |
 
@@ -109,10 +109,12 @@ Una línea de pedido tiene uno o más destinos. Ejemplos reales: "Carros de aren
 | modelo_id | FK modelos, opcional | Compras para la flota de un modelo ("filtros para las 580") |
 | ubicacion_id | FK ubicaciones, opcional | Taller que recibe; obligatoria si destino = stock |
 | detalle_texto | texto | Columna "Detalles" tal cual |
-| sector_imputado_id | FK sectores | Quién paga. Sugerido: sector del activo, o el de la ubicación, o el del pedido |
-| cuenta_id | FK cuentas | Sugerida: cuenta del tipo de activo, o de la categoría del material |
+| sector_imputado_id | FK sectores, opcional | Quién paga. Si llega vacío se completa con la sugerencia: sector del activo, o el de la ubicación, o el del pedido |
+| cuenta_id | FK cuentas, opcional | Si llega vacía se completa con la sugerencia: cuenta del tipo de activo (del activo o del modelo), o la de la categoría del material |
 
-- Derivadas por destino: recibida y pendiente de recibir. Así cada taller da la conformidad de su parte.
+- Derivadas por destino: recibida y pendiente de recibir. Así cada taller da la conformidad de su parte; y **«a revisar»**: destino «a identificar», o sin sector imputado o sin cuenta (cuando no hubo de dónde sugerirlos).
+- **Alta de la línea (decidido 23/11):** el alta de una línea pide la cantidad y el destino principal (activo, modelo, stock con su ubicación, gasto general o a identificar) y crea su primer destino con toda la cantidad. Para repartir entre varios destinos se usa la pestaña «Destinos» de la línea.
+- El activo y la ubicación no corrigen el sector imputado: quien paga puede ser otro sector (préstamos).
 - **Compra parcial (decidido 21/11):** si se adjudica menos de lo solicitado, la app reparte lo adjudicado entre los destinos **en proporción** a sus cantidades; el gestor lo corrige. Para materiales que se cuentan por unidad, el reparto se redondea a enteros y el resto va al primer destino.
 
 ### documentos_proveedor (cabecera)

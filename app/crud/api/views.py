@@ -68,6 +68,8 @@ def serializar(spec: EntitySpec, registro) -> dict:
         attr.key: _valor_json(getattr(registro, attr.key))
         for attr in sa_inspect(spec.model).mapper.column_attrs
     }
+    for nombre in getattr(spec.model, "__calculados__", None) or {}:
+        d[nombre] = _valor_json(getattr(registro, nombre))
     for campo, cfg in fk.campos_fk(spec.fields).items():
         obj = fk.destino(registro, campo, cfg)
         d[f"{campo}_label"] = fk.etiqueta(obj, cfg) if obj is not None else None
@@ -198,7 +200,7 @@ class VistasAPI:
         """Valida contra el JSON Schema y convierte a tipos Python."""
         cuerpo = self._cuerpo()
         jsonschema.validar(self.spec, cuerpo, modo)
-        campos = {c: self.spec.fields[c] for c in jsonschema.campos_api(self.spec)}
+        campos = {c: self.spec.fields[c] for c in jsonschema.campos_entrada(self.spec, modo)}
         datos = coercion.datos_de_entrada(
             self.spec.model, campos, cuerpo, parcial=(modo == "modificar")
         )

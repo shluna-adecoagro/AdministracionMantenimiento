@@ -56,14 +56,29 @@ def _texto(formato: str, año: int, n: int) -> str:
     return _MARCA.sub(reemplazo, formato)
 
 
-def siguiente(model, campo: str, formato: str, hoy: date | None = None) -> str:
-    """Siguiente valor de la serie de `model.campo` según `formato`."""
+def siguiente(model, campo: str, formato: str, hoy: date | None = None, filtro: dict | None = None):
+    """
+    Siguiente valor de la serie de `model.campo` según `formato`. Con `filtro`
+    ({campo: valor}), la serie se cuenta solo entre esos registros (ej: el número
+    de línea dentro de un pedido). Si la columna es numérica, devuelve un entero.
+    """
     año = (hoy or date.today()).year
     patron = _patron(formato, año)
     columna = getattr(model, campo)
+    consulta = select(columna).where(columna.isnot(None))
+    for otro, valor in (filtro or {}).items():
+        consulta = consulta.where(getattr(model, otro) == valor)
     maximo = 0
-    for (valor,) in db.session.execute(select(columna).where(columna.isnot(None))):
+    for (valor,) in db.session.execute(consulta):
         m = patron.match(str(valor))
         if m:
             maximo = max(maximo, int(m.group(1)))
-    return _texto(formato, año, maximo + 1)
+    texto = _texto(formato, año, maximo + 1)
+    return int(texto) if _es_entera(columna) else texto
+
+
+def _es_entera(columna) -> bool:
+    try:
+        return columna.type.python_type is int
+    except NotImplementedError:
+        return False

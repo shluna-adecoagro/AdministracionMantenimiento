@@ -27,4 +27,5 @@ def servicio(entidad, *, confirmar: bool = True):
         etiqueta_tabla,
         confirmar=confirmar,
         al_guardar=spec.al_guardar,
+        completar=spec.completar,
     )

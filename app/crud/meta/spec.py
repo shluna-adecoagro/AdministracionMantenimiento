@@ -75,10 +75,22 @@ class FieldSpec:
     # {año}: "{n}" (serie continua: 1104, 1105...) o "TRA-{año}-{n:04d}"
     # (TRA-2026-0001, se reinicia cada año). Ver app/crud/core/numeracion.py.
     numeracion: str | None = None
+    # La serie se cuenta dentro de cada valor de este campo (ej: el número de
+    # línea, dentro de cada pedido: numeracion_por="pedido_id").
+    numeracion_por: str | None = None
 
     # Dato cuyo dueño es otro sistema (el ERP): se ve en la app, pero solo lo
     # carga o lo actualiza la importación (no se edita en la web ni en la API).
     solo_importacion: bool = False
+
+    # Campo que solo existe en el alta (no es una columna): se pide al crear y lo
+    # usa al_guardar, en registro.datos_alta (ej: la cantidad y el destino
+    # principal de una línea de pedido, que crean su primer destino).
+    solo_alta: bool = False
+
+    # Calculado en Python: propiedad del modelo declarada en __calculados__
+    # (ej: el resumen de un pedido). Se ve en listado, detalle y API.
+    calculado_python: bool = False
 
     # Otros nombres de columna que se aceptan al importar un CSV, además del
     # nombre del campo y su etiqueta (ej: ("name",) para una columna de SharePoint).
@@ -182,6 +194,11 @@ class EntitySpec:
     # texto (advertencia) o una tupla ("ok" | "aviso", texto).
     # operacion: "INSERT" | "UPDATE"; cambiados: campos que cambiaron.
     al_guardar: object = None
+    # Se ejecuta ANTES de guardar, para completar o normalizar datos (así la
+    # auditoría ya los registra): completar(datos, registro) -> datos.
+    # registro es None en un alta; en una modificación, `datos` trae solo lo que
+    # cambia (lo demás está en el registro).
+    completar: object = None
     # Campos que identifican un registro fuera de la base (ej: en SharePoint),
     # donde los IDs no coinciden. Los usa la importación para actualizar en vez
     # de duplicar. Ej: ("nombre_sector",) o ("nombre_ubicacion", "sector_id").

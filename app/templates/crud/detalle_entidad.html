@@ -53,7 +53,7 @@
         <div class="detalle-col-izq">
 
             <table class="tabla-detalle">
-                {% for campo, cfg in fields.items() %}
+                {% for campo, cfg in fields.items() if not cfg.solo_alta %}
                 <tr>
                     <th>{{ cfg.label }}</th>
 

@@ -119,7 +119,7 @@ def _alias(spec: EntitySpec) -> dict[str, tuple[str, str]]:
     """
     candidatos: dict[str, set] = {}
     for campo, f in spec.fields.items():
-        if f.tipo == "file" or f.solo_lectura:
+        if f.tipo == "file" or f.solo_lectura or f.solo_alta:
             continue
         if f.tipo == "fk":
             pares = [(campo, "id"), (f.label, "texto"), (campo.removesuffix("_id"), "texto")]
@@ -132,16 +132,25 @@ def _alias(spec: EntitySpec) -> dict[str, tuple[str, str]]:
 
 
 class _BuscadorFK:
-    """Busca el ID de un registro relacionado por su texto (ej: "Activo" → 1)."""
+    """
+    Busca el ID de un registro relacionado por su texto (ej: "Activo" → 1). Además
+    de la etiqueta, reconoce los atributos de `__buscar_por__` del modelo (ej: el
+    código o la descripción de un material). Si un texto coincide con varios
+    registros, es ambiguo y hay que usar el ID.
+    """
 
     def __init__(self, f):
         self.f = f
         atributo = f.fk_label or getattr(f.fk_model, "__label_field__", None)
-        self.indice: dict[str, list] = {}
+        self.indice: dict[str, set] = {}
         if atributo:
             pk = f.fk_model.__mapper__.primary_key[0].name
+            otros = getattr(f.fk_model, "__buscar_por__", ()) or ()
             for obj in f.fk_model.query.all():
-                self.indice.setdefault(_norm(getattr(obj, atributo)), []).append(getattr(obj, pk))
+                for a in (atributo, *otros):
+                    texto = getattr(obj, a, None)
+                    if texto not in (None, ""):
+                        self.indice.setdefault(_norm(texto), set()).add(getattr(obj, pk))
         self.atributo = atributo
 
     def buscar(self, texto: str):
@@ -152,7 +161,7 @@ class _BuscadorFK:
             raise ValueError(f"no existe «{texto}»")
         if len(ids) > 1:
             raise ValueError(f"hay {len(ids)} registros llamados «{texto}»; usá el ID")
-        return ids[0]
+        return next(iter(ids))
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +199,8 @@ def importar(spec: EntitySpec, contenido: bytes, nombre_archivo: str = "archivo.
         columnas.append((i, *destino))
 
     for campo, f in spec.fields.items():
-        if campo not in vistos and (f.required or campo in spec.clave_natural) and f.tipo != "file":
+        if campo not in vistos and (f.required or campo in spec.clave_natural) and f.tipo != "file" \
+                and not f.solo_alta:
             resultado.errores.append((1, campo, f"falta la columna «{f.label}» (o «{campo}»)"))
     if resultado.errores:
         return resultado
@@ -316,7 +326,7 @@ def exportar(spec: EntitySpec, separador: str = ";") -> bytes:
     """
     from app.crud.core import fk
 
-    campos = [c for c, f in spec.fields.items() if f.tipo != "file"]
+    campos = [c for c, f in spec.fields.items() if f.tipo != "file" and not f.solo_alta]
     salida = io.StringIO()
     escritor = csv.writer(salida, delimiter=separador, lineterminator="\n")
     escritor.writerow([spec.fields[c].label for c in campos])
