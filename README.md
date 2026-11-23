@@ -136,6 +136,7 @@ diseñar un importador), anonimizarlos en la propia computadora:
 ```bash
 python herramientas/anonimizar.py --listar pedidos.xlsx cabeceras.tsv      # ver hojas y columnas
 python herramientas/anonimizar.py pedidos.xlsx cabeceras.tsv -c "Proveedor=PROV" -c "Sector=SEC"
+python herramientas/anonimizar.py --chequear anonimizado                   # solo cantidades
 ```
 
 Reemplaza los valores de las columnas indicadas por alias consistentes (`PROV-001`…) en
@@ -143,8 +144,15 @@ todos los archivos, sin tocar encabezados, importes ni el formato del Excel (col
 pestaña, celdas combinadas). En los Excel reemplaza cada fórmula por su valor calculado
 (así no depende de hojas auxiliares como «Tablas», que se pueden borrar antes), borra el autor
 y demás propiedades del archivo, la dirección de los hipervínculos y los datos ocultos de los
-vínculos a otros libros, y anonimiza los comentarios de celda (texto y autor). Si después se
-abre el resultado en Excel, cerrarlo sin guardar. Los archivos quedan en
+vínculos a otros libros, y anonimiza los comentarios de celda (texto y autor). Los repartos de
+centro de costo escritos a mano («50% 4410 - 50% 4420») reciben los mismos alias que la columna
+de centro de costo. Si después se abre el resultado en Excel, cerrarlo sin guardar.
+
+`--listar` resume todas las hojas agrupadas por encabezado, sin mostrar valores (`--muestra`
+agrega las primeras filas de la hoja 1). `--chequear` cuenta lo que podría haber quedado
+(posibles nombres, razones sociales, correos, hipervínculos, comentarios, propiedades, tablas
+dinámicas…) y, si está la tabla de equivalencias, busca cada valor original en todo el
+archivo; muestra solo cantidades, así que su salida se puede compartir. Los archivos quedan en
 `anonimizado/` y la tabla de equivalencias en `equivalencias_NO_COMPARTIR.csv`, que no se
 comparte ni se sube al repo.
 
