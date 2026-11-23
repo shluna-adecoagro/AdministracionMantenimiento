@@ -180,7 +180,11 @@ class Maestros:
         self.activo_por_nombre = _unicos((normalizar(a.descripcion), a) for a in activos)
         modelos = Modelo.query.all()
         self.modelo_por_nombre = _unicos((normalizar(m.nombre_modelo), m) for m in modelos)
-        self.ubicacion_por_nombre = _unicos((normalizar(u.nombre_ubicacion), u) for u in Ubicacion.query)
+        ubicaciones = Ubicacion.query.all()
+        self.ubicacion_por_nombre = _unicos((normalizar(u.nombre_ubicacion), u) for u in ubicaciones)
+        self.ubicaciones_por_sector: dict[int, list] = {}
+        for u in ubicaciones:
+            self.ubicaciones_por_sector.setdefault(u.sector_id, []).append(u)
         sectores = Sector.query.all()
         self.sector_por_nombre = _unicos(
             [(normalizar(s.nombre_sector), s) for s in sectores]
@@ -583,6 +587,24 @@ class _Importador:
                 tipo, activo, modelo, ubicacion = base(d)
                 filas.append((f.cantidad, tipo, activo, modelo, ubicacion, sector))
 
+        # Sin «Detalles» y con un material del maestro (decidido 23/11): es un
+        # repuesto que va al stock del taller de su sector, si el sector tiene uno
+        # solo; si no, queda «a identificar» con una nota. Lo que no está en el
+        # maestro (ferretería, insumos) queda en gasto general.
+        notas: dict[int, str] = {}
+        if d.tipo == "vacio" and linea.material_id is not None:
+            for i, (cant, tipo, activo, modelo, ubicacion, sector) in enumerate(filas):
+                talleres = m.ubicaciones_por_sector.get(sector.sector_id, []) if sector else []
+                if len(talleres) == 1:
+                    filas[i] = (cant, "stock", None, None, talleres[0], sector)
+                else:
+                    filas[i] = (cant, "a_identificar", None, None, None, sector)
+                    notas[i] = "Sin «Detalles»: repuesto para stock, falta el taller que lo recibe"
+                    r.avisar(h.hoja, f.fila, "repuesto sin «Detalles»: no se pudo deducir el taller de stock "
+                                             + ("(el sector no tiene ubicaciones)" if sector and not talleres
+                                                else "(el sector tiene varias ubicaciones)" if talleres
+                                                else "(no hay sector imputado)"))
+
         clave_linea = linea.clave_origen
         vistas = set()
         for i, (cant, tipo, activo, modelo, ubicacion, sector) in enumerate(filas, start=1):
@@ -594,13 +616,18 @@ class _Importador:
                 "activo_id": activo.activo_id if activo else None,
                 "modelo_id": modelo.modelo_id if modelo else None,
                 "ubicacion_id": ubicacion.ubicacion_id if ubicacion else None,
-                "detalle_texto": (f.detalles or "")[:300] or None,
+                "detalle_texto": (f.detalles or "")[:300] or notas.get(i - 1),
                 "sector_imputado_id": sector.sector_id if sector else None,
                 "cuenta_id": cuenta.cuenta_id if cuenta else None,
                 "origen": "historico", "clave_origen": clave,
             }
-            # Un destino identificado (a mano o antes) no vuelve a «a identificar».
-            if existente is not None and tipo == "a_identificar" and existente.destino != "a_identificar":
+            # Un destino identificado (a mano o antes) no vuelve a «a identificar»,
+            # salvo el gasto general que la importación puso a una línea sin «Detalles»
+            # (si después se identificó el material, es un repuesto para stock).
+            automatico = (existente is not None and existente.destino == "gasto_general"
+                          and existente.detalle_texto is None and existente.ubicacion_id is None)
+            if (existente is not None and tipo == "a_identificar" and existente.destino != "a_identificar"
+                    and not automatico):
                 for c in ("destino", "activo_id", "modelo_id", "ubicacion_id"):
                     datos.pop(c)
             _, accion = self._guardar("pedido_linea_destinos", existente, datos, h.hoja, f.fila,

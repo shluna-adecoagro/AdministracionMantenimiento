@@ -605,9 +605,14 @@ son independientes entre sí; los demás van en orden.
   `codigos`). `material_nuevo` no crea materiales: el gestor los da de alta y reimporta.
 - Esquema (migración `fc476eabc431`): `motivo_revision` («A revisar (importación)») en
   pedidos y líneas; observaciones más largas (2000 en pedidos, 1000 en líneas).
-- Decisiones menores tomadas al codificar (a confirmar en la revisión): una línea sin
-  «Detalles» va a gasto general (no a «a identificar»); la oferta reconstruida lleva la
-  fecha del pedido; la clave del pedido no incluye el nombre del archivo.
+- Línea sin «Detalles» (decidido con el gestor, 23/11): con un material del maestro es un
+  repuesto para stock del taller de su sector imputado (si el sector tiene una sola
+  ubicación; si no, «a identificar» con nota); sin material del maestro (ferretería,
+  insumos), gasto general. Al reimportar, si el material se identificó después, el gasto
+  general automático pasa a stock o a «a identificar».
+- Decisiones menores tomadas al codificar (a confirmar en la revisión): la oferta
+  reconstruida lleva la fecha del pedido; la clave del pedido no incluye el nombre del
+  archivo.
 - Con el Excel anonimizado (maestros vacíos): 392 pedidos, 2096 líneas (1841 cerradas,
   71 con OC emitida, 58 anuladas), 2643 destinos, 462 ofertas; 334 líneas con la OC tomada
   de otra fila y 111 en hojas con varias OC que no se pudieron deducir. Unos 35 s.

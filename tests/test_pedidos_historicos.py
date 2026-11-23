@@ -456,3 +456,36 @@ def test_comando_importar_pedidos(app, maestros, tmp_path):
     assert "Pedidos: 4 creados" in resultado.output
     assert pendientes.read_text(encoding="utf-8-sig").startswith("id;tipo;texto;contexto;veces")
     assert informe.exists()
+
+
+def test_linea_sin_detalles(db, maestros, ubicacion):
+    """
+    Sin «Detalles»: un repuesto del maestro va al stock del taller de su sector (si
+    tiene uno solo); si no, «a identificar» con nota. Lo que no está en el maestro
+    (ferretería), a gasto general.
+    """
+    r = _importar(_libro(("Pedido 735", [
+        [2, "RE504836", None, "5101", "Taller"],    # «Taller» tiene una ubicación: Galpón 1
+        [1, "RE504836", None, "5101", "Tambo 1"],   # «Tambo 1» no tiene ubicaciones
+        [1, "Alicate", None, "5101", "Taller"],
+    ], {"color": VERDE_TEMA})))
+    assert r.ok, r.resumen()
+    stock, sin_taller, alicate = (_linea("735", n).destinos[0] for n in (1, 2, 3))
+    assert (stock.destino, stock.ubicacion_id, stock.cantidad) == ("stock", ubicacion.ubicacion_id, 2)
+    assert (sin_taller.destino, sin_taller.sector_imputado_id) == ("a_identificar", maestros["tambo"].sector_id)
+    assert "falta el taller" in sin_taller.detalle_texto
+    assert (alicate.destino, alicate.sector_imputado_id, alicate.cuenta_id) == (
+        "gasto_general", maestros["sector"].sector_id, maestros["cuenta"].cuenta_id)
+    assert not PedidoLineaDestino.query.filter_by(detalle_texto=None).filter(
+        PedidoLineaDestino.destino == "a_identificar").count()
+
+
+def test_material_identificado_despues_pasa_a_stock(db, maestros, ubicacion):
+    excel = _libro(("Pedido 735", [[1, "AL150288", None, "5101", "Taller"]], {"color": VERDE_TEMA}))
+    _importar(excel)
+    assert _linea("735").destinos[0].destino == "gasto_general"
+    cat = CategoriaMaterial.query.first().categoria_material_id
+    _guardar(db, Material(codigo="AL150288", descripcion="Filtro", categoria_material_id=cat))
+    assert _importar(excel).ok
+    d = _linea("735").destinos[0]
+    assert (d.destino, d.ubicacion_id) == ("stock", ubicacion.ubicacion_id)
