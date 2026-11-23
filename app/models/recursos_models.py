@@ -63,6 +63,8 @@ class Proveedor(Recurso):
 
     razon_social = db.Column(db.String(150), nullable=False, info={"label": "Razón social"})
     cuit = db.Column(db.String(20), info={"label": "CUIT"})
+    # Código del proveedor en el ERP (figura en la OC). Vacío = NULL.
+    codigo_erp = db.Column(db.String(50), nullable=True, unique=True, info={"label": "Código ERP"})
     direccion = db.Column(db.String(200), info={"label": "Dirección"})
     telefono = db.Column(db.String(50), info={"label": "Teléfono"})
     email = db.Column(db.String(100), info={"label": "Email"})

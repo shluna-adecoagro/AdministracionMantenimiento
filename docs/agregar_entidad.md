@@ -172,7 +172,7 @@ Lo mínimo es `{"model": MiModelo}`. Claves disponibles:
 | `sidebar`, `orden` | entrada en el menú y su posición | `activos` |
 | `grupo` | sección del menú: `"operativos"`, `"maestros"` (por defecto) o `"catalogos"` | `overrides/catalogos.py` |
 | `listado`, `filtros` | columnas del listado y campos de búsqueda (por defecto, se eligen solas) | `activos` |
-| `padre` | subentidad: pestaña en el detalle del padre. Puede ser una lista de padres; `"label"` cambia el nombre de la pestaña en ese padre | `ubicaciones`; `bom_activo` («BOM» en el activo, «Usado en activos» en el material) |
+| `padre` | subentidad: pestaña en el detalle del padre. Puede ser una lista de padres; `"label"` cambia el nombre de la pestaña en ese padre y `"visible"` (función del registro padre) la muestra solo en algunos | `ubicaciones`; `bom_activo` («BOM» en el activo, «Usado en activos» en el material) |
 | `clave_natural` | campos que identifican el registro al importar | `["nombre_ubicacion", "sector_id"]` |
 | `fields: {campo: {...}}` | cambiar lo inferido de un campo (ver abajo) | `lecturas_medidor.origen` |
 | `excluir` | campos que no se exponen | — |
