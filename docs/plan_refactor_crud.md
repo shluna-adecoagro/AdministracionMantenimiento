@@ -449,6 +449,31 @@ son independientes entre sí; los demás van en orden.
 | **10.5 Recepciones y estado calculado** | `recepciones` por destino, con la presentación recibida y la conversión a la unidad de la línea. Recibido, pendientes y estado visible completo (adjudicado → cerrado), con el salteo de estados calculado. |
 | **10.6 Importación del Excel histórico** | Adaptador del Excel de pedidos: celdas combinadas, colores de pestaña, moneda por formato de celda, una columna por proveedor. Exportación de `pendientes.csv` y lectura de `equivalencias_revisadas.csv`. Agrega `openpyxl` a `requirements.txt` y a `environment.yml`. |
 
+#### Notas del PR 10.1 (framework y limpieza)
+
+- **Limpieza:** se borraron `Pedido` / `PedidoDetalle`, `pedidos_service.py`,
+  `pedidos_routes.py` y su schema. La migración `c3f0a6b2d1e4` quita las tablas `pedidos`
+  y `pedido_detalle`; si alguna tiene filas, se detiene sin borrar nada. El nombre
+  `pedidos` queda libre para el PR 10.3.
+- **Archivos:** `FieldSpec.extensiones`. Las columnas `archivo*` se infieren como
+  documentos PDF (`.pdf`); las `foto*`, como imágenes. El formulario arma el `accept` y el
+  servidor verifica la extensión del campo. El detalle muestra como imagen solo las
+  imágenes (un PDF queda como enlace «Ver archivo»).
+- **Numeración automática:** `FieldSpec.numeracion` (`app/crud/core/numeracion.py`),
+  con `{n}` y `{año}`. Si el campo llega vacío al crear, toma el mayor de la serie + 1;
+  lo cargado a mano se respeta y lo que no sigue el formato no cuenta.
+- **Solo importación:** `FieldSpec.solo_importacion`. Se ve en listado, detalle y API; el
+  formulario lo muestra deshabilitado (sin enviarlo), la API lo rechaza con un mensaje
+  («lo carga la importación») y la importación lo carga. Se usa desde la fase 11.
+- **Origen de lo importado:** `OrigenMixin` (`origen` + `clave_origen`, única). Las dos
+  columnas son de solo importación y `clave_origen` es la clave natural por defecto. La
+  importación rechaza una fila con la clave natural toda vacía (se crearía un registro
+  nuevo en cada importación).
+- La API distingue, al recibir un campo que no se envía, entre un dato de solo
+  importación, uno calculado y uno desconocido.
+- Tests: `tests/test_framework_fase10.py`, con una entidad de prueba en una metadata
+  propia (ninguna entidad real usa todavía estas piezas).
+
 ## Arquitectura objetivo
 
 ```

@@ -29,6 +29,9 @@ from sqlalchemy.orm import configure_mappers
 # Columnas técnicas que nunca se exponen en formularios.
 COLUMNAS_OCULTAS = {"uuid", "creado_en", "actualizado_en"}
 
+# Origen de lo importado (app/crud/origen_mixin.py): de solo importación.
+COLUMNAS_ORIGEN = ("origen", "clave_origen")
+
 # Claves que el introspector entiende dentro de Column(..., info={...}).
 CLAVES_INFO = {"label"}
 
@@ -44,6 +47,12 @@ PREFIJO_FOTO = "foto"
 REGLA_COLOR = True
 PREFIJO_COLOR = "color"
 SUBCARPETA_FOTOS = "fotos"
+#  - Columna String cuyo nombre empieza con "archivo"     -> widget "file" para documentos (PDF).
+REGLA_ARCHIVO = True
+PREFIJO_ARCHIVO = "archivo"
+SUBCARPETA_ARCHIVOS = "documentos"
+EXTENSIONES_IMAGEN = (".jpg", ".jpeg", ".png", ".gif", ".webp")
+EXTENSIONES_DOCUMENTO = (".pdf",)
 
 # String(n) con n >= TEXTAREA_DESDE se infiere como textarea.
 TEXTAREA_DESDE = 300
@@ -241,15 +250,27 @@ def _inferir_campo(key: str, col, mapper) -> dict:
 
     tipo, extras = tipo_widget(col)
     if REGLA_FOTO and key.startswith(PREFIJO_FOTO) and isinstance(col.type, T.String):
-        tipo, extras = "file", {"subcarpeta": SUBCARPETA_FOTOS}
+        tipo, extras = "file", {"subcarpeta": SUBCARPETA_FOTOS, "extensiones": EXTENSIONES_IMAGEN}
         if not info.get("label"):
             etiqueta = "Foto"
+    if REGLA_ARCHIVO and key.startswith(PREFIJO_ARCHIVO) and isinstance(col.type, T.String):
+        tipo, extras = "file", {"subcarpeta": SUBCARPETA_ARCHIVOS, "extensiones": EXTENSIONES_DOCUMENTO}
+        if not info.get("label"):
+            etiqueta = "Archivo"
     if REGLA_COLOR and key.startswith(PREFIJO_COLOR) and isinstance(col.type, T.String):
         tipo, extras = "color", {}
         if not info.get("label"):
             etiqueta = "Color"
     campo = {"label": etiqueta, "tipo": tipo, "required": requerido}
     campo.update(extras)
+
+    # Origen de lo importado (OrigenMixin): lo carga la importación, no se edita.
+    if key in COLUMNAS_ORIGEN and all(c in mapper.columns for c in COLUMNAS_ORIGEN):
+        campo["solo_importacion"] = True
+        if key == "origen":
+            from app.crud.origen_mixin import OPCIONES_ORIGEN
+
+            campo.update(tipo="select", options=list(OPCIONES_ORIGEN), required=False)
     return campo
 
 

@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.audit.registrar import registrar_cambio
 from app.core.db import db
-from app.crud.core import dependencias, fk
+from app.crud.core import dependencias, fk, numeracion
 from app.crud.core.coercion import ErroresValidacion
 from app.crud.core.repository import valores
 
@@ -195,6 +195,10 @@ class ServicioCRUD:
     def crear(self, datos: dict, motivo: str | None = None, usuario: str = "sistema"):
         datos = self.completar_dependencias(datos)
         self.verificar_opciones(datos)
+        # Numeración automática: el campo vacío toma el siguiente número de su serie.
+        for campo, cfg in self.fields.items():
+            if cfg.get("numeracion") and datos.get(campo) in (None, ""):
+                datos[campo] = numeracion.siguiente(self.model, campo, cfg["numeracion"])
         # Un campo no obligatorio que no se envió toma el valor por defecto de
         # su columna (ej: «Vigente» = Sí), en vez de quedar vacío.
         columnas = sa_inspect(self.model).columns

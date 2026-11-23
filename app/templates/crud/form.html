@@ -34,7 +34,17 @@
                 <div class="form-group {% if errores and errores.get(campo) %}form-group--error{% endif %}">
                     <label for="{{ campo }}">{{ cfg.label }}</label>
 
-                    {% if cfg.tipo == "text" %}
+                    {% if cfg.solo_importacion %}
+                        {# Dato de otro sistema (ERP): se ve, pero sin name (no se envía). #}
+                        {% set v = modelo.get(campo) %}
+                        {% if cfg.tipo == "select" %}
+                            {% set opcion = cfg.options | selectattr("value", "equalto", v) | first %}
+                            {% set v = opcion.label if opcion else v %}
+                        {% endif %}
+                        <input type="text" id="{{ campo }}" value="{{ v if v is not none else '' }}" disabled>
+                        <small class="form-ayuda">Lo carga la importación; no se edita en la app.</small>
+
+                    {% elif cfg.tipo == "text" %}
                         <input type="text" name="{{ campo }}" id="{{ campo }}"
                                value="{{ modelo.get(campo) if modelo.get(campo) is not none else '' }}"
                                {% if cfg.required %}required{% endif %}>
@@ -88,8 +98,11 @@
 
                     {% elif cfg.tipo == "file" %}
                         <input type="file" name="{{ campo }}" id="{{ campo }}"
-                               accept="image/*"
+                               {% if cfg.extensiones %}accept="{{ cfg.extensiones | join(',') }}"{% endif %}
                                {% if cfg.required %}required{% endif %}>
+                        {% if cfg.extensiones %}
+                            <small class="form-ayuda">Formatos: {{ cfg.extensiones | join(', ') }}</small>
+                        {% endif %}
                     
                     {% elif cfg.tipo == "color" %}
                     <input type="color" name="{{ campo }}" id="{{ campo }}"
@@ -109,6 +122,9 @@
 
                     {% if es_filtro %}
                         <small class="form-ayuda">Filtra la lista siguiente; se deduce de ella.</small>
+                    {% endif %}
+                    {% if cfg.numeracion and tipo_operacion == "INSERT" %}
+                        <small class="form-ayuda">Si se deja vacío, se numera solo.</small>
                     {% endif %}
 
                     {% if errores and errores.get(campo) %}

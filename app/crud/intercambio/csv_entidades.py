@@ -213,7 +213,8 @@ def importar(spec: EntitySpec, contenido: bytes, nombre_archivo: str = "archivo.
                     continue
             crudo[campo] = valor
         try:
-            datos = coercion.datos_de_entrada(spec.model, campos_archivo, crudo, parcial=True)
+            datos = coercion.datos_de_entrada(spec.model, campos_archivo, crudo, parcial=True,
+                                              importacion=True)
             faltan = [c for c, f in campos_archivo.items() if f.required and datos.get(c) is None]
             if faltan:
                 raise ErroresValidacion({c: f"{spec.fields[c].label} es obligatorio." for c in faltan})
@@ -227,6 +228,12 @@ def importar(spec: EntitySpec, contenido: bytes, nombre_archivo: str = "archivo.
             continue
 
         clave = tuple(datos.get(c) for c in spec.clave_natural)
+        if all(v is None for v in clave):
+            # Sin clave no se puede saber si el registro ya existe: se crearía uno
+            # nuevo en cada importación (ej: una fila sin clave de origen).
+            etiquetas = " + ".join(spec.fields[c].label for c in spec.clave_natural)
+            resultado.errores.append((numero, "_clave", f"falta {etiquetas}, que identifica el registro"))
+            continue
         if clave in claves_vistas:
             resultado.errores.append((numero, "_clave", f"repite el registro de la fila {claves_vistas[clave]}"))
             continue

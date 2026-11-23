@@ -24,7 +24,10 @@ Dónde va cada dato:
                                                 de columna al importar), solo_lectura,
                                                 depende_de (None desactiva un select
                                                 dependiente inferido), fk_filtro (condición
-                                                de las opciones de una FK)...
+                                                de las opciones de una FK), extensiones
+                                                (archivos), numeracion ("{n}",
+                                                "TRA-{año}-{n:04d}"), solo_importacion
+                                                (dato del ERP)...
       excluir: [campo, ...]                     campos inferidos que no se exponen
       clave_natural: [campo, ...]               cómo se identifica el registro al
                                                 importar (ej: el nombre)

@@ -66,6 +66,19 @@ class FieldSpec:
     # (o, con fk_model, los nombres de ese modelo; el valor sigue siendo texto libre).
     options: tuple = ()
     subcarpeta: str | None = None  # para tipo "file"
+    # Tipo "file": extensiones admitidas (ej: (".pdf",)). Arman el `accept` del
+    # formulario y se verifican al guardar. Vacío = las que admite la app.
+    extensiones: tuple[str, ...] = ()
+
+    # Numeración automática: si el campo llega vacío al crear, se completa con el
+    # siguiente número de la serie. Formato con {n} (el número) y, opcional,
+    # {año}: "{n}" (serie continua: 1104, 1105...) o "TRA-{año}-{n:04d}"
+    # (TRA-2026-0001, se reinicia cada año). Ver app/crud/core/numeracion.py.
+    numeracion: str | None = None
+
+    # Dato cuyo dueño es otro sistema (el ERP): se ve en la app, pero solo lo
+    # carga o lo actualiza la importación (no se edita en la web ni en la API).
+    solo_importacion: bool = False
 
     # Otros nombres de columna que se aceptan al importar un CSV, además del
     # nombre del campo y su etiqueta (ej: ("name",) para una columna de SharePoint).

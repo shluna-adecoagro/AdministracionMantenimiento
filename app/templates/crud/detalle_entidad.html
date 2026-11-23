@@ -107,7 +107,7 @@
         <!-- Columna derecha: foto -->
         <div class="detalle-col-der">
             {% for campo, cfg in fields.items() %}
-                {% if cfg.tipo == "file" and modelo.get(campo) %}
+                {% if cfg.tipo == "file" and modelo.get(campo) and modelo.get(campo) is es_imagen %}
                     <img src="{{ modelo.get(campo) }}" class="detalle-foto">
                 {% endif %}
             {% endfor %}
