@@ -1,8 +1,8 @@
 # Diseño de tablas: parte operativa (borrador para revisar)
 
-*Versión 5.2, 22/11/2026. Deriva de `docs/vision_conceptual.md` y del estado del repo al commit 45e4dc7 (fase 9, planes preventivos). Reemplaza el "diseño inicial" de las fases operativas de `docs/plan_refactor_crud.md`.*
+*Versión 5.3, 23/11/2026. Deriva de `docs/vision_conceptual.md` y del estado del repo al commit 45e4dc7 (fase 9, planes preventivos). Reemplaza el "diseño inicial" de las fases operativas de `docs/plan_refactor_crud.md`.*
 
-*Historial: v2 — primer tramo con pedidos, documentos de proveedores y solicitudes de OC; destinos de la línea de pedido (1 : N); tabla de adjudicaciones (N:M). v2.1 — reparto proporcional entre destinos. v3 — convivencia con el ERP; estados como opciones fijas en código. v3.1 — TSV de EAM a demanda; importadores como adaptadores; estado "Enviada a Administración". v4 — ajustes a partir de ejemplos reales (Excel de pedidos y TSV de solicitudes internas). v4.1 — estado histórico por color de pestaña, moneda por formato de celda, rol de Copilot. v5 — la OC entra al primer tramo: una OC por proveedor y, en la práctica, una por presupuesto adjudicado; el nº de OC cruza pedidos, ofertas y solicitudes. v5.1 — columnas que necesita la lectura de PDF (`docs/prompt_copilot_documentos.md`): descuento global, total en USD informado, equipo y horas del medidor en documentos; precio de lista en líneas; presupuesto citado en la OC. v5.2 — estados de la línea de pedido: se guarda solo lo que no deja otro rastro y el resto se calcula; sector de una distribución con centro de costo compartido; costo de un material de stock sin precio en el maestro; cambios previstos al maestro de materiales.*
+*Historial: v2 — primer tramo con pedidos, documentos de proveedores y solicitudes de OC; destinos de la línea de pedido (1 : N); tabla de adjudicaciones (N:M). v2.1 — reparto proporcional entre destinos. v3 — convivencia con el ERP; estados como opciones fijas en código. v3.1 — TSV de EAM a demanda; importadores como adaptadores; estado "Enviada a Administración". v4 — ajustes a partir de ejemplos reales (Excel de pedidos y TSV de solicitudes internas). v4.1 — estado histórico por color de pestaña, moneda por formato de celda, rol de Copilot. v5 — la OC entra al primer tramo: una OC por proveedor y, en la práctica, una por presupuesto adjudicado; el nº de OC cruza pedidos, ofertas y solicitudes. v5.1 — columnas que necesita la lectura de PDF (`docs/prompt_copilot_documentos.md`): descuento global, total en USD informado, equipo y horas del medidor en documentos; precio de lista en líneas; presupuesto citado en la OC. v5.2 — estados de la línea de pedido: se guarda solo lo que no deja otro rastro y el resto se calcula; sector de una distribución con centro de costo compartido; costo de un material de stock sin precio en el maestro; cambios previstos al maestro de materiales. v5.3 — unidades de las cantidades entre genérico y presentación; presentación recibida en las recepciones; códigos del ERP vacíos como NULL.*
 
 ## Convenciones (las del repo)
 
@@ -11,6 +11,7 @@
 - **Estados de flujo como opciones fijas en código** (decidido 21/11): select con `options` en el override, no catálogo editable, porque las reglas de la app dependen de ellos.
 - **Cantidades derivadas sin columna:** ofertada, adjudicada, recibida y facturada se calculan sumando filas vinculadas (principio "recalcular, nunca incrementar"). Si hace falta por rendimiento, se agrega una caché que se recalcula, nunca un contador.
 - **Importación idempotente:** toda tabla que recibe histórico o reportes tiene `origen` (app / histórico / reporte / PDF) y `clave_origen` única (por ejemplo, hoja y fila del Excel, o número del ERP).
+- **Vacío es NULL:** en las importaciones, un código opcional vacío (por ejemplo, `codigo_erp` de materiales y proveedores) se guarda como NULL, nunca como texto vacío. Así la restricción de unicidad admite muchos registros sin código y solo controla los cargados.
 - **Registros del ERP** (solicitudes de OC, OC, OT): columna `sistema` (EAM / SAP / app) y número del ERP, únicos juntos. Las columnas cuyo dueño es el ERP no se editan en la app: las actualiza la próxima importación. Un registro creado en la app (`sistema` = app) puede recibir después su número del ERP, y la importación lo reconoce en lugar de duplicarlo.
 - **Importadores como adaptadores:** un adaptador por fuente (TSV de EAM, PDF de OC, Excel histórico de pedidos, Excel histórico de solicitudes; después, SAP) traduce el archivo a un formato interno común, y un único servicio de importación aplica las reglas de dueño y de claves. Los adaptadores son código determinístico que corre en la computadora del gestor; la IA solo interviene en las interpretaciones dudosas y en la lectura de PDF, siempre con revisión (ver "Rol de Copilot").
 - **Texto original siempre guardado:** cuando un dato importado se interpreta (un activo identificado a partir de "Detalles", un material a partir de un código), se guarda también el texto tal cual vino. Lo no identificado queda "a revisar", nunca se descarta.
@@ -172,9 +173,17 @@ Relación N:M entre líneas de oferta y líneas de pedido. Cubre una oferta que 
 | cantidad_ofertada | decimal, opcional | Si la oferta reparte su renglón entre líneas de pedido |
 | cantidad_adjudicada | decimal, 0 | Lo que el gestor confirma. 0 = cotizado, no comprado |
 
-- Adjudicada de la línea de pedido = suma de `cantidad_adjudicada`.
+- `cantidad_adjudicada` está en la unidad de la línea de oferta (la presentación ofertada). La adjudicada de la línea de pedido es la suma de esas cantidades **convertidas a la unidad de la línea de pedido** (ver «Unidades: genérico y presentación»).
 - Total adjudicado de una oferta = suma de `cantidad_adjudicada × precio neto` de sus líneas.
 - **En el histórico, el nº de OC reconstruye la adjudicación:** una línea de pedido con OC X se vincula con la oferta del mismo proveedor que tiene OC X (o que la OC X cita en sus observaciones).
+
+### Unidades: genérico y presentación (decidido 23/11)
+
+- **Del lado del pedido, todo se expresa en la unidad de la línea de pedido:** solicitada, cantidades de los destinos, adjudicada, recibida y pendientes.
+- **La oferta y la recepción guardan su cantidad en su propia unidad** (la de la presentación ofertada o recibida).
+- Si la línea pide un **genérico** y se adjudica o se recibe una **presentación**, la cantidad se convierte con `presentacion_cantidad`: 2 bidones de 20 L = 40 L.
+- Si la línea pide la misma presentación que se adjudica, no hay conversión.
+- Para que la conversión sea posible, la unidad de una presentación es la de su genérico (se verifica en el maestro de materiales).
 
 ### recepciones (conformidad de materiales)
 
@@ -184,7 +193,8 @@ Una fila por entrega y por destino; admite entregas parciales.
 |---|---|---|
 | pedido_linea_destino_id | FK | Qué destino recibe |
 | fecha | fecha | |
-| cantidad | decimal | Por defecto, lo pendiente de recibir del destino |
+| material_id | FK materiales | Lo que llegó: siempre una presentación. Por defecto, la adjudicada |
+| cantidad | decimal | **En la unidad de `material_id`** (por ejemplo, 2 bidones). Por defecto, lo pendiente de recibir del destino, convertido |
 | recibido_por_id | FK empleados | |
 | documento_linea_id | FK, opcional | Línea del remito |
 | observaciones | texto | Faltantes, roturas |
@@ -325,12 +335,12 @@ Dueño: el ERP. Fuentes: el PDF de la OC que Compras manda por mail (leído con 
 
 ### Cambios a tablas existentes
 
-- `proveedores`: agregar `codigo_erp` (código interno del proveedor en el ERP, figura en la OC). El CUIT ya existe.
+- `proveedores`: agregar `codigo_erp` (código interno del proveedor en el ERP, figura en la OC; vacío = NULL). El CUIT ya existe.
 - `categorias_material`: agregar `cuenta_id` (opcional), para sugerir la cuenta sin activo.
 - `materiales`: agregar `controla_stock` (sí/no). **El maestro no guarda precios** (ver «Costo de un material de stock»).
 - **Maestro de materiales (decidido 22/11; se implementa en la fase 10):**
-  - `codigo` es el **número de parte** (código del fabricante) y sigue siendo la clave natural. Se agrega `codigo_erp` (código en EAM/SAP, opcional, único cuando está cargado).
-  - **Genérico y presentaciones:** el genérico es una fila de `materiales` marcada `es_generico` («Aceite 15W-40», en litros, sin envase; código con prefijo `GEN-`). Sus presentaciones comprables apuntan a él con `material_generico_id` («Aceite 15W-40 bidón 20 L», `presentacion_cantidad` 20 en litros). Un genérico no tiene genérico propio y la FK de una presentación solo acepta genéricos.
+  - `codigo` es el **número de parte** (código del fabricante) y sigue siendo la clave natural. Se agrega `codigo_erp` (código en EAM/SAP, opcional, único cuando está cargado; vacío = NULL).
+  - **Genérico y presentaciones:** el genérico es una fila de `materiales` marcada `es_generico` («Aceite 15W-40», en litros, sin envase; código con prefijo `GEN-`). Sus presentaciones comprables apuntan a él con `material_generico_id` («Aceite 15W-40 bidón 20 L», `presentacion_cantidad` 20 en litros). Un genérico no tiene genérico propio, la FK de una presentación solo acepta genéricos y la unidad de la presentación es la del genérico (base de la conversión de cantidades).
   - **Dónde se usa cada uno:** el BOM y los planes preventivos pueden usar el genérico (la cantidad no depende del envase). Ofertas, stock y recepciones usan siempre la presentación. Una línea de pedido puede pedir cualquiera de los dos; la presentación se define al adjudicar.
   - Los modelos aplicables no son una columna: salen del BOM por modelo.
   - Después, los prompts de Copilot usan el export de la app (`flask exportar materiales`) en lugar del maestro anterior.
