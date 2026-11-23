@@ -45,6 +45,7 @@ def test_todas_las_entidades_estan_en_el_registry():
         "planes_preventivos", "plan_preventivo_tareas", "tareas_preventivo",
         "planes_modelo", "plan_modelo_materiales",
         "pedidos", "pedido_lineas", "pedido_linea_destinos",
+        "documentos_proveedor", "documento_lineas", "adjudicaciones",
     }
 
 

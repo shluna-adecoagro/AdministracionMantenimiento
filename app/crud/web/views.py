@@ -464,7 +464,8 @@ class VistasEntidad:
             "template_listado": "crud/listado_subentidad.html",
             "items": [fk.agregar_etiquetas(repository.valores(o), o, hijo.fields) for o in objetos],
             "entidad": hijo.name,
-            "fields": hijo.fields,
+            # Las columnas del listado de la entidad (no todas: la tabla desbordaría).
+            "fields": {c: hijo.fields[c] for c in hijo.listado},
             "pk": hijo.pk,
             "fk": rel.fk,
             "modelo_padre": repository.valores(registro),

@@ -102,6 +102,25 @@ def registrar_comandos(app):
         if not resultado.ok:
             raise SystemExit(1)
 
+    @app.cli.command("importar-documentos")
+    @click.argument("cabeceras", type=click.Path(exists=True, dir_okay=False))
+    @click.argument("lineas", type=click.Path(exists=True, dir_okay=False))
+    @click.option("--simular", is_flag=True, help="Valida y muestra el resultado sin guardar nada.")
+    @click.option("--usuario", default="importación", show_default=True,
+                  help="Usuario que figura en la auditoría.")
+    def importar_documentos(cabeceras, lineas, simular, usuario):
+        """Importa documentos de proveedores leídos con Copilot (bloques A y B del prompt)."""
+        import os
+
+        from app.crud.intercambio.documentos_copilot import importar_documentos as importar_docs
+
+        with open(cabeceras, "rb") as fa, open(lineas, "rb") as fb:
+            resultado = importar_docs(fa.read(), fb.read(), nombre_cabeceras=os.path.basename(cabeceras),
+                                      nombre_lineas=os.path.basename(lineas), simular=simular, usuario=usuario)
+        click.echo(resultado.resumen())
+        if not resultado.ok:
+            raise SystemExit(1)
+
     @app.cli.command("exportar")
     @click.argument("entidad")
     @click.argument("archivo", type=click.Path(dir_okay=False, writable=True))

@@ -529,6 +529,32 @@ son independientes entre sí; los demás van en orden.
   texto ISO.
 - Tests: `tests/test_pedidos.py`.
 
+#### Notas del PR 10.4 (documentos y adjudicación)
+
+- Tablas `documentos_proveedor`, `documento_lineas` y `adjudicaciones`
+  (`app/models/documentos_models.py`; reglas en `app/crud/meta/overrides/documentos.py`).
+  Menú «Operaciones» → Documentos de proveedores; el documento es pestaña del proveedor,
+  sus líneas también del material («Ofertas y documentos») y las adjudicaciones, de la
+  línea de oferta y de la línea de pedido.
+- **Documento:** los cuatro tipos; solo las ofertas se adjudican. El proveedor se
+  identifica por CUIT o razón social (si no, queda el texto); «revisado» pide proveedor,
+  fecha y moneda. Número único por proveedor y tipo; nº de OC normalizado. Calculados:
+  total de líneas, diferencia con el total sin IVA y total adjudicado.
+- **Línea:** se numera dentro del documento; nunca un genérico; unidad del material
+  («Se cuenta en»: envases si es una presentación); subtotal; «a revisar» sin material.
+- **Adjudicación:** solo líneas de ofertas; no a líneas anuladas; conversión genérico →
+  presentación calculada en la consulta (`factor_conversion`); sin material identificado
+  no se adjudica a un genérico; no se supera lo ofertado. En la línea de pedido:
+  ofertada, adjudicada y pendiente de comprar (en su unidad). Acciones «Vincular con
+  pedidos» y «Adjudicar lo vinculado» (envases enteros).
+- **Lectura con Copilot:** `flask importar-documentos documentos.csv documento_lineas.csv
+  [--simular]` (`app/crud/intercambio/documentos_copilot.py`). Idempotente por
+  `clave_documento`; saltea los revisados; borra las líneas que ya no vienen (salvo con
+  adjudicaciones); todo o nada.
+- Framework: la pestaña de una subentidad muestra las columnas de su listado (antes,
+  todas: la tabla desbordaba).
+- Tests: `tests/test_documentos.py`.
+
 ## Arquitectura objetivo
 
 ```
