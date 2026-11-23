@@ -27,3 +27,7 @@ instance/
 
 # Archivos subidos desde la app (fotos, documentos): son datos, no código
 app/static/uploads/
+
+# Salida de herramientas/anonimizar.py
+anonimizado/
+equivalencias_NO_COMPARTIR.csv
