@@ -435,6 +435,20 @@ Cambios principales respecto del diseño inicial:
   fuente) y la app completa lo que el ERP no registra.
 - Cada fase empieza revisando el diseño con el usuario.
 
+### Fase 10: división en PR (acordada 22/11)
+
+Cada PR deja la app funcionando y los tests en verde, y agrega sus notas acá. 10.1 y 10.2
+son independientes entre sí; los demás van en orden.
+
+| PR | Cubre |
+|---|---|
+| **10.1 Framework y limpieza** | Borrar `Pedido` / `PedidoDetalle`, su servicio, rutas y schema, y quitar las tablas viejas `pedidos` y `pedido_detalle` en la migración (las nuevas usan el nombre `pedidos`). `accept` del campo archivo según lo que admite (PDF). Numeración automática (serie continua para pedidos; `TRA-AAAA-NNNN` para después). Columnas «solo por importación»: se ven, no se editan en la web ni en la API, sí se importan (se usan desde la fase 11). `origen` + `clave_origen` como clave natural de lo importado. |
+| **10.2 Maestro de materiales** | `codigo_erp`, `es_generico` + `material_generico_id` (con sus reglas: un genérico no tiene genérico, la FK solo acepta genéricos, misma unidad), `controla_stock`; `proveedores.codigo_erp`; `categorias_material.cuenta_id`. Códigos del ERP vacíos como NULL. Los dos prompts de Copilot pasan a las columnas del export de la app. |
+| **10.3 Pedidos** | `pedidos`, `pedido_lineas` y `pedido_linea_destinos`. Sugerencia de sector imputado y cuenta. Estados guardados (solicitado, en cotización, ofertas cargadas, anulado), anulación y cancelación con motivo. Resumen del pedido («3 de 5…»). |
+| **10.4 Documentos y adjudicación** | `documentos_proveedor` (con el PDF), `documento_lineas` y `adjudicaciones`, con reparto proporcional entre destinos y conversión de unidades genérico → presentación. Ofertada y adjudicada calculadas. Adaptador para la salida de Copilot (bloques A y B de `prompt_copilot_documentos.md`). |
+| **10.5 Recepciones y estado calculado** | `recepciones` por destino, con la presentación recibida y la conversión a la unidad de la línea. Recibido, pendientes y estado visible completo (adjudicado → cerrado), con el salteo de estados calculado. |
+| **10.6 Importación del Excel histórico** | Adaptador del Excel de pedidos: celdas combinadas, colores de pestaña, moneda por formato de celda, una columna por proveedor. Exportación de `pendientes.csv` y lectura de `equivalencias_revisadas.csv`. Agrega `openpyxl` a `requirements.txt` y a `environment.yml`. |
+
 ## Arquitectura objetivo
 
 ```
