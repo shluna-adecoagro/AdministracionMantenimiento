@@ -94,7 +94,8 @@ def _admite_nulo(esquema: dict) -> dict:
 
 def campos_api(spec: EntitySpec) -> list[str]:
     """Campos que se pueden enviar por la API."""
-    return [c for c, f in spec.fields.items() if f.tipo != "file" and not f.solo_lectura]
+    return [c for c, f in spec.fields.items()
+            if f.tipo != "file" and not f.solo_lectura and not f.solo_importacion]
 
 
 # ---------------------------------------------------------------------------
@@ -142,8 +143,11 @@ def esquema_registro(spec: EntitySpec) -> dict:
         esquema = esquema_campo(spec, campo)
         if f.tipo == "file":
             esquema = {"title": f.label, "type": "string", "description": "Ruta pública del archivo"}
-        if f.solo_lectura:
+        if f.solo_lectura or f.solo_importacion:
             esquema["readOnly"] = True
+        if f.solo_importacion:
+            esquema["description"] = "Lo carga o actualiza la importación; no se modifica por la API."
+
         propiedades[campo] = _admite_nulo(esquema) if not f.required else esquema
         if f.tipo == "fk":
             propiedades[f"{campo}_label"] = {
@@ -210,7 +214,13 @@ def validar(spec: EntitySpec, datos, modo: str) -> None:
 
     if isinstance(datos, dict):
         for campo in sorted(set(datos) - set(esquema["properties"])):
-            errores[campo] = f"Campo desconocido: «{campo}»."
+            f = spec.fields.get(campo)
+            if f is not None and f.solo_importacion:
+                errores[campo] = f"{f.label}: lo carga la importación; no se modifica por la API."
+            elif f is not None and f.solo_lectura:
+                errores[campo] = f"{f.label}: es un dato calculado; no se envía."
+            else:
+                errores[campo] = f"Campo desconocido: «{campo}»."
 
     validador = Draft202012Validator({**esquema, "additionalProperties": True})
     for error in sorted(validador.iter_errors(datos), key=lambda e: list(e.path)):

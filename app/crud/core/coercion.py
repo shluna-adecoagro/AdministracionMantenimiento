@@ -128,7 +128,8 @@ def convertir(columna, valor):
 # Conversión de un registro completo
 # ---------------------------------------------------------------------------
 
-def datos_de_entrada(model, fields: dict, entrada, *, parcial: bool = False) -> dict:
+def datos_de_entrada(model, fields: dict, entrada, *, parcial: bool = False,
+                     importacion: bool = False) -> dict:
     """
     Convierte y valida los datos recibidos para `model`.
 
@@ -138,6 +139,9 @@ def datos_de_entrada(model, fields: dict, entrada, *, parcial: bool = False) -> 
              ausentes o vacíos son error.
              True (edición): solo se procesan los campos presentes en `entrada`;
              los ausentes conservan su valor actual.
+
+    importacion  True: también se procesan los campos de solo importación (datos
+             cuyo dueño es el ERP). Desde la web y la API se ignoran.
 
     Los campos tipo "file", "virtual" y de solo lectura no se procesan acá.
     Devuelve {campo: valor_convertido}; lanza ErroresValidacion con todos los
@@ -149,6 +153,8 @@ def datos_de_entrada(model, fields: dict, entrada, *, parcial: bool = False) -> 
 
     for campo, cfg in fields.items():
         if cfg.get("virtual") or cfg.get("solo_lectura") or cfg.get("tipo") == "file":
+            continue
+        if cfg.get("solo_importacion") and not importacion:
             continue
         if parcial and campo not in entrada:
             continue

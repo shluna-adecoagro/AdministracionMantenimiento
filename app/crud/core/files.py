@@ -23,15 +23,18 @@ def _segmento_seguro(nombre: str) -> str:
     return nombre
 
 
-def guardar(archivo, carpeta_static: str, entidad: str, subcarpeta: str | None = None) -> str:
+def guardar(archivo, carpeta_static: str, entidad: str, subcarpeta: str | None = None,
+            extensiones=()) -> str:
     """
     Guarda un archivo (werkzeug FileStorage o similar) y devuelve su ruta pública,
     por ejemplo "/static/uploads/activos/fotos/<uuid>.jpg".
-    Lanza ArchivoInvalido si la extensión no está permitida.
+    Lanza ArchivoInvalido si la extensión no está permitida: las del campo
+    (`extensiones`, ej: solo PDF) o, si no declara ninguna, las de la app.
     """
+    admitidas = (set(extensiones) & EXTENSIONES_PERMITIDAS) if extensiones else EXTENSIONES_PERMITIDAS
     extension = os.path.splitext(archivo.filename or "")[1].lower()
-    if extension not in EXTENSIONES_PERMITIDAS:
-        permitidas = ", ".join(sorted(EXTENSIONES_PERMITIDAS))
+    if extension not in admitidas:
+        permitidas = ", ".join(sorted(admitidas))
         raise ArchivoInvalido(f"tipo de archivo no permitido (se aceptan: {permitidas})")
 
     partes = ["uploads", _segmento_seguro(entidad)]

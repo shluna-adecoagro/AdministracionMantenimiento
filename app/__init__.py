@@ -70,6 +70,13 @@ def create_app(env="development", config_extra=None):
 
     app.add_template_filter(_inicial, "inicial")
 
+    @app.template_test("es_imagen")
+    def es_imagen(ruta):
+        """Archivo que se puede mostrar como imagen (no un PDF)."""
+        from app.crud.introspect import EXTENSIONES_IMAGEN
+
+        return str(ruta).lower().endswith(EXTENSIONES_IMAGEN)
+
     @app.template_filter("mostrar")
     def mostrar(valor):
         """Valor para mostrar en una celda: None (dato vacío) se ve como un guion."""

@@ -202,7 +202,8 @@ class VistasEntidad:
             archivo = request.files.get(campo)
             if archivo and archivo.filename:
                 try:
-                    datos[campo] = guardar(archivo, current_app.static_folder, self.spec.name, f.subcarpeta)
+                    datos[campo] = guardar(archivo, current_app.static_folder, self.spec.name,
+                                           f.subcarpeta, f.extensiones)
                 except ArchivoInvalido as e:
                     errores[campo] = f"{f.label}: {e}."
             elif f.required and not parcial:

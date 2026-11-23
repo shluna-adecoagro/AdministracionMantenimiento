@@ -25,6 +25,7 @@ from dataclasses import replace
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.exc import NoInspectionAvailable
 
+from app.crud.core.numeracion import FormatoInvalido, validar_formato
 from app.crud.introspect import columnas_hacia, fk_apunta_a, inferir_entidad
 from app.crud.meta.spec import (
     AUDITORIA_IGNORAR_DEFAULT,
@@ -100,6 +101,11 @@ def _field_spec(nombre: str, inferido: dict, override: dict, model) -> FieldSpec
         datos["options"] = tuple(dict(o) for o in datos["options"])
     if "alias" in datos:
         datos["alias"] = tuple(datos["alias"])
+    if "extensiones" in datos:
+        datos["extensiones"] = tuple(e.lower() if e.startswith(".") else f".{e.lower()}"
+                                     for e in datos["extensiones"])
+    if datos.get("numeracion"):
+        datos["required"] = False  # si llega vacío, se numera solo
 
     col = _columna(model, nombre)
     if col is not None:
@@ -233,6 +239,17 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
             errores.append(f"{pref} fields.{c}: tipo 'fk' sin 'fk_model'")
         if f.fk_filtro is not None and (f.tipo != "fk" or not callable(f.fk_filtro)):
             errores.append(f"{pref} fields.{c}: fk_filtro debe ser una función, en un campo FK")
+        if f.extensiones and f.tipo != "file":
+            errores.append(f"{pref} fields.{c}: extensiones solo aplica a un campo de tipo 'file'")
+        if f.numeracion:
+            try:
+                validar_formato(f.numeracion)
+            except FormatoInvalido as e:
+                errores.append(f"{pref} fields.{c}: numeracion '{f.numeracion}' {e}")
+            if f.tipo not in ("text", "number"):
+                errores.append(f"{pref} fields.{c}: numeracion solo aplica a un campo de texto o número")
+        if f.solo_importacion and f.solo_lectura:
+            errores.append(f"{pref} fields.{c}: un campo calculado no puede ser también de solo importación")
         if f.tipo == "select" and not f.options:
             errores.append(f"{pref} fields.{c}: tipo 'select' sin 'options'")
         if f.tipo == "datalist" and not (f.options or f.fk_model):
@@ -293,7 +310,9 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
         errores.append(f"{pref} al_guardar debe ser una función")
 
     # --- clave natural ---------------------------------------------------
-    clave_natural = tuple(ov.get("clave_natural", ()))
+    # Por defecto, la clave de origen de lo importado (OrigenMixin), si la hay.
+    por_defecto = ("clave_origen",) if "clave_origen" in campos else ()
+    clave_natural = tuple(ov.get("clave_natural", por_defecto))
     for c in clave_natural:
         if c not in campos:
             errores.append(f"{pref} clave_natural: '{c}' no es un campo de la entidad.{_sugerir(c, campos)}")

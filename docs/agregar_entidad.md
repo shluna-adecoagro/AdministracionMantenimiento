@@ -76,7 +76,8 @@ class Herramienta(db.Model, ModelMixin, AuditMixin):    # AuditMixin → pestañ
 | `info={"label": "Código"}` | etiqueta del campo (si no, se arma con el nombre: `nro_motor` → «Nro motor») |
 | `ForeignKey` + `relationship` | select con los registros del destino |
 | FK a una clase `Estado…` con `color_badge` | se muestra como badge de color |
-| columna `foto*` / `color*` | subida de imagen / selector de color |
+| columna `foto*` / `archivo*` / `color*` | subida de imagen / de documento PDF / selector de color |
+| `OrigenMixin` (columnas `origen` y `clave_origen`) | datos importados: las dos columnas son de solo importación y `clave_origen` es la clave natural por defecto |
 | `__label_field__` | texto con el que el registro aparece en selects, listados e importación |
 | `AuditMixin` (+ columna `uuid`) | cada cambio queda en el historial |
 | `uuid`, `creado_en`, `actualizado_en`, columnas JSON | no se muestran en formularios |
@@ -96,6 +97,12 @@ obligatorio (`"required": False` en el override), se usa cuando no se envía (AP
 muestra en listado, detalle y API, pero no se edita. Si trae una FK (ej:
 `Activo.tipo_activo_id`, el tipo de la categoría), además funciona como filtro en el
 formulario.
+
+**Datos importados (`OrigenMixin`, `app/crud/origen_mixin.py`).** Toda tabla que recibe
+histórico o reportes del ERP hereda `origen` (app / histórico / reporte / PDF) y
+`clave_origen` (cómo se identifica en la fuente: archivo + hoja, sistema + número). Así
+la importación es idempotente: repetirla actualiza en lugar de duplicar. Lo cargado en la
+app queda con origen «app» y sin clave; una fila importada sin clave se rechaza.
 
 ### Qué pasa al borrar
 
@@ -178,8 +185,12 @@ Dentro de `fields`, cada campo acepta, entre otras: `label`, `tipo` (`text`, `nu
 `textarea`, `date`, `select`, `fk`, `datalist`, `file`, `color`), `required`,
 `options` (para `select`), `alias` (otros nombres de columna al importar),
 `solo_lectura`, `oculto`, `depende_de` (`None` para desactivar un select dependiente
-inferido, o un campo o una lista para limitarlo a esos) y `fk_filtro` (función que
-devuelve la condición que deben cumplir las opciones de una FK). Ejemplos:
+inferido, o un campo o una lista para limitarlo a esos), `fk_filtro` (función que
+devuelve la condición que deben cumplir las opciones de una FK), `extensiones` (las de
+un campo de archivo, ej: `[".pdf"]`: arman el `accept` del formulario y se verifican al
+guardar), `numeracion` (ver abajo) y `solo_importacion` (dato cuyo dueño es el ERP: se ve
+en la app, pero solo lo carga la importación; la web lo muestra deshabilitado y la API
+lo rechaza con un mensaje). Ejemplos:
 
 ```python
 "fields": {
@@ -194,6 +205,18 @@ devuelve la condición que deben cumplir las opciones de una FK). Ejemplos:
     "unidad_medida_id": {"fk_filtro": lambda: UnidadMedida.tipo_medidor.isnot(None)},
 }
 ```
+
+**Numeración automática.** `"numeracion"` completa el campo al crear, si llega vacío
+(web, API o importación), con el siguiente número de su serie. `{n}` es el número y
+`{año}` reinicia la serie cada año:
+
+```python
+"numero": {"numeracion": "{n}"},                     # 1104, 1105... (serie continua)
+"numero": {"numeracion": "TRA-{año}-{n:04d}"},       # TRA-2026-0001, TRA-2026-0002...
+```
+
+El campo deja de ser obligatorio en el formulario y en la API (se completa solo), y un
+valor cargado a mano se respeta.
 
 ## 4. Probar
 
