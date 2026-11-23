@@ -205,7 +205,7 @@ OVERRIDES = {
         },
         "listado": ["numero", "fecha_pedido", "referencia", "sector_id", "prioridad", "resumen"],
         "filtros": ["numero", "referencia", "solicitante_texto", "solicitante_id", "sector_id", "canal",
-                    "prioridad", "observaciones"],
+                    "prioridad", "observaciones", "motivo_revision", "origen"],
         # El número identifica al pedido (también en el Excel histórico).
         "clave_natural": ["numero"],
     },
@@ -242,7 +242,8 @@ OVERRIDES = {
         "listado": ["pedido_id", "nro_linea", "material_id", "descripcion", "solicitada", "adjudicada",
                     "recibida", "pendiente_comprar", "pendiente_recibir", "se_cuenta_en", "estado_visible",
                     "nro_oc"],
-        "filtros": ["material_id", "descripcion", "estado", "nro_oc", "observaciones"],
+        "filtros": ["material_id", "descripcion", "estado", "nro_oc", "observaciones", "motivo_revision",
+                    "origen"],
         "clave_natural": ["pedido_id", "nro_linea"],
         "tabs_extra": [{"id": "recepciones_linea", "label": "Recepciones", "funcion": _tab_recepciones}],
         "completar": completar_linea,

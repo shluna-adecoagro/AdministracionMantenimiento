@@ -577,6 +577,43 @@ son independientes entre sí; los demás van en orden.
   actuales no se nota, pero si los listados crecen mucho conviene paginar.
 - Tests: `tests/test_recepciones.py`.
 
+#### Notas del PR 10.6 (importación del Excel histórico)
+
+- Antes de codificar se analizó el Excel completo (`docs/analisis_excel_pedidos.md`) y el
+  gestor respondió las dudas (23/11): todos los verdes y el azul son cerrados; el naranja
+  equivale al amarillo; la OC escrita en una fila vale para el resto de la hoja (cerrada);
+  «Recibido?» = ok es cierre manual sin recepción; la moneda se termina de resolver al
+  cruzar con las OC. En las demás dudas se aceptaron las recomendaciones. Reglas
+  completas en «Importación del Excel histórico de pedidos» de
+  `diseno_tablas_operativas.md`.
+- `flask --app run importar-pedidos Pedidos.xlsx [--equivalencias equivalencias_revisadas.csv]
+  [--pendientes pendientes.csv] [--informe informe_pedidos.csv] [--simular]`.
+- **Adaptador** (`app/crud/intercambio/excel_pedidos.py`, sin base): lee con openpyxl dos
+  veces (valores calculados y fórmulas). Encabezado = la fila con «Detalles» en C;
+  columnas G en adelante por su encabezado, y cualquier otro encabezado es un proveedor
+  cotizado. Celdas combinadas repetidas; color de pestaña por tono (HSV), resuelto con el
+  tema del propio libro; moneda por formato; OC y proveedor completados en las hojas
+  cerradas; columnas corridas detectadas por contenido (la «OC» sin números de OC y
+  «PROVEEDOR» con ellos).
+- **Servicio** (`app/crud/intercambio/pedidos_historicos.py`): carga con los servicios de
+  cada entidad (validación, sugerencias, auditoría). Pedido, líneas, destinos, ofertas
+  reconstruidas (una por proveedor y OC) y adjudicaciones. Idempotente por
+  `clave_origen` (`excel_pedidos|<hoja>|f<fila>`); no pisa con vacíos lo identificado ni
+  toca destinos cargados en la app ni ofertas revisadas. Todo o nada.
+- **Equivalencias:** `pendientes.csv` con las columnas del prompt (`id` estable: tipo + hash
+  del texto); `equivalencias_revisadas.csv` se lee por `tipo` + `texto` (`resultado` y
+  `codigos`). `material_nuevo` no crea materiales: el gestor los da de alta y reimporta.
+- Esquema (migración `fc476eabc431`): `motivo_revision` («A revisar (importación)») en
+  pedidos y líneas; observaciones más largas (2000 en pedidos, 1000 en líneas).
+- Decisiones menores tomadas al codificar (a confirmar en la revisión): una línea sin
+  «Detalles» va a gasto general (no a «a identificar»); la oferta reconstruida lleva la
+  fecha del pedido; la clave del pedido no incluye el nombre del archivo.
+- Con el Excel anonimizado (maestros vacíos): 392 pedidos, 2096 líneas (1841 cerradas,
+  71 con OC emitida, 58 anuladas), 2643 destinos, 462 ofertas; 334 líneas con la OC tomada
+  de otra fila y 111 en hojas con varias OC que no se pudieron deducir. Unos 35 s.
+- `openpyxl` en `requirements.txt` y `environment.yml`.
+- Tests: `tests/test_pedidos_historicos.py`.
+
 ## Arquitectura objetivo
 
 ```
@@ -624,7 +661,7 @@ La API generada usa `GET/POST {url}` y `PUT/PATCH/DELETE {url}/{id}`.
 | **7. Migrar el resto** | Tras revisar su diseño: activos, medidores, lecturas, insumos, stock, unidades, marcas, modelos, recursos, BOM. Ver «Notas de la Fase 7». | ✅ Hecha |
 | **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. Ver «Notas de la Fase 8». | ✅ Hecha |
 | **9. Planes preventivos** | Planes por categoría de activo (período por uso y/o por tiempo, plan que incluye a otro), tareas, materiales por modelo; categoría en el modelo y tipo de medidor. Ver «Fase 9: planes preventivos». | ✅ Hecha |
-| **10. Pedidos y documentos de proveedores** | Pedidos con líneas y destinos (imputación), ofertas y presupuestos (cabecera + líneas), adjudicación por cantidad, recepciones (conformidad). Importación del Excel histórico de pedidos. Ver «Fases operativas». | En curso (10.1 a 10.5 hechos) |
+| **10. Pedidos y documentos de proveedores** | Pedidos con líneas y destinos (imputación), ofertas y presupuestos (cabecera + líneas), adjudicación por cantidad, recepciones (conformidad). Importación del Excel histórico de pedidos. Ver «Fases operativas». | ✅ Hecha |
 | **11. Solicitudes de trabajo, solicitudes internas y OC** | Solicitudes de trabajo (avisos de los mecánicos para llamar a un contratista) y su vínculo con los presupuestos (`documentos_proveedor.solicitud_trabajo_id`). Importación de los TSV de EAM (cabeceras, líneas, distribuciones) y de las OC; vínculo con los documentos adjudicados; distribución propuesta; detalle para Administración; conciliación por nº de OC. | Pendiente |
 | **12. Órdenes de trabajo** | Cabecera importada del ERP; la app agrega operaciones, recursos y materiales (previsto y utilizado). Incluye cuándo le toca un plan a cada activo. | Pendiente |
 | **13. Sincronización con SharePoint** | Opción A: exportar periódicamente de la app a SharePoint, más copias de seguridad automáticas de la base. Al final, escribir en SharePoint directo (Microsoft Graph) en lugar de pasar por CSV. | Pendiente |

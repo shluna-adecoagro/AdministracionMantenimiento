@@ -18,6 +18,7 @@ dependencies:
   - flask-cors
   - python-dotenv
   - jsonschema
+  - openpyxl
   # Desarrollo y tests (requirements-dev.txt)
   - pytest
   - openapi-spec-validator

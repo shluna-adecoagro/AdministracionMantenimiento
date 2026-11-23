@@ -4,7 +4,7 @@ Uso: abrí Copilot (con tu cuenta corporativa), adjuntá los cuatro archivos ind
 
 **Archivos a adjuntar**
 
-1. `pendientes.csv`: los textos a resolver. Columnas: `id`, `tipo` (destino o material), `texto`, `contexto`, `veces`. Lo va a generar el importador de la app; mientras tanto, para probar, podés armarlo a mano copiando algunas filas de "Producto" (tipo material) y de "Detalles" (tipo destino) de pedidos reales. En `contexto` va la referencia del pedido y la otra columna de la misma fila (por ejemplo, para un destino, el producto; para un material, el detalle).
+1. `pendientes.csv`: los textos a resolver. Columnas: `id`, `tipo` (destino o material), `texto`, `contexto`, `veces`. Lo genera el importador: `flask --app run importar-pedidos Pedidos.xlsx` (con `--simular` no guarda nada en la base, pero igual deja el archivo). En `contexto` va el pedido y la otra columna de la misma fila (para un destino, el producto; para un material, el detalle).
 2. `activos.csv`: la lista de activos exportada de la app con `flask --app run exportar activos activos.csv` (número de activo, descripción, categoría, tipo, marca, modelo, número de serie, número de motor, año, sector, ubicación, usuario asignado, código de carga de gasoil, estado).
 3. `materiales.csv`: el maestro de materiales, exportado de la app con `flask --app run exportar materiales materiales.csv`.
 4. `bom_modelos.csv`: qué materiales lleva cada modelo, exportado con `flask --app run exportar bom_modelo bom_modelos.csv`.
@@ -63,4 +63,5 @@ Al terminar todas, agregá un resumen: cantidad de filas por resultado y por con
 
 - Todas las filas de confianza media y baja, y todas las de `material_nuevo`.
 - Una muestra de las de confianza alta (por ejemplo, 1 de cada 10), para confirmar que no se equivoca en lo "seguro".
-- Pegá la tabla en Excel (Datos → Texto en columnas, separador punto y coma), corregí lo que haga falta y guardala como `equivalencias_revisadas.csv`. Eso es lo que va a leer el importador.
+- Pegá la tabla en Excel (Datos → Texto en columnas, separador punto y coma), corregí lo que haga falta y guardala como `equivalencias_revisadas.csv` (CSV separado por punto y coma). Después: `flask --app run importar-pedidos Pedidos.xlsx --equivalencias equivalencias_revisadas.csv`.
+- El importador usa las columnas `tipo`, `texto`, `resultado` y `codigos`: activo y varios_activos por número de activo; modelo, ubicación y sector por nombre; material_existente por «Código (número de parte)». Las filas `sin_resolver` y `material_nuevo` no se usan: un material nuevo primero se da de alta en la app (con la descripción, categoría y unidad propuestas) y en la importación siguiente se identifica por su código. Un código que no existe en la app se informa y no se usa.
