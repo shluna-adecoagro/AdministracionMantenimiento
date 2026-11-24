@@ -267,3 +267,113 @@ def test_excel_reemplaza_formulas_por_su_valor_anonimizado(anonimizar, monkeypat
     _correr(anonimizar, monkeypatch, tmp_path, "solicitudes.xlsx", *reglas, "--conservar-formulas")
     hoja = openpyxl.load_workbook(tmp_path / "anonimizado" / "solicitudes.xlsx").active
     assert hoja["B2"].value.startswith("=_xlfn.XLOOKUP") and hoja["D2"].value == "=C2"
+
+
+def test_repartos_de_centro_de_costo_en_texto_libre(anonimizar, monkeypatch, tmp_path):
+    libro = openpyxl.Workbook()
+    hoja = libro.active
+    hoja.append(["Detalles", "Sector", "Centro de Costo", "Importe", "Observaciones"])
+    hoja.append(["Imputar 50% 4410 - 50% 4420", "40% 4410, 60% Taller Norte", 4410, 100, "IVA 21% 15000"])
+    hoja.append(["100% 4410", "Taller Norte", 4430, 200, "cargar a CC 4430/4440"])
+    hoja.append(["4410 30% y 4499 70%", None, None, 300, "100% 8888"])
+    libro.save(tmp_path / "pedidos.xlsx")
+
+    _correr(anonimizar, monkeypatch, tmp_path, "pedidos.xlsx",
+            "-c", "Sector=SEC", "-c", "Centro de Costo=CC")
+
+    filas = [list(f) for f in openpyxl.load_workbook(tmp_path / "anonimizado" / "pedidos.xlsx").active
+             .iter_rows(min_row=2, values_only=True)]
+    # Dos o más porcentajes: reparto; los códigos reciben el alias de la columna de centro de costo
+    assert filas[0][0] == "Imputar 50% CC-001 - 50% CC-003"
+    assert filas[2][0] == "CC-001 30% y CC-005 70%"
+    # En la columna con regla se conserva el reparto: código -> CC, texto -> alias de la columna
+    assert filas[0][1] == "40% CC-001, 60% SEC-001" and filas[1][1] == "SEC-001"
+    # Un solo porcentaje: solo si el código ya es un centro de costo conocido
+    assert filas[1][0] == "100% CC-001"
+    assert filas[0][4] == "IVA 21% 15000" and filas[2][4] == "100% 8888"
+    # Después de «CC»: siempre, aunque sean varios
+    assert filas[1][4] == "cargar a CC CC-002/CC-004"
+    assert [f[3] for f in filas] == [100, 200, 300]
+    equivalencias = (tmp_path / "equivalencias_NO_COMPARTIR.csv").read_text(encoding="utf-8-sig")
+    assert "CC-003;4420" in equivalencias and "8888" not in equivalencias
+    assert "15000" not in equivalencias
+
+
+def test_repartos_en_tsv_con_prefijo_de_la_columna_de_centro_de_costo(anonimizar, monkeypatch, tmp_path):
+    (tmp_path / "dist.tsv").write_text(
+        "Nro\tCentro de Costo\tComentario\n101\t4410\t50% 4410 - 50% 4420\n", encoding="utf-8")
+    _correr(anonimizar, monkeypatch, tmp_path, "dist.tsv", "-c", "Centro de Costo=CECO")
+
+    dist = list(csv.reader((tmp_path / "anonimizado" / "dist.tsv").open(encoding="utf-8"), delimiter="\t"))
+    assert dist[1] == ["101", "CECO-001", "50% CECO-001 - 50% CECO-002"]
+
+
+def test_listar_muestra_todas_las_hojas_sin_valores(anonimizar, monkeypatch, tmp_path, capsys):
+    _hoja_pedido(tmp_path / "pedidos.xlsx")
+    libro = openpyxl.load_workbook(tmp_path / "pedidos.xlsx")
+    for nombre in ("1105", "1106"):
+        libro.copy_worksheet(libro["1104"]).title = nombre
+    libro.create_sheet("Tablas").append(["Área", "Centro de costo", "Responsable"])
+    libro["Tablas"].sheet_state = "hidden"
+    libro.save(tmp_path / "pedidos.xlsx")
+
+    _correr(anonimizar, monkeypatch, tmp_path, "pedidos.xlsx", "--listar")
+
+    salida = capsys.readouterr().out
+    assert "4 hojas (ocultas: 4)" in salida
+    assert "3 hojas  fila 6: Cantidad | Producto | Detalles | Imputación | PROVEEDOR | IMPORTE | OC" in salida
+    assert "hojas n° 1-3" in salida and "Área | Centro de costo | Responsable" in salida
+    assert "Solicitante(s): (3)" in salida
+    for valor in ("Juan Pérez", "Repuestos del Sur", "Filtros", "8605140"):
+        assert valor not in salida
+
+    _correr(anonimizar, monkeypatch, tmp_path, "pedidos.xlsx", "--listar", "--muestra")
+    assert "Juan Pérez" in capsys.readouterr().out
+
+
+def test_chequear_muestra_solo_cantidades(anonimizar, monkeypatch, tmp_path, capsys):
+    from openpyxl.comments import Comment
+
+    libro = openpyxl.Workbook()
+    hoja = libro.active
+    hoja.append(["Solicitó", "Proveedor", "Detalles"])
+    hoja.append(["Pedro Ramírez", "Repuestos del Sur SA", "50% 7710 - 50% 7720, ver jperez@empresa.com"])
+    hoja["C2"].hyperlink = "C:\\Compras\\Repuestos del Sur SA\\presupuesto.pdf"
+    hoja["A2"].comment = Comment("Ana Gómez: ok", "Ana Gómez")
+    libro.save(tmp_path / "solicitudes.xlsx")
+
+    def chequear(*args):
+        _correr(anonimizar, monkeypatch, tmp_path, "--chequear", *args)
+        salida = capsys.readouterr().out
+        for valor in ("Pedro Ramírez", "Repuestos del Sur", "7710", "jperez", "Ana Gómez", "Compras"):  # no los de los rótulos
+            assert valor not in salida
+        return {linea[8:].strip(): int(linea[:8]) for linea in salida.splitlines()
+                if linea[:8].strip().isdigit()}
+
+    # Antes de anonimizar, sin tabla de equivalencias
+    antes = chequear("solicitudes.xlsx")
+    nombres, razones, correos = list(anonimizar.CHEQUEOS_TEXTO)[:3]
+    assert (antes[nombres], antes[razones], antes[correos]) == (2, 1, 1)  # nombres: celda A2 y comentario
+    assert antes[anonimizar.CATEGORIA_REPARTOS] == 1
+    assert antes["hipervínculos a archivos o webs"] == 1 and antes["de esos, sin anonimizar"] == 1
+    assert antes["de esos, con autor sin anonimizar"] == 1
+    assert not any(c.startswith("valores originales") for c in antes)
+
+    _correr(anonimizar, monkeypatch, tmp_path, "solicitudes.xlsx", "-c", "Solicitó=SOL", "-c", "Proveedor=PROV",
+            "--terminos", str(_terminos(tmp_path)))
+    capsys.readouterr()
+    # El original contra la tabla de equivalencias: encuentra los valores
+    original = chequear("solicitudes.xlsx")
+    assert original["valores originales en celdas: con letras"] >= 2
+    assert original["valores originales en todo el archivo: con letras"] >= 3
+    # El resultado (pasando la carpeta, como en Windows): no queda nada
+    despues = chequear("anonimizado", "--ubicaciones")
+    for categoria, n in despues.items():
+        if categoria not in ("hojas", "comentarios", "hipervínculos a archivos o webs"):
+            assert n == 0, categoria
+
+
+def _terminos(tmp_path):
+    ruta = tmp_path / "terminos.txt"
+    ruta.write_text("EMP;Ana Gómez\nMAIL;jperez@empresa.com\n", encoding="utf-8")
+    return ruta
