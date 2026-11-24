@@ -21,6 +21,10 @@ Uso:
      para textos que aparecen sueltos dentro de celdas (por ejemplo, un nombre
      escrito en una descripción o en el encabezado de una hoja de pedido).
 
+     Opcional: --conservar VALOR (una por valor) para dejar sin alias un valor que no es
+     sensible y cuyo significado importa, por ejemplo --conservar MECANICO en la columna
+     de recursos de las OT, para distinguir el trabajo propio del de un proveedor.
+
   Repartos de centro de costo escritos a mano («50% 4410 - 50% 4420»): los códigos pegados a
   un porcentaje reciben el alias de la columna de centro de costo (CC-001…; otro prefijo con
   --prefijo-cc). En el texto libre se reemplazan si hay dos o más porcentajes, si el código
@@ -68,9 +72,11 @@ def norm(texto):
 class Alias:
     """Asigna alias consistentes por prefijo: PROV-001, PROV-002..."""
 
-    def __init__(self, protegidos=()):
+    def __init__(self, protegidos=(), conservar=()):
         # Nombres de columna y etiquetas: nunca se anonimizan (son encabezados)
         self.protegidos = {norm(p).rstrip(":").strip() for p in protegidos}
+        # Valores que no son sensibles y se dejan tal cual (--conservar)
+        self.protegidos |= {norm(v) for v in conservar}
         self.mapa = {}  # (prefijo, valor normalizado) -> alias
         self.originales = {}  # alias -> valor original
         self.contadores = {}
@@ -737,6 +743,8 @@ def main():
                         "(por defecto, el de la columna de centro de costo, o CC)")
     p.add_argument("-c", "--columna", action="append", default=[], metavar="COLUMNA=PREFIJO")
     p.add_argument("--terminos", type=Path, help="Archivo con líneas PREFIJO;texto")
+    p.add_argument("--conservar", action="append", default=[], metavar="VALOR",
+                   help="Valor que se deja sin alias (no es sensible), p. ej. MECANICO")
     p.add_argument("--conservar-formulas", action="store_true",
                    help="No reemplazar las fórmulas por su valor (el texto de las fórmulas no se anonimiza)")
     a = p.parse_args()
@@ -769,7 +777,7 @@ def main():
 
     salida = Path("anonimizado")
     salida.mkdir(exist_ok=True)
-    alias = Alias(protegidos=list(reglas))
+    alias = Alias(protegidos=list(reglas), conservar=a.conservar)
     prefijo_cc = (a.prefijo_cc or prefijo_centro_costo(reglas)).upper()
     # Primero las tablas (definen alias), después los Excel (los reutilizan)
     orden = sorted(a.archivos, key=lambda r: r.suffix.lower() in (".xlsx", ".xlsm"))

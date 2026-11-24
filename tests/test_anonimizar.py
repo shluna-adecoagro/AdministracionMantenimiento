@@ -79,6 +79,22 @@ def test_alias_consistentes_entre_archivos_y_no_toca_importes(anonimizar, monkey
     assert "PROV-001;Repuestos del Sur SA" in equivalencias
 
 
+def test_conservar_deja_valores_sin_alias(anonimizar, monkeypatch, tmp_path):
+    (tmp_path / "ots.tsv").write_text(
+        "OT\tRecurso\n1\tMECANICO\n2\tTaller del Sur SA\n3\tmecanico \n", encoding="utf-8")
+    (tmp_path / "lineas.tsv").write_text(
+        "Nro\tProveedor\n10\tTaller del Sur SA\n", encoding="utf-8")
+    _correr(anonimizar, monkeypatch, tmp_path, "ots.tsv", "lineas.tsv",
+            "-c", "Recurso=PROV", "-c", "Proveedor=PROV", "--conservar", "MECANICO")
+
+    ots = list(csv.reader((tmp_path / "anonimizado" / "ots.tsv").open(encoding="utf-8"), delimiter="\t"))
+    lineas = list(csv.reader((tmp_path / "anonimizado" / "lineas.tsv").open(encoding="utf-8"), delimiter="\t"))
+    assert [f[1] for f in ots[1:]] == ["MECANICO", "PROV-001", "mecanico "]
+    assert lineas[1] == ["10", "PROV-001"]  # mismo proveedor en otra columna, mismo alias
+    equivalencias = (tmp_path / "equivalencias_NO_COMPARTIR.csv").read_text(encoding="utf-8-sig")
+    assert "MECANICO" not in equivalencias.upper()
+
+
 def test_excel_con_celdas_combinadas(anonimizar, monkeypatch, tmp_path):
     # Como la planilla de solicitudes: títulos de grupo combinados arriba del encabezado
     # y valores combinados en varias filas dentro de las columnas a anonimizar
