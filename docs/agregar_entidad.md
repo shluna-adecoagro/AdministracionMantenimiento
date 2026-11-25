@@ -92,11 +92,12 @@ marca, y al elegirlo se completan las dos.
 **Valores por defecto.** El `default` de una columna (ej: `vigente = db.Column(db.Boolean,
 nullable=False, default=True)`) aparece preseleccionado en el alta y, si el campo no es
 obligatorio (`"required": False` en el override), se usa cuando no se envía (API, CSV).
-Una FK puede tener un valor por defecto **calculado**: una función que recibe el contexto
-de SQLAlchemy (o `None`, desde el formulario) y devuelve el ID. También se preselecciona
-en el alta. Ejemplo: el estado «Operativa» de una ubicación
-(`estado_ubicacion_por_defecto` en `app/models/ubicaciones_models.py`; consulta por
-`contexto.connection` porque se llama en pleno flush).
+Una FK obligatoria a un catálogo puede tener un valor por defecto **calculado** por
+nombre, con `app/crud/por_defecto.py`: `default=id_por_nombre("estados_proveedor",
+"estado_proveedor_id", "nombre_estado_proveedor", "Activo")` en la columna (también se
+preselecciona en el alta), y en el override `"fields": {campo: {"required": False}}`
+con `"completar": mantener_si_vacio(campo)`, para que una modificación que no lo trae
+mantenga el valor. Ejemplos: estados de ubicación, proveedor y contacto.
 
 **Campos calculados.** Un `column_property` del modelo (ej: `Material.stock_total`) se
 muestra en listado, detalle y API, pero no se edita. Si el cálculo es más fácil en Python,

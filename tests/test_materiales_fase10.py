@@ -85,11 +85,11 @@ def test_codigo_erp_vacio_es_null(app, categoria):
 
 def test_codigo_erp_de_proveedores(app, client):
     for nombre in ("Repuestos SA", "Lubricantes SRL"):
-        r = client.post("/api/proveedores", json={"razon_social": nombre, "estado_recurso_id": 1, "codigo_erp": ""})
+        r = client.post("/api/proveedores", json={"razon_social": nombre, "codigo_erp": ""})
         assert r.status_code == 201, r.get_json()
     assert [p.codigo_erp for p in Proveedor.query] == [None, None]
     client.patch(f"/api/proveedores/{Proveedor.query.first().recurso_id}", json={"codigo_erp": "P-100"})
-    r = client.post("/api/proveedores", json={"razon_social": "Otro", "estado_recurso_id": 1, "codigo_erp": "P-100"})
+    r = client.post("/api/proveedores", json={"razon_social": "Otro", "codigo_erp": "P-100"})
     assert r.status_code == 409
 
 

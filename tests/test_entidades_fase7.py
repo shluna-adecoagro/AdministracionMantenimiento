@@ -311,7 +311,7 @@ def test_sector_con_empleados_no_se_borra(client, sector):
 
 
 def test_borrar_proveedor_borra_sus_contactos(client, db):
-    p = _guardar(db, Proveedor(razon_social="Repuestos SA", estado_recurso_id=1))
+    p = _guardar(db, Proveedor(razon_social="Repuestos SA"))
     r = client.post(f"/contactos_proveedor/crear?proveedor_id={p.recurso_id}",
                     data={"nombre_contacto": "Laura"})
     assert r.status_code == 302

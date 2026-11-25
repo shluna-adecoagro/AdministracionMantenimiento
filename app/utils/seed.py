@@ -8,7 +8,7 @@ from app.models.sectores_models import EstadoSector
 from app.models.ubicaciones_models import EstadoUbicacion
 from app.models.motivos_models import MotivoOperacion
 from app.models.cuentas_models import EstadoCuenta
-from app.models.recursos_models import EstadoRecurso
+from app.models.recursos_models import EstadoContacto, EstadoProveedor, EstadoRecurso
 
 from app.models.activos_models import EstadoActivo
 
@@ -136,6 +136,26 @@ def seed_data():
             ]
         )
         print("✔ Estados de recurso precargados.")
+
+    # ============================================================
+    # ESTADOS DE PROVEEDOR Y DE CONTACTO
+    # ============================================================
+    # La migración que los agregó (dda0f1c78dee) ya los inserta completos en una
+    # base existente; esto los carga en una base creada sin migraciones (tests).
+    if EstadoProveedor.query.count() == 0:
+        db.session.add_all([
+            EstadoProveedor(nombre_estado_proveedor=nombre, color_badge=color)
+            for nombre, color in (("Activo", "#16a34a"), ("Retenido", "#facc15"),
+                                  ("Inactivo", "#dc2626"))
+        ])
+        print("✔ Estados de proveedor precargados.")
+
+    if EstadoContacto.query.count() == 0:
+        db.session.add_all([
+            EstadoContacto(nombre_estado_contacto=nombre, color_badge=color)
+            for nombre, color in (("Disponible", "#16a34a"), ("No disponible", "#dc2626"))
+        ])
+        print("✔ Estados de contacto precargados.")
 
     # ============================================================
     # ESTADOS DE ACTIVO

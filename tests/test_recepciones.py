@@ -56,7 +56,7 @@ def pedido(client):
 
 @pytest.fixture
 def oferta(client, db):
-    p = _guardar(db, Proveedor(razon_social="Lange SA", estado_recurso_id=1))
+    p = _guardar(db, Proveedor(razon_social="Lange SA"))
     r = client.post("/api/documentos_proveedor", json={"tipo": "oferta", "proveedor_id": p.recurso_id,
                                                        "numero": "9676", "moneda": "ARS"})
     return db.session.get(DocumentoProveedor, r.get_json()["documento_id"])

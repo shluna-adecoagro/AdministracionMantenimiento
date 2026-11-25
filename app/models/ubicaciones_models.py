@@ -1,6 +1,7 @@
 from app.core.db import db
 from app.crud.audit_mixin import AuditMixin
 from app.crud.model_mixin import ModelMixin
+from app.crud.por_defecto import id_por_nombre
 import uuid
 from datetime import datetime
 
@@ -21,23 +22,6 @@ class EstadoUbicacion(ModelMixin, db.Model):
     nombre_estado_ubicacion = db.Column(db.String(50), nullable=False, unique=True,
                                         info={"label": "Nombre"})
     color_badge = db.Column(db.String(20), nullable=False)
-
-
-def estado_ubicacion_por_defecto(contexto):
-    """
-    ID de «Operativa» (o, si se renombró o borró, del primer estado cargado).
-
-    SQLAlchemy la llama al insertar sin estado, con el contexto de ejecución: se
-    consulta por su conexión porque la sesión está en pleno flush. El formulario
-    de alta la llama sin contexto (None) para preseleccionar el valor.
-    """
-    consulta = db.select(EstadoUbicacion.estado_ubicacion_id).order_by(
-        (EstadoUbicacion.nombre_estado_ubicacion != ESTADO_UBICACION_POR_DEFECTO),
-        EstadoUbicacion.estado_ubicacion_id,
-    ).limit(1)
-    if contexto is None:
-        return db.session.execute(consulta).scalar()
-    return contexto.connection.execute(consulta).scalar()
 
 
 class Ubicacion(db.Model, ModelMixin, AuditMixin):
@@ -67,7 +51,8 @@ class Ubicacion(db.Model, ModelMixin, AuditMixin):
         db.Integer,
         db.ForeignKey("estados_ubicacion.estado_ubicacion_id"),
         nullable=False,
-        default=estado_ubicacion_por_defecto,
+        default=id_por_nombre("estados_ubicacion", "estado_ubicacion_id",
+                              "nombre_estado_ubicacion", ESTADO_UBICACION_POR_DEFECTO),
         info={"label": "Estado"},
     )
     estado = db.relationship("EstadoUbicacion")
