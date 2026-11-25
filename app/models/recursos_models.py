@@ -86,6 +86,7 @@ class ContactoProveedor(db.Model, ModelMixin):
     proveedor_id = db.Column(db.Integer, db.ForeignKey("proveedores.recurso_id"), nullable=False)
 
     nombre_contacto = db.Column(db.String(100), nullable=False, info={"label": "Nombre"})
+    division = db.Column(db.String(100), nullable=True, info={"label": "División"})
     email = db.Column(db.String(100), info={"label": "Email"})
     telefono = db.Column(db.String(50), info={"label": "Teléfono"})
     tipo_contacto = db.Column(db.String(50))
