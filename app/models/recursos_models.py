@@ -37,7 +37,7 @@ class Empleado(Recurso):
 
     nombre = db.Column(db.String(100), nullable=False)
     apellido = db.Column(db.String(100), nullable=False)
-    legajo = db.Column(db.String(50))
+    legajo = db.Column(db.String(50), info={"label": "Legajo"})
     # Sin backref: un sector con empleados no se puede borrar.
     sector_id = db.Column(db.Integer, db.ForeignKey("sectores.sector_id"))
     sector = db.relationship("Sector")
