@@ -39,7 +39,13 @@
                 <span id="clear-search" class="clear-btn" style="display:none;">×</span>
             </div>
 
-            <button class="btn-filtro" type="submit">Buscar</button>
+            <button class="btn-filtro" type="submit">
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="7"></circle><line x1="20" y1="20" x2="16.65" y2="16.65"></line>
+                </svg>
+                Buscar
+            </button>
             {% if q or valores %}
                 <a class="btn-limpiar" href="{{ url_for(endpoint_base + '_listar') }}">Limpiar</a>
             {% endif %}

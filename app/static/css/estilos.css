@@ -229,6 +229,31 @@ body {
   flex-wrap: wrap;
 }
 
+/* Buscar: botón principal, a la altura de los campos de búsqueda */
+.btn-filtro {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1rem;
+  border: 1px solid #2563eb;
+  border-radius: 6px;
+  background-color: #3b82f6;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.btn-filtro:hover {
+  background-color: #2563eb;
+}
+
+.btn-filtro:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.35);
+}
+
 .btn-limpiar {
   color: #475569;
   font-size: 0.9rem;
