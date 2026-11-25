@@ -47,28 +47,35 @@
         </div>
 
         {% if campos_select %}
-        <details class="filtros-panel" {% if valores %}open{% endif %}>
-            <summary>
-                Filtros{% if valores %} ({{ valores | length }} aplicado{{ "" if valores | length == 1 else "s" }}){% endif %}
-            </summary>
-            <div class="filtros-grid">
+        <!-- Filtros a demanda: una fila por filtro aplicado; «+ Agregar filtro»
+             muestra la fila de otro campo. Las filas sin usar quedan ocultas. -->
+        <div class="filtros-filas" id="filtros-filas">
+            {% for c in campos_select %}
+                <div class="filtro-fila" data-campo="{{ c }}" {% if c not in valores %}hidden{% endif %}>
+                    <label for="filtro-{{ c }}">{{ fields[c].label }}</label>
+                    <select class="filtro-select filtro-combinable" name="{{ c }}" id="filtro-{{ c }}">
+                        <option value="">Todos</option>
+                        {% for opt in fk_data[c] %}
+                            <option value="{{ opt.value }}"
+                                {% if opt.deps %}data-deps='{{ opt.deps | tojson }}'{% endif %}
+                                {% if valores.get(c) == opt.value | string %}selected{% endif %}>
+                                {{ opt.label }}{% if opt.grupo %} ({{ opt.grupo }}){% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" class="filtro-quitar" title="Quitar filtro"
+                            aria-label="Quitar el filtro {{ fields[c].label }}">×</button>
+                </div>
+            {% endfor %}
+        </div>
+        <div class="filtro-agregar">
+            <select class="filtro-select" id="agregar-filtro" aria-label="Agregar filtro">
+                <option value="">+ Agregar filtro</option>
                 {% for c in campos_select %}
-                    <label class="filtro-campo">
-                        <span>{{ fields[c].label }}</span>
-                        <select class="filtro-select filtro-combinable" name="{{ c }}">
-                            <option value="">Todos</option>
-                            {% for opt in fk_data[c] %}
-                                <option value="{{ opt.value }}"
-                                    {% if opt.deps %}data-deps='{{ opt.deps | tojson }}'{% endif %}
-                                    {% if valores.get(c) == opt.value | string %}selected{% endif %}>
-                                    {{ opt.label }}{% if opt.grupo %} ({{ opt.grupo }}){% endif %}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </label>
+                    <option value="{{ c }}" {% if c in valores %}hidden disabled{% endif %}>{{ fields[c].label }}</option>
                 {% endfor %}
-            </div>
-        </details>
+            </select>
+        </div>
         {% endif %}
 
     </form>
@@ -173,10 +180,49 @@
 
         filtrarOpciones();
         selects.forEach(sel => sel.addEventListener("change", function () {
-            limpiarVacios();
             filtrarOpciones();
-            form.submit();
+            if (sel.value !== "") { limpiarVacios(); form.submit(); }
         }));
+
+        // «+ Agregar filtro»: muestra la fila del campo elegido y abre su select.
+        const agregar = document.getElementById("agregar-filtro");
+        // Sin campos para agregar (todos en uso), el selector no se muestra.
+        function actualizarAgregar() {
+            if (!agregar) return;
+            const libres = Array.from(agregar.options).filter(o => o.value && !o.disabled).length;
+            agregar.parentElement.hidden = libres === 0;
+        }
+        actualizarAgregar();
+        if (agregar) {
+            agregar.addEventListener("change", function () {
+                const campo = agregar.value;
+                agregar.value = "";
+                if (!campo) return;
+                const fila = form.querySelector(`.filtro-fila[data-campo="${campo}"]`);
+                fila.hidden = false;
+                const opcion = agregar.querySelector(`option[value="${campo}"]`);
+                opcion.hidden = opcion.disabled = true;
+                actualizarAgregar();
+                fila.querySelector("select").focus();
+            });
+        }
+
+        // «×»: quita el filtro; si tenía un valor, vuelve a buscar sin él.
+        form.querySelectorAll(".filtro-quitar").forEach(function (boton) {
+            boton.addEventListener("click", function () {
+                const fila = boton.closest(".filtro-fila");
+                const sel = fila.querySelector("select");
+                const teniaValor = sel.value !== "";
+                sel.value = "";
+                fila.hidden = true;
+                const opcion = agregar.querySelector(`option[value="${fila.dataset.campo}"]`);
+                opcion.hidden = opcion.disabled = false;
+                actualizarAgregar();
+                filtrarOpciones();
+                if (teniaValor) { limpiarVacios(); form.submit(); }
+            });
+        });
+
         // Cambiar el campo de búsqueda vuelve a buscar solo si hay texto.
         document.getElementById("campo-select").addEventListener("change", function () {
             if (document.getElementById("search-input").value.trim()) { limpiarVacios(); form.submit(); }

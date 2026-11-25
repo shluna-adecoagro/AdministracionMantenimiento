@@ -675,10 +675,15 @@ son independientes entre sí; los demás van en orden.
 
 #### Notas: filtros combinables en los listados (25/11, fuera de fase)
 
-- Panel plegable «Filtros» en todos los listados: un select por cada campo de los
-  `filtros` con opciones (FK, opciones fijas, Sí/No), combinados con Y y con la búsqueda
-  de texto. Se abre solo cuando hay filtros aplicados; muestra cuántos y la cantidad de
-  resultados, y tiene «Limpiar». Ejemplo: tractores 5090E del Feedlot.
+- Filtros **a demanda** en todos los listados: «+ Agregar filtro» suma una fila (campo,
+  select y «×» para quitarla) por cada campo de los `filtros` con opciones (FK, opciones
+  fijas, Sí/No), combinados con Y y con la búsqueda de texto. Las filas van una debajo de
+  la otra (al principio era un panel con todos los selects en grilla, que con la hoja de
+  estilos en caché se veía en una sola línea y se cortaba). Al volver a una búsqueda se
+  ven las filas de los filtros aplicados. Cantidad de resultados y «Limpiar». Ejemplo:
+  tractores 5090E del Feedlot.
+- La hoja de estilos se pide con `?v=<fecha de modificación>` (`version_estatico` en
+  `app/__init__.py`): después de una actualización el navegador no usa la copia vieja.
 - Selects dependientes, como en el formulario (los modelos de la categoría elegida).
 - Filtros en la URL con el nombre del campo (`/activos?categoria_activo_id=2&sector_id=3`),
   como en la API; los vacíos no se envían. Un valor inválido se ignora. Los enlaces
