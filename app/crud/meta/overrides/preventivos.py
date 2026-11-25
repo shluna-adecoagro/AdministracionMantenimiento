@@ -335,8 +335,7 @@ OVERRIDES = {
             # Columna «NombreERP» de la planilla de equivalencias de SharePoint.
             "nombre_erp": {"alias": ["NombreERP"]},
         },
-        "listado": ["nombre_plan", "nombre_erp", "categoria_activo_id", "periodo_uso", "unidad_uso_id",
-                    "periodo_tiempo", "unidad_tiempo_id", "plan_inferior_id", "ciclo", "vigente"],
+        "listado": ["nombre_plan", "nombre_erp", "categoria_activo_id", "plan_inferior_id", "ciclo", "vigente"],
         "clave_natural": ["nombre_plan"],
         "al_guardar": al_guardar_plan,
         "tabs_extra": [{"id": "todas_las_tareas", "label": "Todas las tareas", "funcion": tab_todas_las_tareas}],
