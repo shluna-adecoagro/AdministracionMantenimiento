@@ -261,6 +261,10 @@ flask --app run importar herramientas herramientas.csv
 flask --app run exportar herramientas herramientas.csv
 ```
 
+Los números se escriben en formato argentino («1.234,5», «1.400»), como los exporta
+Excel; también se acepta «1,5» o «1.5». La exportación usa coma decimal y no agrega
+miles.
+
 Si una fila tiene errores, se informan todos juntos y no se guarda nada.
 
 ---

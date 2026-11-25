@@ -35,6 +35,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import types as T
 
 from app.core.db import db
 from app.crud.core import coercion
@@ -213,6 +214,12 @@ def importar(spec: EntitySpec, contenido: bytes, nombre_archivo: str = "archivo.
     # --- validación de todas las filas -----------------------------------
     buscadores = {c: _BuscadorFK(spec.fields[c]) for _, c, modo in columnas if modo == "texto"}
     campos_archivo = {c: spec.fields[c] for _, c, _ in columnas}
+    # Columnas numéricas: sus valores se leen en formato argentino (ver numero_csv).
+    # Las FK quedan afuera: se escriben por nombre o por ID, nunca con miles.
+    tabla = sa_inspect(spec.model).columns
+    numericos = {c for c in campos_archivo
+                 if c in tabla and not tabla[c].foreign_keys
+                 and isinstance(tabla[c].type, (T.Integer, T.Numeric, T.Float))}
     validas: list[tuple[int, dict]] = []
     claves_vistas: dict[tuple, int] = {}
 
@@ -226,6 +233,8 @@ def importar(spec: EntitySpec, contenido: bytes, nombre_archivo: str = "archivo.
                 except ValueError as e:
                     errores_fila[campo] = f"{spec.fields[campo].label}: {e}."
                     continue
+            if valor and campo in numericos:
+                valor = coercion.numero_csv(valor)  # «1.400» → 1400, «1.234,5» → 1234.5
             crudo[campo] = valor
         try:
             datos = coercion.datos_de_entrada(spec.model, campos_archivo, crudo, parcial=True,
@@ -318,8 +327,13 @@ def _texto(valor) -> str:
         return valor.isoformat(sep=" ", timespec="minutes")
     if isinstance(valor, date):
         return valor.isoformat()
+    # Decimales con coma y sin miles, el mismo formato que lee la importación
+    # (numero_csv): así «1,234» no vuelve como 1234. Excel en castellano lo abre
+    # como número.
     if isinstance(valor, Decimal):
-        return format(valor, "f")
+        return format(valor, "f").replace(".", ",")
+    if isinstance(valor, float):
+        return repr(valor).replace(".", ",")
     return str(valor)
 
 

@@ -244,3 +244,24 @@ def test_comando_exportar(cli, sector, tmp_path):
     r = cli.invoke(args=["exportar", "sectores", str(archivo)])
     assert r.exit_code == 0, r.output
     assert "Taller" in archivo.read_text(encoding="utf-8-sig")
+
+
+def test_exportar_y_reimportar_conserva_los_decimales(app, db, categorias_activo):
+    """Los decimales salen con coma: «1,234» vuelve como 1,234 (no como 1234)."""
+    from app.models.preventivos_models import PlanPreventivo
+    from app.models.unidadmedida_models import TipoUnidad, UnidadMedida
+
+    tiempo = TipoUnidad.query.filter_by(nombre_tipo="Tiempo").one().tipo_unidad_id
+    h = UnidadMedida(nombre_unidad="Horas", abreviatura="h", tipo_medidor="Horómetro", tipo_unidad_id=tiempo)
+    db.session.add(h)
+    db.session.flush()
+    db.session.add(PlanPreventivo(nombre_plan="P", periodo_uso=1.234, unidad_uso_id=h.unidad_medida_id,
+                                  categoria_activo_id=categorias_activo["Tractor"].categoria_activo_id))
+    db.session.commit()
+    planes = REGISTRY["planes_preventivos"]
+    contenido = exportar(planes)
+    assert "1,234" in contenido.decode("utf-8-sig")
+    PlanPreventivo.query.one().periodo_uso = 5
+    db.session.commit()
+    assert importar(planes, contenido).ok
+    assert PlanPreventivo.query.one().periodo_uso == 1.234

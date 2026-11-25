@@ -540,9 +540,6 @@ def test_importar_nombre_erp_con_la_columna_de_sharepoint(app, db, palas, catego
     }
 
 
-@pytest.mark.xfail(strict=True, reason="Error conocido: el CSV toma el punto siempre como "
-                   "decimal, y «1.400» (miles, como lo exporta SharePoint) queda en 1,4. "
-                   "Ver app/crud/core/coercion.py, convertir().")
 def test_importar_numero_con_separador_de_miles(app, db, categorias_activo, unidades):
     csv = ("Nombre;Categoría de activo;Período por uso;Unidad (uso)\n"
            "Preventivo tractor completo;Tractor;1.400;Horas\n").encode()
@@ -571,3 +568,21 @@ def test_nombre_erp_vacio_es_null(client, palas, unidades):
     h = unidades["h"].unidad_medida_id
     assert _plan(client, "A", palas, periodo_uso=10, unidad_uso_id=h, nombre_erp="PREV PALA 300").status_code == 201
     assert _plan(client, "B", palas, periodo_uso=20, unidad_uso_id=h, nombre_erp="PREV PALA 300").status_code == 409
+
+
+def test_importar_numeros_en_formato_argentino_solo_en_columnas_numericas(app, db, categorias_activo, unidades):
+    """«1.234,5» en una columna numérica; un texto con «1.400» (el nombre) no se toca."""
+    csv = ("Nombre;Categoría de activo;Período por uso;Unidad (uso);Período por tiempo;Unidad (tiempo)\n"
+           "Plan 1.400;Tractor;1.234,5;Horas;1.200;Meses\n").encode()
+    r = importar(REGISTRY["planes_preventivos"], csv)
+    assert r.ok, r.resumen()
+    p = PlanPreventivo.query.one()
+    assert (p.nombre_plan, p.periodo_uso, p.periodo_tiempo) == ("Plan 1.400", 1234.5, 1200)
+
+
+def test_importar_numero_en_formato_ingles_se_rechaza(app, db, categorias_activo, unidades):
+    csv = ("Nombre;Categoría de activo;Período por uso;Unidad (uso)\n"
+           "Plan;Tractor;1,234.5;Horas\n").encode()
+    r = importar(REGISTRY["planes_preventivos"], csv)
+    assert not r.ok
+    assert PlanPreventivo.query.count() == 0

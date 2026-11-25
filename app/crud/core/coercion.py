@@ -11,6 +11,8 @@ No depende de Flask: recibe cualquier dict-like (request.form, un JSON, un dict)
 """
 from __future__ import annotations
 
+import re
+
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
@@ -122,6 +124,37 @@ def convertir(columna, valor):
         return valor
 
     return valor
+
+
+# ---------------------------------------------------------------------------
+# Números de un CSV (formato argentino)
+# ---------------------------------------------------------------------------
+
+# «1.234,5»: puntos de miles (en grupos de tres) y coma decimal.
+_MILES_Y_COMA = re.compile(r"^[-+]?\d{1,3}(\.\d{3})+,\d+$")
+# «1.400», «12.345.678»: solo puntos de miles, en grupos de tres.
+_SOLO_MILES = re.compile(r"^[-+]?\d{1,3}(\.\d{3})+$")
+
+
+def numero_csv(texto: str) -> str:
+    """
+    Normaliza un número escrito en formato argentino, como lo exportan Excel y
+    SharePoint, para que convertir() lo lea bien. Solo para la importación CSV:
+    los formularios web mandan el punto como decimal («1.5») y no pasan por acá.
+
+        «1.234,5»  → «1234.5»   puntos de miles y coma decimal
+        «1.400»    → «1400»     solo puntos en grupos de tres: miles
+        «1,5», «1.5», «300»     sin cambios (convertir() ya toma la coma como decimal)
+
+    Lo demás («1,234.5», «12.34,5») queda igual: convertir() lo rechaza con un
+    error, en vez de adivinar.
+    """
+    valor = texto.strip()
+    if _MILES_Y_COMA.match(valor):
+        return valor.replace(".", "").replace(",", ".")
+    if _SOLO_MILES.match(valor):
+        return valor.replace(".", "")
+    return texto
 
 
 # ---------------------------------------------------------------------------
