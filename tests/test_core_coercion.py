@@ -103,3 +103,27 @@ def test_valor_para_formulario():
     assert valor_para_formulario({"tipo": "date"}, datetime(2026, 1, 15, 10, 0)) == "2026-01-15"
     assert valor_para_formulario({"tipo": "text"}, None) == ""
     assert valor_para_formulario({"tipo": "number"}, 3) == 3
+
+
+# ---------------------------------------------------------------------------
+# Números de un CSV en formato argentino (numero_csv)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("texto, esperado", [
+    ("1.400", "1400"),              # solo miles
+    ("12.345.678", "12345678"),
+    ("-1.400", "-1400"),
+    ("1.234,5", "1234.5"),          # miles y coma decimal
+    ("1.234.567,89", "1234567.89"),
+    ("1,5", "1,5"),                 # sin cambios: convertir() toma la coma como decimal
+    ("1.5", "1.5"),                 # un punto que no agrupa de a tres: decimal
+    ("1.25", "1.25"),
+    ("300", "300"),
+    ("1.4000", "1.4000"),           # grupo de cuatro: no son miles
+    ("1,234.5", "1,234.5"),         # formato inglés: queda igual (y convertir() lo rechaza)
+    ("12.34,5", "12.34,5"),
+])
+def test_numero_csv(texto, esperado):
+    from app.crud.core.coercion import numero_csv
+
+    assert numero_csv(texto) == esperado

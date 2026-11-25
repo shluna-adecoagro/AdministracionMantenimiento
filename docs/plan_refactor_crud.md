@@ -142,6 +142,12 @@ Hecho:
   para los nombres de columna de SharePoint.
 - **Todo o nada**: se informan todos los errores con su fila y no se guarda nada.
 - Lee CSV con `,` `;` o tabulación, en UTF-8 (con o sin BOM) o Windows-1252.
+- **Números en formato argentino** (25/11), solo en las columnas numéricas que no son FK:
+  «1.234,5» → 1234,5 y «1.400» (puntos en grupos de tres) → 1400; «1,5» y «1.5» siguen
+  siendo decimales. Lo ambiguo o en formato inglés («1,234.5») se rechaza con un error.
+  Ver `numero_csv` en `app/crud/core/coercion.py`. Los formularios web y la API no
+  cambian (mandan punto decimal). La exportación escribe los decimales con coma y sin
+  miles, así que exportar y reimportar conserva los valores.
 
 Decisiones del usuario:
 
@@ -664,9 +670,8 @@ son independientes entre sí; los demás van en orden.
 - `planes_preventivos.nombre_erp` (migración `1d89261de669`), opcional y único cuando
   está cargado; alias «NombreERP» para importar la planilla de SharePoint. Ver
   `docs/diseno_tablas_operativas.md`. El uso (reconocer el plan en la OT) es de la fase 12.
-- **Error conocido** (`xfail` en `tests/test_preventivos.py`): el CSV toma el punto
-  siempre como decimal, así que «1.400» (miles, como lo exporta SharePoint) se importa
-  como 1,4, sin aviso. Pendiente de decidir cómo leer los números del CSV.
+- Error encontrado al probarlo: el CSV tomaba el punto siempre como decimal y «1.400»
+  se importaba como 1,4. Corregido en el PR siguiente (ver «Carga de datos (Fase 6)»).
 
 ## Arquitectura objetivo
 
