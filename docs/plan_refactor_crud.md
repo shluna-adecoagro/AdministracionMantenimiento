@@ -309,7 +309,7 @@ fases 10 a 12; no se muestra mientras no tenga entidades.
 
 - **Datos maestros** (por defecto): activos, materiales, empleados, proveedores,
   sectores, cuentas, marcas.
-- **Catálogos** (plegable): estados de activo, sector, cuenta y recurso; tipos de activo
+- **Catálogos** (plegable): estados de activo, sector, ubicación, cuenta y recurso; tipos de activo
   (con sus categorías); categorías de material (con sus tipos); unidades de medida; tipos
   de unidad; motivos de operación. Antes la mayoría solo se cargaba desde `seed.py`; ahora
   se editan desde la app (un valor en uso no se puede borrar). No se auditan.
@@ -618,6 +618,25 @@ son independientes entre sí; los demás van en orden.
   de otra fila y 111 en hojas con varias OC que no se pudieron deducir. Unos 35 s.
 - `openpyxl` en `requirements.txt` y `environment.yml`.
 - Tests: `tests/test_pedidos_historicos.py`.
+
+#### Notas: estado de las ubicaciones (25/11, fuera de fase)
+
+- Catálogo `estados_ubicacion` (Operativa, En mantenimiento, Inactiva; con color) y
+  `ubicaciones.estado_ubicacion_id` obligatorio. Informativo: no limita destinos de
+  stock ni activos. Ver `docs/diseno_tablas_operativas.md`, «Cambios a tablas existentes».
+- Migración `5c7c85247e05`: crea el catálogo, **inserta los tres estados** y deja las
+  ubicaciones existentes en «Operativa». El seed los carga solo en una base sin
+  migraciones (tests). Lección del seed de motivos (PR 34): si una migración inserta
+  valores de un catálogo, que inserte el catálogo completo, o el seed por «tabla vacía»
+  saltea el resto.
+- Valor por defecto: función del modelo (`estado_ubicacion_por_defecto`) que busca
+  «Operativa» (o el primer estado, si se renombró). El override marca el campo como no
+  obligatorio y, con `completar`, mantiene el estado actual si una modificación lo trae
+  vacío (PUT de la API).
+- Framework: el formulario de alta ahora preselecciona también los valores por defecto
+  **calculados** de las FK (antes, solo los fijos). Las fechas (`date.today`) siguen sin
+  preseleccionarse.
+- Tests: `tests/test_estado_ubicacion.py`.
 
 ## Arquitectura objetivo
 

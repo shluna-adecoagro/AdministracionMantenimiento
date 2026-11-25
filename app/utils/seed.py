@@ -5,6 +5,7 @@ import uuid
 
 # MODELOS
 from app.models.sectores_models import EstadoSector
+from app.models.ubicaciones_models import EstadoUbicacion
 from app.models.motivos_models import MotivoOperacion
 from app.models.cuentas_models import EstadoCuenta
 from app.models.recursos_models import EstadoRecurso
@@ -40,6 +41,24 @@ def seed_data():
             ]
         )
         print("✔ Estados de sector precargados.")
+
+    # ============================================================
+    # ESTADOS DE UBICACIÓN
+    # ============================================================
+    # La migración que los agregó (5c7c85247e05) ya los inserta en una base
+    # existente; esto los carga en una base creada sin migraciones (tests).
+    if EstadoUbicacion.query.count() == 0:
+        db.session.add_all(
+            [
+                EstadoUbicacion(nombre_estado_ubicacion=nombre, color_badge=color)
+                for nombre, color in (
+                    ("Operativa", "#16a34a"),
+                    ("En mantenimiento", "#eab308"),
+                    ("Inactiva", "#dc2626"),
+                )
+            ]
+        )
+        print("✔ Estados de ubicación precargados.")
 
     # ============================================================
     # MOTIVOS DE OPERACIÓN

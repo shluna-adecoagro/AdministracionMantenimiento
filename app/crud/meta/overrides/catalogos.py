@@ -11,6 +11,7 @@ from app.models.cuentas_models import EstadoCuenta
 from app.models.motivos_models import MotivoOperacion
 from app.models.recursos_models import EstadoRecurso
 from app.models.sectores_models import EstadoSector
+from app.models.ubicaciones_models import EstadoUbicacion
 from app.models.unidadmedida_models import TipoUnidad, UnidadMedida
 
 # Tipos de medidor que se sugieren al cargar una unidad (además de los ya usados).
@@ -86,6 +87,7 @@ OVERRIDES = {
     },
     # --- Otros -------------------------------------------------------------
     "estados_sector": _estado(EstadoSector, "nombre_estado_sector", "sector", 160),
+    "estados_ubicacion": _estado(EstadoUbicacion, "nombre_estado_ubicacion", "ubicación", 165),
     "estados_cuenta": _estado(EstadoCuenta, "nombre_estado_cuenta", "cuenta", 170),
     "estados_recurso": _estado(EstadoRecurso, "nombre_estado_recurso", "recurso", 180),
     "motivos_operacion": {

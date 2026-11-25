@@ -275,8 +275,16 @@ class VistasEntidad:
         for campo in self.fields:
             col = columnas.get(campo)
             default = getattr(col, "default", None) if col is not None else None
-            if default is not None and getattr(default, "is_scalar", False):
+            if default is None:
+                continue
+            if getattr(default, "is_scalar", False):
                 resultado[campo] = default.arg
+            elif getattr(default, "is_callable", False) and self.fields[campo].tipo == "fk":
+                # Una FK con valor por defecto calculado (ej: el estado «Operativa»
+                # de una ubicación). La función recibe el contexto de ejecución de
+                # SQLAlchemy; fuera de un INSERT se la llama con None. Solo FK: las
+                # fechas (date.today) se siguen cargando a mano.
+                resultado[campo] = default.arg(None)
         return resultado
 
     def crear(self):
