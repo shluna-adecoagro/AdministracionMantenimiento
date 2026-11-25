@@ -31,6 +31,11 @@ Si el código y el diseño no coinciden, o falta una decisión, preguntá antes 
   `docs/diseno_tablas_operativas.md`.
 - Textos de la app, mensajes, comentarios, commits y documentación en español
   (rioplatense, sin voseo forzado en la interfaz).
+- **Sesiones cortas:** avisale al gestor cuando convenga empezar una sesión nueva (por
+  ejemplo, al cerrar un PR después de varios en la misma sesión, o antes de arrancar
+  un tema que no depende de lo anterior), para que una sesión larga no afecte las
+  respuestas. Lo importante de cada tema tiene que quedar en los docs y en los PR, no
+  solo en la conversación.
 
 ## Convenciones
 

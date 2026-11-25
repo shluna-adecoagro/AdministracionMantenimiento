@@ -127,4 +127,16 @@ def create_app(env="development", config_extra=None):
     def inject_sidebar_entities():
         return {"sidebar_grupos": menu}
 
+    # Versión de un archivo estático para su URL (?v=<fecha de modificación>): al
+    # cambiar el archivo cambia la URL, y el navegador no sigue usando la copia
+    # vieja de su caché (ej: estilos.css después de una actualización).
+    @app.template_global()
+    def version_estatico(nombre: str) -> int:
+        import os
+
+        try:
+            return int(os.path.getmtime(os.path.join(app.static_folder, nombre)))
+        except OSError:
+            return 0
+
     return app

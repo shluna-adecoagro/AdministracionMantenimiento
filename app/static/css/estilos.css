@@ -229,6 +229,31 @@ body {
   flex-wrap: wrap;
 }
 
+/* Buscar: botón principal, a la altura de los campos de búsqueda */
+.btn-filtro {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1rem;
+  border: 1px solid #2563eb;
+  border-radius: 6px;
+  background-color: #3b82f6;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.btn-filtro:hover {
+  background-color: #2563eb;
+}
+
+.btn-filtro:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.35);
+}
+
 .btn-limpiar {
   color: #475569;
   font-size: 0.9rem;
@@ -241,25 +266,55 @@ body {
   font-size: 0.9rem;
 }
 
-.filtros-panel summary {
-  cursor: pointer;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-.filtros-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 0.75rem 1rem;
-  margin-top: 0.75rem;
-}
-
-.filtro-campo {
+/* Filtros a demanda: una fila por filtro, una debajo de la otra */
+.filtros-filas {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.85rem;
+  gap: 0.5rem;
+}
+
+.filtros-filas:empty,
+.filtros-filas:not(:has(.filtro-fila:not([hidden]))) {
+  display: none;
+}
+
+.filtro-fila {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.filtro-fila[hidden] {
+  display: none;
+}
+
+.filtro-fila label {
+  flex: 0 0 11rem;
+  font-size: 0.9rem;
   color: #475569;
+}
+
+.filtro-fila select {
+  flex: 0 1 22rem;
+  min-width: 0;
+}
+
+.filtro-quitar {
+  border: none;
+  background: none;
+  color: #94a3b8;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.filtro-quitar:hover {
+  color: #dc2626;
+}
+
+.filtro-agregar select {
+  color: #2563eb;
+  font-weight: 600;
 }
 
 /* ============================================================

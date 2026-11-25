@@ -56,6 +56,12 @@ def tabla(html):
     return html[html.index("<tbody>"):html.index("</tbody>")]
 
 
+def filas_visibles(html):
+    """Campos con su fila de filtro a la vista (no ocultas)."""
+    return {campo for campo, oculta in
+            re.findall(r'<div class="filtro-fila" data-campo="(\w+)"\s*(hidden)?', html) if not oculta}
+
+
 def numeros(html):
     return set(re.findall(r"\b[TP]-0\d\b", tabla(html)))
 
@@ -66,19 +72,23 @@ def test_filtros_combinados(client, flota):
     html = client.get(url).get_data(as_text=True)
     assert numeros(html) == {"T-01"}
     assert "1 resultado" in html
-    assert "(3 aplicados)" in html
-    assert re.search(r'<details class="filtros-panel"\s+open', html)
+    # Filtros a demanda: se ven las filas de los aplicados, y los demás quedan
+    # para «+ Agregar filtro».
+    assert filas_visibles(html) == {"categoria_activo_id", "modelo_id", "sector_id"}
+    assert re.search(r'<option value="sector_id"\s+hidden disabled>', html)
+    assert re.search(r'<option value="marca_id"\s*>', html)
 
 
 def test_sin_filtros_el_panel_esta_plegado(client, flota):
     html = client.get("/activos").get_data(as_text=True)
     assert numeros(html) == {"T-01", "T-02", "T-03", "P-01"}
     assert "4 resultados" in html
-    assert re.search(r'<details class="filtros-panel"\s*>', html)
-    # Un select por cada campo con opciones, todos a la vez.
+    assert filas_visibles(html) == set()
+    # Todos los campos con opciones se pueden agregar como filtro.
     for campo in ("tipo_activo_id", "categoria_activo_id", "marca_id", "modelo_id",
                   "sector_id", "ubicacion_id", "estado_activo_id"):
         assert f'name="{campo}"' in html
+        assert re.search(rf'<option value="{campo}"\s*>', html)
 
 
 def test_texto_busca_en_el_nombre_de_lo_vinculado(client, flota):
@@ -133,3 +143,9 @@ def test_api_busca_en_el_nombre_de_lo_vinculado(client, flota):
     r = client.get("/api/activos?q=5090")
     assert r.status_code == 200
     assert {a["numero_activo"] for a in r.get_json()} == {"T-01", "T-02"}
+
+
+def test_hoja_de_estilos_con_version(client):
+    """La URL de estilos.css cambia con el archivo: el navegador no usa la copia vieja."""
+    html = client.get("/activos").get_data(as_text=True)
+    assert re.search(r'css/estilos\.css\?v=\d{9,}', html)
