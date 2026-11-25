@@ -659,6 +659,15 @@ son independientes entre sí; los demás van en orden.
 - Tests: `tests/test_estados_proveedor_contacto.py` y
   `test_estados_de_proveedor_desde_los_de_recurso` en `tests/test_migraciones.py`.
 
+#### Notas: nombre en el ERP de los planes preventivos (25/11, fuera de fase)
+
+- `planes_preventivos.nombre_erp` (migración `1d89261de669`), opcional y único cuando
+  está cargado; alias «NombreERP» para importar la planilla de SharePoint. Ver
+  `docs/diseno_tablas_operativas.md`. El uso (reconocer el plan en la OT) es de la fase 12.
+- **Error conocido** (`xfail` en `tests/test_preventivos.py`): el CSV toma el punto
+  siempre como decimal, así que «1.400» (miles, como lo exporta SharePoint) se importa
+  como 1,4, sin aviso. Pendiente de decidir cómo leer los números del CSV.
+
 ## Arquitectura objetivo
 
 ```

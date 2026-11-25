@@ -515,3 +515,59 @@ def test_vigente_arranca_en_si(client):
     form = client.get("/planes_preventivos/crear").get_data(as_text=True)
     vigente = form.split('id="vigente"')[1].split("</select>")[0]
     assert re.search(r'value="True"\s+selected', vigente)
+
+
+# ---------------------------------------------------------------------------
+# Nombre en el ERP (equivalencia 1:1 con el plan de EAM / SAP PM)
+# ---------------------------------------------------------------------------
+
+def test_importar_nombre_erp_con_la_columna_de_sharepoint(app, db, palas, categorias_activo, unidades):
+    """La planilla de equivalencias de SharePoint, exportada a CSV («NombreERP»)."""
+    csv = ("Nombre;Categoría de activo;Período por uso;Unidad (uso);NombreERP\n"
+           "Preventivo tractor parcial;Tractor;350;Horas;PREV TRACTOR 350\n"
+           "Preventivo tractor completo;Tractor;1400;Horas;PREV TRACTOR 1400\n"
+           "Preventivo pala parcial;Pala cargadora;300;Horas;PREV PALA 300\n"
+           "Preventivo pala completo;Pala cargadora;1200;Horas;PREV PALA 1200\n"
+           ).encode()
+    r = importar(REGISTRY["planes_preventivos"], csv)
+    assert r.ok, r.resumen()
+    planes = {p.nombre_plan: (p.periodo_uso, p.nombre_erp) for p in PlanPreventivo.query.all()}
+    assert planes == {
+        "Preventivo tractor parcial": (350, "PREV TRACTOR 350"),
+        "Preventivo tractor completo": (1400, "PREV TRACTOR 1400"),
+        "Preventivo pala parcial": (300, "PREV PALA 300"),
+        "Preventivo pala completo": (1200, "PREV PALA 1200"),
+    }
+
+
+@pytest.mark.xfail(strict=True, reason="Error conocido: el CSV toma el punto siempre como "
+                   "decimal, y «1.400» (miles, como lo exporta SharePoint) queda en 1,4. "
+                   "Ver app/crud/core/coercion.py, convertir().")
+def test_importar_numero_con_separador_de_miles(app, db, categorias_activo, unidades):
+    csv = ("Nombre;Categoría de activo;Período por uso;Unidad (uso)\n"
+           "Preventivo tractor completo;Tractor;1.400;Horas\n").encode()
+    r = importar(REGISTRY["planes_preventivos"], csv)
+    assert r.ok, r.resumen()
+    assert PlanPreventivo.query.one().periodo_uso == 1400
+
+
+def test_nombre_erp_repetido_se_rechaza(app, db, categorias_activo, unidades):
+    """Dos planes con el mismo plan del ERP rompen la equivalencia 1:1: no se guarda nada."""
+    csv = ("Nombre;Categoría de activo;Período por uso;Unidad (uso);nombre_erp\n"
+           "Preventivo tractor parcial;Tractor;350;Horas;PREV TRACTOR 350\n"
+           "Preventivo tractor completo;Tractor;1400;Horas;PREV TRACTOR 350\n").encode()
+    r = importar(REGISTRY["planes_preventivos"], csv)
+    assert not r.ok
+    assert PlanPreventivo.query.count() == 0
+
+
+def test_nombre_erp_vacio_es_null(client, palas, unidades):
+    for nombre, periodo in (("Parcial palas", 300), ("Completo palas", 1200)):
+        r = _plan(client, nombre, palas, periodo_uso=periodo,
+                  unidad_uso_id=unidades["h"].unidad_medida_id, nombre_erp="")
+        assert r.status_code == 201, r.get_json()
+    assert [p.nombre_erp for p in PlanPreventivo.query.all()] == [None, None]
+
+    h = unidades["h"].unidad_medida_id
+    assert _plan(client, "A", palas, periodo_uso=10, unidad_uso_id=h, nombre_erp="PREV PALA 300").status_code == 201
+    assert _plan(client, "B", palas, periodo_uso=20, unidad_uso_id=h, nombre_erp="PREV PALA 300").status_code == 409

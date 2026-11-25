@@ -332,8 +332,10 @@ OVERRIDES = {
             "unidad_uso_id": {"fk_filtro": unidades_de_medidor},
             "unidad_tiempo_id": {"fk_filtro": unidades_de_tiempo},
             "vigente": VIGENTE,
+            # Columna «NombreERP» de la planilla de equivalencias de SharePoint.
+            "nombre_erp": {"alias": ["NombreERP"]},
         },
-        "listado": ["nombre_plan", "categoria_activo_id", "periodo_uso", "unidad_uso_id",
+        "listado": ["nombre_plan", "nombre_erp", "categoria_activo_id", "periodo_uso", "unidad_uso_id",
                     "periodo_tiempo", "unidad_tiempo_id", "plan_inferior_id", "ciclo", "vigente"],
         "clave_natural": ["nombre_plan"],
         "al_guardar": al_guardar_plan,
