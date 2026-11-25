@@ -219,6 +219,49 @@ body {
   box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
 }
 
+/* Filtros combinables: búsqueda arriba y panel plegable de selects */
+.filtros-combinables {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.filtros-combinables .filtros-left {
+  flex-wrap: wrap;
+}
+
+.btn-limpiar {
+  color: #475569;
+  font-size: 0.9rem;
+  text-decoration: underline;
+}
+
+.filtros-total {
+  margin-left: auto;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.filtros-panel summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.filtros-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem 1rem;
+  margin-top: 0.75rem;
+}
+
+.filtro-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
 /* ============================================================
    8) TABLAS — ESTILO GENERAL
    ============================================================ */

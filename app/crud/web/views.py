@@ -47,6 +47,13 @@ def endpoint(entidad: str, accion: str) -> str:
     return f"{BLUEPRINT}.{entidad}_{accion}"
 
 
+def _valor_url(valor) -> str:
+    """Un valor de filtro como va en la URL y en el <option>: Sí/No para los booleanos."""
+    if isinstance(valor, bool):
+        return "Sí" if valor else "No"
+    return str(valor)
+
+
 class VistasEntidad:
     def __init__(self, spec: EntitySpec, registry: dict[str, EntitySpec]):
         self.spec = spec
@@ -146,16 +153,44 @@ class VistasEntidad:
     # LISTAR
     # ------------------------------------------------------------------
 
+    def _filtros_de_url(self, campos: list[str]) -> dict:
+        """
+        {campo: valor} de los filtros de la URL (?categoria_activo_id=2&sector_id=3),
+        convertidos al tipo de la columna. Un valor vacío o inválido se ignora.
+        """
+        columnas = self.spec.model.__mapper__.columns
+        resultado = {}
+        for campo in campos:
+            crudo = request.args.get(campo, "")
+            if crudo == "" or campo not in columnas:
+                continue
+            try:
+                valor = coercion.convertir(columnas[campo], crudo)
+            except ValueError:
+                continue
+            if valor is not None:
+                resultado[campo] = valor
+        return resultado
+
     def listar(self):
         s = self.spec
         campo = request.args.get("campo") or "todos"
         q = request.args.get("q", "")
-        valor_fk = request.args.get("valor_fk")
         padre, padre_id = self._padre_desde_url()
+
+        # Filtros combinables: un select por cada FK, opción fija o Sí/No de los
+        # `filtros`. Los enlaces viejos (?campo=<fk>&valor_fk=3) siguen andando.
+        campos_select = repository.campos_de_filtro(self.fields, list(s.filtros))
+        valores = self._filtros_de_url(campos_select)
+        valor_fk = request.args.get("valor_fk")
+        if campo in campos_select:
+            if valor_fk not in (None, "") and campo not in valores:
+                valores.update(self._filtros_de_url_valor(campo, valor_fk))
+            campo = "todos"
 
         objetos = repository.consulta_listado(
             s.model, self.fields, list(s.filtros),
-            q=q, campo=campo, valor_fk=valor_fk,
+            q=q, campo=campo, valores=valores,
             filtro_padre=(padre.fk, padre_id) if padre else None,
         ).all()
 
@@ -166,19 +201,37 @@ class VistasEntidad:
             fila[s.pk] = getattr(r, s.pk)
             registros.append(fila)
 
+        opciones = fk.opciones_de(self.fields)
+        for c in campos_select:
+            if c not in opciones:  # opciones fijas y Sí/No
+                opciones[c] = [{"value": _valor_url(o["value"]), "label": o["label"], "deps": None, "grupo": None}
+                               for o in self.fields[c].options]
+
         return render_template(
             "crud/listado_entidad.html",
             **self._contexto(),
             nombre_entidad=inicial(s.label_plural),
             registros=registros,
             columns=list(s.listado),
-            filtros={"campos": list(s.filtros)},
+            # La búsqueda de texto elige entre los campos que no tienen select.
+            filtros={"campos": [c for c in s.filtros if c not in campos_select]},
+            campos_select=campos_select,
+            # Como texto, para comparar con el value de cada <option>.
+            valores={c: _valor_url(v) for c, v in valores.items()},
             campo_actual=campo,
-            valor_fk=valor_fk,
-            fk_data=fk.opciones_de(self.fields),
+            fk_data=opciones,
             fk_labels=fk_labels,
             q=q,
         )
+
+    def _filtros_de_url_valor(self, campo: str, crudo: str) -> dict:
+        """Un filtro recibido con el formato viejo (?campo=<campo>&valor_fk=<valor>)."""
+        columna = self.spec.model.__mapper__.columns.get(campo)
+        try:
+            valor = coercion.convertir(columna, crudo) if columna is not None else None
+        except ValueError:
+            return {}
+        return {} if valor is None else {campo: valor}
 
     # ------------------------------------------------------------------
     # Formulario (alta y edición)

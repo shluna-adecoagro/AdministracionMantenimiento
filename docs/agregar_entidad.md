@@ -184,7 +184,7 @@ Lo mínimo es `{"model": MiModelo}`. Claves disponibles:
 | `label_singular`, `label_plural`, `genero` | textos de las pantallas | todas |
 | `sidebar`, `orden` | entrada en el menú y su posición | `activos` |
 | `grupo` | sección del menú: `"operativos"`, `"maestros"` (por defecto) o `"catalogos"` | `overrides/catalogos.py` |
-| `listado`, `filtros` | columnas del listado y campos de búsqueda (por defecto, se eligen solas) | `activos` |
+| `listado`, `filtros` | columnas del listado y campos de búsqueda (por defecto, se eligen solas). De los `filtros`, las FK, las opciones fijas y los Sí/No son selects combinables en el panel «Filtros» del listado (`?campo=valor` en la URL); los demás, campos de la búsqueda de texto, que en una FK busca por el nombre de lo vinculado | `activos` |
 | `padre` | subentidad: pestaña en el detalle del padre. Puede ser una lista de padres; `"label"` cambia el nombre de la pestaña en ese padre y `"visible"` (función del registro padre) la muestra solo en algunos | `ubicaciones`; `bom_activo` («BOM» en el activo, «Usado en activos» en el material) |
 | `clave_natural` | campos que identifican el registro al importar | `["nombre_ubicacion", "sector_id"]` |
 | `fields: {campo: {...}}` | cambiar lo inferido de un campo (ver abajo) | `lecturas_medidor.origen` |
