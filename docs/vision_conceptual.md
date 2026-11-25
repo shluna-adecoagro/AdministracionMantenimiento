@@ -150,6 +150,7 @@ Un sector puede prestarle una máquina a otro. Si se rompe, paga el **sector que
 
 - El sector imputado se sugiere desde el activo, pero se puede cambiar. La corrección queda auditada.
 - **El costo operativo siempre va al activo** (su historial de costos no depende de quién pagó). El sector imputado responde a la pregunta "quién paga".
+- **Activos compartidos (decidido 25/11):** hay activos que se comparten entre sectores según la demanda. Cada activo tiene igual un solo sector, y la imputación se corrige donde ocurre el gasto: en la OT (que la sugiere desde el activo y permite editarla) o en el destino del pedido. El gestor se entera por el reporte de la reparación.
 - Más adelante: registrar los préstamos (activo, sector que lo usa, desde y hasta), cuando exista la costumbre de informarlos.
 
 ### Contable y operativo pueden diferir, y está bien
