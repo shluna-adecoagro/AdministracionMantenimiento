@@ -21,6 +21,7 @@ OVERRIDES = {
         "genero": "m",
         "sidebar": True,
         "orden": 40,
+        "listado": ["razon_social","telefono", "email", "estado_proveedor_id"],
         "clave_natural": ["razon_social"],
         # Estado obligatorio en la base, pero no hace falta enviarlo: en el alta
         # toma «Activo» (preseleccionado en el formulario) y al modificar se
