@@ -278,7 +278,7 @@ def maestros(db, sector, cuenta, categorias_activo, estado_sector_activo):
                                    sector_id=sector.sector_id, estado_activo_id=estado)) for n in (17, 26, 20)]
     cat = CategoriaMaterial.query.first().categoria_material_id
     filtro = _guardar(db, Material(codigo="RE504836", descripcion="Filtro de aceite", categoria_material_id=cat))
-    lange = _guardar(db, Proveedor(razon_social="Lange", estado_recurso_id=1))
+    lange = _guardar(db, Proveedor(razon_social="Lange"))
     return {"tambo": tambo, "recria": recria, "modelo": modelo, "activos": activos, "filtro": filtro,
             "lange": lange, "sector": sector, "cuenta": cuenta}
 

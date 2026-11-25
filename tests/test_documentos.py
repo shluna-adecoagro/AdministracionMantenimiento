@@ -27,7 +27,7 @@ def _errores(r):
 
 @pytest.fixture
 def lange(db):
-    return _guardar(db, Proveedor(razon_social="Lubricantes Lange S.A.", cuit="30-71234567-8", estado_recurso_id=1))
+    return _guardar(db, Proveedor(razon_social="Lubricantes Lange S.A.", cuit="30-71234567-8"))
 
 
 @pytest.fixture

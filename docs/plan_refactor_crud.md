@@ -309,7 +309,8 @@ fases 10 a 12; no se muestra mientras no tenga entidades.
 
 - **Datos maestros** (por defecto): activos, materiales, empleados, proveedores,
   sectores, cuentas, marcas.
-- **Catálogos** (plegable): estados de activo, sector, ubicación, cuenta y recurso; tipos de activo
+- **Catálogos** (plegable): estados de activo, sector, ubicación, cuenta, recurso
+  (empleados), proveedor y contacto; tipos de activo
   (con sus categorías); categorías de material (con sus tipos); unidades de medida; tipos
   de unidad; motivos de operación. Antes la mayoría solo se cargaba desde `seed.py`; ahora
   se editan desde la app (un valor en uso no se puede borrar). No se auditan.
@@ -637,6 +638,26 @@ son independientes entre sí; los demás van en orden.
   **calculados** de las FK (antes, solo los fijos). Las fechas (`date.today`) siguen sin
   preseleccionarse.
 - Tests: `tests/test_estado_ubicacion.py`.
+
+#### Notas: estados de proveedor y de contacto (25/11, fuera de fase)
+
+- Catálogos `estados_proveedor` (Activo, Retenido, Inactivo) y `estados_contacto`
+  (Disponible, No disponible), informativos. «Retenido» todavía no bloquea
+  adjudicaciones ni OC (punto abierto en `docs/diseno_tablas_operativas.md`).
+- El estado sale de `recursos`: `empleados.estado_recurso_id` (sigue con
+  `estados_recurso`) y `proveedores.estado_proveedor_id`. Ya no se pasa
+  `estado_recurso_id` al crear un proveedor.
+- Migración `dda0f1c78dee`: inserta los catálogos completos, copia el estado de cada
+  empleado, pasa el de cada proveedor por nombre («Suspendido» → «Retenido»), deja los
+  contactos en «Disponible» y agrega `contactos_proveedor.division` (estaba en el modelo
+  sin migración). Si un proveedor tiene un estado de recurso sin equivalente, se frena
+  **antes** de tocar el esquema: SQLite no deshace el DDL de una migración que falla a
+  mitad de camino. La bajada es simétrica.
+- Valores por defecto generalizados en `app/crud/por_defecto.py`: `id_por_nombre(...)`
+  (default de la columna) y `mantener_si_vacio(...)` (`completar` del override). Los
+  usan ubicaciones, proveedores y contactos.
+- Tests: `tests/test_estados_proveedor_contacto.py` y
+  `test_estados_de_proveedor_desde_los_de_recurso` en `tests/test_migraciones.py`.
 
 ## Arquitectura objetivo
 

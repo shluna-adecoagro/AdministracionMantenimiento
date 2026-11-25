@@ -104,6 +104,37 @@ def test_reset_db_carga_todos_los_motivos(app_archivo):
         assert MotivoOperacion.query.count() == 14
 
 
+def test_estados_de_proveedor_desde_los_de_recurso(app_archivo):
+    """«Suspendido» pasa a «Retenido»; un estado sin equivalente frena la migración."""
+    from sqlalchemy import text
+
+    with app_archivo().app_context():
+        upgrade(revision="5c7c85247e05")
+        con = db.session
+        for i, n in [(1, "Activo"), (2, "Suspendido"), (3, "Licencia")]:
+            con.execute(text("INSERT INTO estados_recurso VALUES (:i, :u, :n, '#000')"),
+                        {"i": i, "u": f"u{i}", "n": n})
+        for rid, estado in [(1, 2), (2, 3)]:
+            con.execute(text("INSERT INTO recursos (recurso_id, uuid, tipo_recurso, estado_recurso_id) "
+                             "VALUES (:r, :u, 'proveedor', :e)"), {"r": rid, "u": f"r{rid}", "e": estado})
+            con.execute(text("INSERT INTO proveedores (recurso_id, razon_social) VALUES (:r, :n)"),
+                        {"r": rid, "n": f"P{rid}"})
+        con.commit()
+
+        # Flask-Migrate informa el error (con el estado «Licencia») y sale.
+        with pytest.raises(SystemExit):
+            upgrade()
+        con.rollback()
+
+        con.execute(text("UPDATE recursos SET estado_recurso_id = 1 WHERE recurso_id = 2"))
+        con.commit()
+        upgrade()
+        estados = dict(con.execute(text(
+            "SELECT p.razon_social, e.nombre_estado_proveedor FROM proveedores p "
+            "JOIN estados_proveedor e USING (estado_proveedor_id)")).all())
+        assert estados == {"P1": "Retenido", "P2": "Activo"}
+
+
 def test_reset_db_pide_confirmacion(app_archivo):
     resultado = app_archivo().test_cli_runner().invoke(args=["reset-db"], input="n\n")
     assert resultado.exit_code != 0

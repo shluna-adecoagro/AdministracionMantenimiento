@@ -9,7 +9,7 @@ pueden agregar, renombrar o cambiar de color. Un valor en uso no se puede borrar
 from app.models.activos_models import CategoriaActivo, EstadoActivo, TipoActivo
 from app.models.cuentas_models import EstadoCuenta
 from app.models.motivos_models import MotivoOperacion
-from app.models.recursos_models import EstadoRecurso
+from app.models.recursos_models import EstadoContacto, EstadoProveedor, EstadoRecurso
 from app.models.sectores_models import EstadoSector
 from app.models.ubicaciones_models import EstadoUbicacion
 from app.models.unidadmedida_models import TipoUnidad, UnidadMedida
@@ -90,6 +90,8 @@ OVERRIDES = {
     "estados_ubicacion": _estado(EstadoUbicacion, "nombre_estado_ubicacion", "ubicación", 165),
     "estados_cuenta": _estado(EstadoCuenta, "nombre_estado_cuenta", "cuenta", 170),
     "estados_recurso": _estado(EstadoRecurso, "nombre_estado_recurso", "recurso", 180),
+    "estados_proveedor": _estado(EstadoProveedor, "nombre_estado_proveedor", "proveedor", 182),
+    "estados_contacto": _estado(EstadoContacto, "nombre_estado_contacto", "contacto", 184),
     "motivos_operacion": {
         "model": MotivoOperacion,
         "label_singular": "motivo de operación",

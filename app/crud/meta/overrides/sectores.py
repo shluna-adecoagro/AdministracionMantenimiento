@@ -1,15 +1,7 @@
 # app/crud/meta/overrides/sectores.py
 from app.models.sectores_models import Sector
+from app.crud.por_defecto import mantener_si_vacio
 from app.models.ubicaciones_models import Ubicacion
-
-
-def _completar_ubicacion(datos, registro):
-    """El estado no se puede vaciar: en una modificación que no lo trae (PUT de la
-    API) o lo deja en blanco, se mantiene el que tenía. En un alta sin estado lo
-    completa el valor por defecto del modelo («Operativa»)."""
-    if registro is not None and datos.get("estado_ubicacion_id") in (None, ""):
-        datos["estado_ubicacion_id"] = registro.estado_ubicacion_id
-    return datos
 
 
 OVERRIDES = {
@@ -37,6 +29,6 @@ OVERRIDES = {
             # formulario) y al modificar se mantiene el que tenía.
             "estado_ubicacion_id": {"required": False},
         },
-        "completar": _completar_ubicacion,
+        "completar": mantener_si_vacio("estado_ubicacion_id"),
     },
 }
