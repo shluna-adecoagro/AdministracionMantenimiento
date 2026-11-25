@@ -12,7 +12,7 @@ Por cada entidad del registry:
     DELETE /api/<entidad>/<id>     baja            → 200 {"status": "ok"}
 
 Listado:
-    ?q=texto&campo=<campo>     búsqueda (como en la web)
+    ?q=texto&campo=<campo>     búsqueda (como en la web; en una FK, por el nombre de lo vinculado)
     ?<campo>=<valor>           filtro exacto por cualquier campo (ej: ?sector_id=3)
     ?limit=50&offset=100       paginación opcional; el total va en X-Total-Count
 

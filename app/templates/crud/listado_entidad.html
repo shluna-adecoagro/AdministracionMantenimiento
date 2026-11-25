@@ -16,53 +16,60 @@
         {% include "crud/partials/_listado_header.html" %}
     {% endwith %}
 
-    <!-- Filtros -->
-    <form method="GET" class="filtros-container" id="filtros-form">
+    <!-- Filtros: búsqueda de texto + panel plegable de selects combinables (Y) -->
+    <form method="GET" class="filtros-container filtros-combinables" id="filtros-form">
 
         <div class="filtros-left">
-            <label>Filtros:</label>
+            <label for="campo-select">Buscar en:</label>
 
-            <!-- Campo -->
             <select class="filtro-select" name="campo" id="campo-select">
-                <option value="todos"
-                    {% if campo_actual == "todos" %}selected{% endif %}>
+                <option value="todos" {% if campo_actual == "todos" %}selected{% endif %}>
                     Todos los campos
                 </option>
-
                 {% for c in filtros.campos %}
-                    <option value="{{ c }}"
-                        {% if campo_actual == c %}selected{% endif %}>
+                    <option value="{{ c }}" {% if campo_actual == c %}selected{% endif %}>
                         {{ fields[c].label }}
                     </option>
                 {% endfor %}
             </select>
 
-            <!-- Si el campo es FK, mostrar select dinámico -->
-            {% if campo_actual in fk_data %}
-                <select class="filtro-select" name="valor_fk" id="fk-select">
-                    <option value="">-- Todos --</option>
-                    {% for opt in fk_data[campo_actual] %}
-                        <option value="{{ opt.value }}"
-                            {% if valor_fk == opt.value|string %}selected{% endif %}>
-                            {{ opt.label }}
-                        </option>
-                    {% endfor %}
-                </select>
-            {% endif %}
-
-            <!-- Búsqueda -->
             <div class="search-wrapper">
-                <input type="text"
-                name="q"
-                id="search-input"
-                class="filtro-search"
-                placeholder="Buscar..."
-                value="{{ q }}">
+                <input type="text" name="q" id="search-input" class="filtro-search"
+                       placeholder="Buscar..." value="{{ q }}">
                 <span id="clear-search" class="clear-btn" style="display:none;">×</span>
             </div>
 
             <button class="btn-filtro" type="submit">Buscar</button>
+            {% if q or valores %}
+                <a class="btn-limpiar" href="{{ url_for(endpoint_base + '_listar') }}">Limpiar</a>
+            {% endif %}
+            <span class="filtros-total">{{ registros | length }} resultado{{ "" if registros | length == 1 else "s" }}</span>
         </div>
+
+        {% if campos_select %}
+        <details class="filtros-panel" {% if valores %}open{% endif %}>
+            <summary>
+                Filtros{% if valores %} ({{ valores | length }} aplicado{{ "" if valores | length == 1 else "s" }}){% endif %}
+            </summary>
+            <div class="filtros-grid">
+                {% for c in campos_select %}
+                    <label class="filtro-campo">
+                        <span>{{ fields[c].label }}</span>
+                        <select class="filtro-select filtro-combinable" name="{{ c }}">
+                            <option value="">Todos</option>
+                            {% for opt in fk_data[c] %}
+                                <option value="{{ opt.value }}"
+                                    {% if opt.deps %}data-deps='{{ opt.deps | tojson }}'{% endif %}
+                                    {% if valores.get(c) == opt.value | string %}selected{% endif %}>
+                                    {{ opt.label }}{% if opt.grupo %} ({{ opt.grupo }}){% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                {% endfor %}
+            </div>
+        </details>
+        {% endif %}
 
     </form>
 
@@ -136,41 +143,44 @@
 
     <script>
     document.addEventListener("DOMContentLoaded", function () {
-
-        const campoSelect = document.getElementById("campo-select");
-        const inputTexto = document.getElementById("search-input");
         const form = document.getElementById("filtros-form");
+        const selects = Array.from(form.querySelectorAll("select.filtro-combinable"));
+        const porNombre = Object.fromEntries(selects.map(s => [s.name, s]));
 
-        const fkData = {{ fk_data | tojson }};
-
-        function actualizarVisibilidad() {
-            const campo = campoSelect.value;
-
-            const esFK = fkData.hasOwnProperty(campo);
-
-            // Mostrar input de texto si NO es FK
-            inputTexto.style.display = esFK ? "none" : "inline-block";
-
-            // Mostrar select FK si corresponde (solo si existe)
-            const fkSelect = document.getElementById("fk-select");
-            if (fkSelect) {
-                fkSelect.style.display = esFK ? "inline-block" : "none";
-            }
+        // Selects dependientes: una opción se oculta si no corresponde a lo elegido
+        // en los selects de los que depende (ej: los modelos de la categoría elegida).
+        function filtrarOpciones() {
+            selects.forEach(function (sel) {
+                Array.from(sel.options).forEach(function (opt) {
+                    if (!opt.dataset.deps) return;
+                    const deps = JSON.parse(opt.dataset.deps);
+                    opt.hidden = Object.entries(deps).some(function ([campo, valor]) {
+                        const padre = porNombre[campo];
+                        return padre && padre.value !== "" && String(valor) !== padre.value;
+                    });
+                });
+                if (sel.selectedOptions.length && sel.selectedOptions[0].hidden) sel.value = "";
+            });
         }
 
-        actualizarVisibilidad();
+        // URL limpia (para guardarla o compartirla): no se envían los campos vacíos.
+        form.addEventListener("submit", limpiarVacios);
+        function limpiarVacios() {
+            form.querySelectorAll("select, input").forEach(function (el) {
+                if (el.name && (el.value === "" || (el.name === "campo" && el.value === "todos"))) el.disabled = true;
+            });
+        }
 
-        campoSelect.addEventListener("change", function () {
-
-            // Limpiar valor FK si existe
-            const fkSelect = document.getElementById("fk-select");
-            if (fkSelect) {
-                fkSelect.value = "";
-            }
-
+        filtrarOpciones();
+        selects.forEach(sel => sel.addEventListener("change", function () {
+            limpiarVacios();
+            filtrarOpciones();
             form.submit();
+        }));
+        // Cambiar el campo de búsqueda vuelve a buscar solo si hay texto.
+        document.getElementById("campo-select").addEventListener("change", function () {
+            if (document.getElementById("search-input").value.trim()) { limpiarVacios(); form.submit(); }
         });
-
     });
     </script>
 
@@ -188,7 +198,7 @@
         clearBtn.addEventListener("click", () => {
             input.value = "";
             toggleClearButton();
-            input.form.submit();
+            input.form.requestSubmit();  // pasa por limpiarVacios
         });
         </script>
 

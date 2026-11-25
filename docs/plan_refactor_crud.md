@@ -673,6 +673,24 @@ son independientes entre sí; los demás van en orden.
 - Error encontrado al probarlo: el CSV tomaba el punto siempre como decimal y «1.400»
   se importaba como 1,4. Corregido en el PR siguiente (ver «Carga de datos (Fase 6)»).
 
+#### Notas: filtros combinables en los listados (25/11, fuera de fase)
+
+- Panel plegable «Filtros» en todos los listados: un select por cada campo de los
+  `filtros` con opciones (FK, opciones fijas, Sí/No), combinados con Y y con la búsqueda
+  de texto. Se abre solo cuando hay filtros aplicados; muestra cuántos y la cantidad de
+  resultados, y tiene «Limpiar». Ejemplo: tractores 5090E del Feedlot.
+- Selects dependientes, como en el formulario (los modelos de la categoría elegida).
+- Filtros en la URL con el nombre del campo (`/activos?categoria_activo_id=2&sector_id=3`),
+  como en la API; los vacíos no se envían. Un valor inválido se ignora. Los enlaces
+  viejos (`?campo=<fk>&valor_fk=<id>`) siguen andando. Sí/No va como `Sí` / `No`.
+- La búsqueda de texto busca en una FK por el nombre de lo vinculado (antes, por el
+  ID): «5090» encuentra el modelo 5090E. Vale también para la API. Si el nombre es una
+  propiedad de Python (ej: el nombre completo del empleado), esa FK no participa.
+- Rendimiento medido con 3000 activos: sin filtros, ~43 ms; texto en todos los campos y
+  FK, ~6 ms; tres filtros combinados, ~3 ms.
+- `repository.consulta_listado(valores=...)` y `campos_de_filtro(...)`.
+- Tests: `tests/test_filtros_listado.py`.
+
 ## Arquitectura objetivo
 
 ```
