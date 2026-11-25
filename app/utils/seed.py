@@ -44,34 +44,33 @@ def seed_data():
     # ============================================================
     # MOTIVOS DE OPERACIÓN
     # ============================================================
-    if MotivoOperacion.query.count() == 0:
-        motivos = [
-            ("Alta inicial", "INSERT"),
-            ("Creación por reorganización", "INSERT"),
-            ("División de sector", "INSERT"),
-            ("Corrección de datos", "UPDATE"),
-            ("Cambio de estado", "UPDATE"),
-            ("Actualización administrativa", "UPDATE"),
-            ("Ajuste operativo", "UPDATE"),
-            ("Depuración de registros", "DELETE"),
-            ("Eliminación por reorganización", "DELETE"),
-            ("Registro duplicado", "DELETE"),
-            ("Error de carga", "DELETE"),
-        ]
-
-        db.session.add_all(
-            [MotivoOperacion(nombre_motivo=m, tipo_operacion=t) for m, t in motivos]
-        )
-        print("✔ Motivos de operación precargados.")
-
-    # Motivos de anulación de líneas de pedido (fase 10). Aparte, para que se
-    # agreguen también a una base que ya tenía los demás motivos.
-    if MotivoOperacion.query.filter_by(tipo_operacion="ANULACION").count() == 0:
-        db.session.add_all([
-            MotivoOperacion(nombre_motivo=m, tipo_operacion="ANULACION")
-            for m in ("Ya no hace falta", "Pedido duplicado", "Se resolvió de otra forma")
-        ])
-        print("✔ Motivos de anulación precargados.")
+    # Se decide por tipo de operación y no por tabla vacía: la migración de
+    # pedidos (2923dcc41468) ya inserta los de ANULACION, y con un chequeo de
+    # "tabla vacía" el resto nunca se cargaba tras un reset-db. Cada tipo se
+    # carga solo si todavía no tiene ningún motivo (respeta lo editado a mano).
+    motivos_por_tipo = {
+        "INSERT": ["Alta inicial", "Creación por reorganización", "División de sector"],
+        "UPDATE": [
+            "Corrección de datos",
+            "Cambio de estado",
+            "Actualización administrativa",
+            "Ajuste operativo",
+        ],
+        "DELETE": [
+            "Depuración de registros",
+            "Eliminación por reorganización",
+            "Registro duplicado",
+            "Error de carga",
+        ],
+        # Anulación de líneas de pedido (fase 10).
+        "ANULACION": ["Ya no hace falta", "Pedido duplicado", "Se resolvió de otra forma"],
+    }
+    for tipo, nombres in motivos_por_tipo.items():
+        if MotivoOperacion.query.filter_by(tipo_operacion=tipo).count() == 0:
+            db.session.add_all(
+                [MotivoOperacion(nombre_motivo=n, tipo_operacion=tipo) for n in nombres]
+            )
+            print(f"✔ Motivos de operación {tipo} precargados.")
 
     # ============================================================
     # ESTADOS DE CUENTA

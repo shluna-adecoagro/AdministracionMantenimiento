@@ -90,6 +90,20 @@ def test_reset_db(app_archivo):
         assert EstadoSector.query.count() == 2
 
 
+def test_reset_db_carga_todos_los_motivos(app_archivo):
+    """La migración de pedidos ya inserta los de ANULACION; el seed igual tiene
+    que cargar los de alta, modificación y baja."""
+    from app.models.motivos_models import MotivoOperacion
+
+    app = app_archivo()
+    resultado = app.test_cli_runner().invoke(args=["reset-db", "--yes"])
+    assert resultado.exit_code == 0, resultado.output
+    with app.app_context():
+        tipos = {m.tipo_operacion for m in MotivoOperacion.query.all()}
+        assert tipos == {"INSERT", "UPDATE", "DELETE", "ANULACION"}
+        assert MotivoOperacion.query.count() == 14
+
+
 def test_reset_db_pide_confirmacion(app_archivo):
     resultado = app_archivo().test_cli_runner().invoke(args=["reset-db"], input="n\n")
     assert resultado.exit_code != 0
