@@ -50,6 +50,11 @@ class PlanPreventivo(db.Model, ModelMixin, AuditMixin):
     uuid = db.Column(db.String(36), default=lambda: str(uuid.uuid4()), unique=True, nullable=False)
 
     nombre_plan = db.Column(db.String(100), nullable=False, unique=True, info={"label": "Nombre"})
+    # Descripción del plan en el ERP (hoy EAM; con SAP PM se reemplaza por la de
+    # SAP): equivalencia 1:1 para reconocer el plan en las OT importadas. La carga
+    # el gestor (dueño: la app). Única cuando está cargada; vacío = NULL.
+    nombre_erp = db.Column(db.String(150), nullable=True, unique=True,
+                           info={"label": "Nombre en el ERP"})
 
     # FK → CategoriaActivo. Al borrar la categoría se borran sus planes.
     categoria_activo_id = db.Column(
