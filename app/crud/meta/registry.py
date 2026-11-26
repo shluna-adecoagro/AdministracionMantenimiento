@@ -66,7 +66,10 @@ CLAVES_ENTIDAD = frozenset({
     "campos_alta",        # {campo: {...}} campos que solo se piden al crear (no son columnas)
     "orden_campos",       # [campo, ...] primeros campos del formulario, en ese orden
     "clave_natural",      # [campo, ...] identifica el registro al importar (ej: nombre)
-    "edicion_en_linea",   # [campo, ...] campos editables en la grilla (fase 13)
+    "edicion_en_linea",   # [campo | (campo, columna), ...] campos editables en la grilla (fase 13)
+    "editable_si",        # {campo: función(registro)} si el campo se puede cambiar (fase 13.2)
+    "eliminable_si",      # función(registro): si se puede eliminar
+    "creable_si",         # función(datos): si se puede crear con esos datos
 })
 
 # Tipos de widget que por defecto aparecen en listado y filtros.
@@ -108,6 +111,8 @@ def _field_spec(nombre: str, inferido: dict, override: dict, model) -> FieldSpec
         datos["options"] = tuple(dict(o) for o in datos["options"])
     if "alias" in datos:
         datos["alias"] = tuple(datos["alias"])
+    if "excluir_en_linea" in datos:
+        datos["excluir_en_linea"] = tuple(datos["excluir_en_linea"])
     if "extensiones" in datos:
         datos["extensiones"] = tuple(e.lower() if e.startswith(".") else f".{e.lower()}"
                                      for e in datos["extensiones"])
@@ -120,6 +125,28 @@ def _field_spec(nombre: str, inferido: dict, override: dict, model) -> FieldSpec
         datos.setdefault("unique", bool(getattr(col, "unique", False)))
 
     return FieldSpec(name=nombre, **datos)
+
+
+def _campo_suelto(c: str, cfg: dict, pref: str, errores: list) -> FieldSpec:
+    """
+    Un campo que no es una columna: los campos de alta (ej: la cantidad de la
+    línea, que crea su primer destino) y los de una acción con formulario.
+    """
+    desconocidas = sorted(set(cfg) - FieldSpec.claves_override())
+    for k in desconocidas:
+        errores.append(f"{pref}.{c}: clave desconocida '{k}'.{_sugerir(k, FieldSpec.claves_override())}")
+    datos = {k: v for k, v in cfg.items() if k in FieldSpec.claves_override()}
+    datos.setdefault("label", c.replace("_", " ").capitalize())
+    datos.setdefault("tipo", "text")
+    if "options" in datos:
+        datos["options"] = tuple(dict(o) for o in datos["options"])
+    if datos["tipo"] == "fk" and datos.get("fk_model") is not None:
+        datos.setdefault("fk_label", getattr(datos["fk_model"], "__label_field__", None))
+    if datos["tipo"] not in {"text", "textarea", "number", "select", "fk", "date"}:
+        errores.append(f"{pref}.{c}: tipo '{datos['tipo']}' no admitido en un campo que no es una columna")
+    if datos["tipo"] == "fk" and datos.get("fk_model") is None:
+        errores.append(f"{pref}.{c}: tipo 'fk' sin 'fk_model'")
+    return FieldSpec(name=c, **datos)
 
 
 def _dependencias(campos: dict, overrides_campos: dict, pref: str, errores: list) -> dict:
@@ -250,6 +277,9 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
             errores.append(f"{pref} fields.{c}: selector '{f.selector}' inválido (válidos: {sorted(SELECTORES)})")
         elif f.selector is not None and f.tipo not in ("fk", "select"):
             errores.append(f"{pref} fields.{c}: selector solo aplica a un campo 'fk' o 'select'")
+        if f.excluir_en_linea and (f.tipo != "select" or not set(f.excluir_en_linea)
+                                   <= {o["value"] for o in f.options}):
+            errores.append(f"{pref} fields.{c}: excluir_en_linea son valores de las opciones de un 'select'")
         if f.extensiones and f.tipo != "file":
             errores.append(f"{pref} fields.{c}: extensiones solo aplica a un campo de tipo 'file'")
         if f.numeracion:
@@ -274,21 +304,7 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
         if c in campos:
             errores.append(f"{pref} campos_alta: '{c}' ya es un campo de {model.__name__}")
             continue
-        desconocidas = sorted(set(cfg) - FieldSpec.claves_override())
-        for k in desconocidas:
-            errores.append(f"{pref} campos_alta.{c}: clave desconocida '{k}'.{_sugerir(k, FieldSpec.claves_override())}")
-        datos = {k: v for k, v in cfg.items() if k in FieldSpec.claves_override()}
-        datos.setdefault("label", c.replace("_", " ").capitalize())
-        datos.setdefault("tipo", "text")
-        if "options" in datos:
-            datos["options"] = tuple(dict(o) for o in datos["options"])
-        if datos["tipo"] == "fk" and datos.get("fk_model") is not None:
-            datos.setdefault("fk_label", getattr(datos["fk_model"], "__label_field__", None))
-        if datos["tipo"] not in {"text", "number", "select", "fk", "date"}:
-            errores.append(f"{pref} campos_alta.{c}: tipo '{datos['tipo']}' no admitido en un campo de alta")
-        if datos["tipo"] == "fk" and datos.get("fk_model") is None:
-            errores.append(f"{pref} campos_alta.{c}: tipo 'fk' sin 'fk_model'")
-        campos[c] = FieldSpec(name=c, solo_alta=True, **datos)
+        campos[c] = replace(_campo_suelto(c, cfg, f"{pref} campos_alta", errores), solo_alta=True)
 
     # --- orden del formulario ---------------------------------------------
     primeros = list(ov.get("orden_campos") or [])
@@ -344,13 +360,16 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
 
     # --- acciones y al_guardar --------------------------------------------
     acciones: list[AccionSpec] = []
-    claves_accion = {"id", "label", "funcion", "seccion", "confirmar", "visible"}
+    claves_accion = {"id", "label", "funcion", "seccion", "confirmar", "visible", "campos", "en_fila", "ayuda"}
     for a in ov.get("acciones", ()):
         if (not isinstance(a, dict) or not {"id", "label", "funcion"} <= set(a) <= claves_accion
                 or not callable(a["funcion"])):
             errores.append(f"{pref} acciones: cada acción es {{'id', 'label', 'funcion'}} "
                            f"(opcionales: {sorted(claves_accion - {'id', 'label', 'funcion'})})")
             continue
+        a = dict(a)
+        a["campos"] = {c: _campo_suelto(c, cfg, f"{pref} acciones.{a['id']}.campos", errores)
+                       for c, cfg in (a.get("campos") or {}).items()}
         acciones.append(AccionSpec(**a))
     al_guardar = ov.get("al_guardar")
     if al_guardar is not None and not callable(al_guardar):
@@ -368,7 +387,22 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
             errores.append(f"{pref} clave_natural: '{c}' no es un campo de la entidad.{_sugerir(c, campos)}")
 
     # --- edición en línea -------------------------------------------------
-    edicion_en_linea = tuple(ov.get("edicion_en_linea") or ())
+    edicion_en_linea, columna_en_linea = [], {}
+    for item in ov.get("edicion_en_linea") or ():
+        if isinstance(item, (tuple, list)):
+            if len(item) != 2:
+                errores.append(f"{pref} edicion_en_linea: {item!r} debe ser un campo o (campo, columna)")
+                continue
+            item, columna = item
+            if columna not in listado:
+                errores.append(f"{pref} edicion_en_linea: la columna '{columna}' de '{item}' no está en el listado")
+            elif columna in edicion_en_linea or columna in columna_en_linea.values():
+                errores.append(f"{pref} edicion_en_linea: la columna '{columna}' ya edita otro campo")
+            columna_en_linea[item] = columna
+        elif item in columna_en_linea.values():
+            errores.append(f"{pref} edicion_en_linea: la columna '{item}' ya edita otro campo")
+        edicion_en_linea.append(item)
+    edicion_en_linea = tuple(edicion_en_linea)
     # El padre principal no se edita en la grilla (sería mover el registro a otro
     # padre). Los otros sí (ej: el material de una línea, que también cuelga del
     # material): en la pestaña de cada padre se oculta la columna de ese padre.
@@ -392,10 +426,21 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
             motivo = "es la entidad padre principal"
         elif f.tipo not in TIPOS_EDICION_EN_LINEA:
             motivo = f"tiene tipo '{f.tipo}' (admitidos: {sorted(TIPOS_EDICION_EN_LINEA)})"
-        elif c not in listado:
+        elif c not in listado and c not in columna_en_linea:
             motivo = "no está en el listado (la grilla muestra las columnas del listado)"
         if motivo:
             errores.append(f"{pref} edicion_en_linea: '{c}' {motivo}")
+
+    # --- reglas de edición según el registro (fase 13.2) --------------------
+    editable_si = dict(ov.get("editable_si") or {})
+    for c, regla in editable_si.items():
+        if c not in campos or campos[c].solo_alta:
+            errores.append(f"{pref} editable_si: '{c}' no es un campo de la entidad.{_sugerir(c, campos)}")
+        elif not callable(regla):
+            errores.append(f"{pref} editable_si.{c} debe ser una función (registro) -> bool")
+    for clave in ("eliminable_si", "creable_si"):
+        if ov.get(clave) is not None and not callable(ov[clave]):
+            errores.append(f"{pref} {clave} debe ser una función")
 
     # --- textos ----------------------------------------------------------
     label_plural = ov.get("label_plural", nombre.replace("_", " "))
@@ -429,6 +474,10 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
         completar=completar,
         clave_natural=clave_natural,
         edicion_en_linea=edicion_en_linea,
+        columna_en_linea=columna_en_linea,
+        editable_si=editable_si,
+        eliminable_si=ov.get("eliminable_si"),
+        creable_si=ov.get("creable_si"),
     )
     return spec, errores
 

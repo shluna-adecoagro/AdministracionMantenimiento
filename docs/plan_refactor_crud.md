@@ -802,6 +802,65 @@ revisa en la fase 14, cuando Compras escriba en la app.
   flechas, Esc, doble clic, clic afuera, error 422 y búsqueda por código y por comienzo.
 - Tests: `tests/test_edicion_en_linea.py`.
 
+#### Notas del PR 13.2 (borrador y envío a Compras)
+
+- **Columna** `pedido_lineas.enviada_en` (migración `b8e4d2f1a9c3`). Las líneas que ya
+  existían (histórico y cargadas a mano) quedaron enviadas con la fecha de su pedido.
+  El importador del histórico la pone al crear la línea. No se recibe por el
+  formulario, la API ni el CSV (`solo_lectura`): la pone «Enviar a Compras».
+- **Framework (spec):** `editable_si` `{campo: función(registro)}`, `eliminable_si` y
+  `creable_si(datos)`; devuelven `True`, o `False` o el porqué. Las aplica
+  `ServicioCRUD` (`verificar_editables` en `actualizar`, antes de `completar`; solo
+  cambios reales, así el formulario puede mandar todo), así que valen en la grilla, el
+  formulario, la API y el CSV. `servicio(..., reglas_de_edicion=False)` las saltea:
+  solo lo usa el importador del histórico de pedidos, cuya fuente es el Excel; `al_guardar`
+  lo ve en `registro.reglas_de_edicion`. Un `NoEliminable` es un `ErrorIntegridad` (409).
+- **Pantallas:** celda congelada en gris con el porqué como título (y 404 si se pide);
+  en el formulario, el campo deshabilitado con el porqué (sin `name`, la edición es
+  parcial); «Eliminar» oculto en el detalle y, si la entidad tiene `eliminable_si`,
+  ofrecido en la fila.
+- **Grilla:** `edicion_en_linea` acepta `(campo, columna)` para editar un campo sobre
+  otra columna (el estado de seguimiento sobre «Estado», el visible; `columna_en_linea`
+  en la spec). `FieldSpec.excluir_en_linea`: opciones que la grilla no ofrece ni acepta
+  («Anulado»: se anula con su acción).
+- **Acciones con formulario:** `AccionSpec.campos` (armados como los campos de alta),
+  `en_fila` y `ayuda`. GET muestra `crud/accion.html`; POST convierte, valida (FK y
+  `fk_filtro`), ejecuta `funcion(registro, datos)` y confirma. Los errores vuelven al
+  formulario. Desde la fila (`?desde=fila`) se vuelve a la pestaña del padre. Una acción
+  puede devolver varios mensajes con categoría (`ok`, `aviso`).
+- **Reglas de la línea** (`overrides/pedidos.py`):
+  - material: editable en borrador; enviada, solo para completarlo si está vacío
+    (para identificar las líneas del histórico, decidido 26/11);
+  - descripción: solo en borrador; la unidad no se congela (sale del material);
+  - estado de seguimiento: en líneas enviadas, no anuladas, no cerradas y sin compras;
+  - nº de OC, cantidad cancelada y motivo: en líneas enviadas;
+  - destinos: cantidad congelada, no se agregan ni se eliminan en una línea enviada;
+    la imputación (tipo, activo, modelo, ubicación, sector, cuenta) sigue editable;
+  - eliminar: la línea solo en borrador; el pedido, solo si no tiene líneas enviadas;
+  - anular en borrador: error («eliminala»). Con compras no se anula entera (lo frena
+    `editable_si` del estado; la acción avisa antes, con lo que se puede cancelar). Cancelar:
+    hasta lo pendiente de comprar.
+- **Acciones:** «Enviar a Compras» (pestaña «Líneas» del pedido, si hay líneas en
+  borrador no anuladas; avisa las que tienen destinos a revisar, pero envía igual) y
+  «Anular o cancelar» (detalle de la línea y su fila; motivo de tipo «Anulación» y
+  cantidad opcional). La auditoría guarda «Enviar a Compras», «Anulación: <motivo>» o
+  «Cancelación de N: <motivo>».
+- **Estado visible «Borrador»** (después de «Anulado» en la prioridad). Resumen del pedido:
+  «Borrador: 3 líneas» si ninguna se envió; si no, «5 líneas: 1 en borrador, …».
+- **Otros cambios:** «Vincular con pedidos» toma solo líneas enviadas. La auditoría
+  guarda las fechas con hora como texto ISO (antes las descartaba; `creado_en` y
+  `actualizado_en` se siguen ignorando). `grilla.js`: antes de guardar se llama a
+  `htmx.process(form)`; elegir en un select apenas llegaba la celda enviaba el form
+  como GET y la página navegaba (venía de la 13.1). La columna de acciones ya no se
+  recorta.
+- **Pendiente para la 13.4:** sin «Redistribuir», una línea enviada no se reparte
+  distinto. Tampoco se revirtió una anulación (no estaba en el diseño).
+- **Probado en el navegador** (Chromium, Playwright): envío y aviso, celdas
+  congeladas, estado sobre la columna visible, completar el material, cancelar desde la
+  fila, resumen y formulario con campos congelados.
+- Tests: `tests/test_borrador_envio.py`; los de pedidos, documentos y recepciones envían
+  las líneas antes de comprarlas (fixture `enviar` en `conftest.py`).
+
 ## Arquitectura objetivo
 
 ```
@@ -852,7 +911,7 @@ La API generada usa `GET/POST {url}` y `PUT/PATCH/DELETE {url}/{id}`.
 | **10. Pedidos y documentos de proveedores** | Pedidos con líneas y destinos (imputación), ofertas y presupuestos (cabecera + líneas), adjudicación por cantidad, recepciones (conformidad). Importación del Excel histórico de pedidos. Ver «Fases operativas». | ✅ Hecha |
 | **11. Solicitudes de trabajo, solicitudes internas y OC** | Solicitudes de trabajo (avisos de los mecánicos para llamar a un contratista) y su vínculo con los presupuestos (`documentos_proveedor.solicitud_trabajo_id`). Importación de los TSV de EAM (cabeceras, líneas, distribuciones) y de las OC; vínculo con los documentos adjudicados; distribución propuesta; detalle para Administración; conciliación por nº de OC. | Pendiente |
 | **12. Órdenes de trabajo** | Cabecera importada del ERP; la app agrega operaciones, recursos y materiales (previsto y utilizado). Incluye cuándo le toca un plan a cada activo. | Pendiente |
-| **13. Edición en línea, borrador y envío a Compras** | Listados editables tipo planilla con htmx, generados desde la spec (`edicion_en_linea`, `editable_si`). En pedidos: líneas en borrador y «Enviar a Compras» (`enviada_en`), eliminar en borrador, anular o cancelar con motivo, destinos desplegados y «Redistribuir», alta rápida, pegar desde Excel. Ver «Fase 13: edición en línea». Puede ir antes que la 11: trabaja sobre los pedidos de la fase 10. | En curso (13.1 hecho) |
+| **13. Edición en línea, borrador y envío a Compras** | Listados editables tipo planilla con htmx, generados desde la spec (`edicion_en_linea`, `editable_si`). En pedidos: líneas en borrador y «Enviar a Compras» (`enviada_en`), eliminar en borrador, anular o cancelar con motivo, destinos desplegados y «Redistribuir», alta rápida, pegar desde Excel. Ver «Fase 13: edición en línea». Puede ir antes que la 11: trabaja sobre los pedidos de la fase 10. | En curso (13.1 y 13.2 hechos) |
 | **14. Circuito con Compras** | Usuarios, roles y auditoría con usuario; despliegue en un servidor. Vista de Compras (para cotizar, para emitir OC, reclamos), comparativo por línea, adjudicación y «Pedir OC». Ver [`propuesta_circuito_compras.md`](propuesta_circuito_compras.md). | En diseño |
 | **15. Sincronización con SharePoint** | Opción A: exportar periódicamente de la app a SharePoint, más copias de seguridad automáticas de la base. Al final, escribir en SharePoint directo (Microsoft Graph) en lugar de pasar por CSV. | Pendiente |
 

@@ -36,7 +36,13 @@
                 <div class="form-group {% if errores and errores.get(campo) %}form-group--error{% endif %}">
                     <label for="{{ campo }}">{{ cfg.label }}</label>
 
-                    {% if cfg.solo_importacion %}
+                    {% if campo in congelados %}
+                        {# Congelado en este registro (editable_si): se ve, pero sin name. #}
+                        {% set texto, porque = congelados[campo] %}
+                        <input type="text" id="{{ campo }}" value="{{ texto }}" disabled>
+                        <small class="form-ayuda">No se puede cambiar{% if porque %}: {{ porque }}{% endif %}.</small>
+
+                    {% elif cfg.solo_importacion %}
                         {# Dato de otro sistema (ERP): se ve, pero sin name (no se envía). #}
                         {% set v = modelo.get(campo) %}
                         {% if cfg.tipo == "select" %}

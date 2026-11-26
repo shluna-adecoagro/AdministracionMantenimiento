@@ -174,8 +174,9 @@ def test_unidad_de_la_linea(client, db, pedido, litros):
     assert (b["unidad_medida_id"], b["se_cuenta_en"]) == (litros.unidad_medida_id, "envases (20 L)")
 
 
-def test_nro_oc_normalizado(client, pedido, filtro):
+def test_nro_oc_normalizado(client, pedido, filtro, enviar):
     linea = _linea(client, pedido, material_id=filtro.material_id, cantidad=1, destino="a_identificar").get_json()
+    enviar(pedido.pedido_id)  # el nº de OC se carga en líneas enviadas
     r = client.patch(f"/api/pedido_lineas/{linea['pedido_linea_id']}", json={"nro_oc": " oc 4500 12 "})
     assert r.get_json()["nro_oc"] == "OC450012"
 
@@ -190,8 +191,9 @@ def test_cantidad_solo_en_el_alta(client, pedido, filtro):
 # Anulación y cancelación
 # ---------------------------------------------------------------------------
 
-def test_anular_pide_motivo_de_anulacion(client, pedido, filtro):
+def test_anular_pide_motivo_de_anulacion(client, pedido, filtro, enviar):
     linea = _linea(client, pedido, material_id=filtro.material_id, cantidad=3, destino="a_identificar").get_json()
+    enviar(pedido.pedido_id)  # en borrador no se anula: se elimina
     url = f"/api/pedido_lineas/{linea['pedido_linea_id']}"
     r = client.patch(url, json={"estado": "anulado"})
     assert r.status_code == 400 and "motivo" in _errores(r)["motivo_operacion_id"]
@@ -201,8 +203,9 @@ def test_anular_pide_motivo_de_anulacion(client, pedido, filtro):
     assert r.status_code == 200
 
 
-def test_cancelar_mas_de_lo_solicitado(client, pedido, filtro):
+def test_cancelar_mas_de_lo_solicitado(client, pedido, filtro, enviar):
     linea = _linea(client, pedido, material_id=filtro.material_id, cantidad=3, destino="a_identificar").get_json()
+    enviar(pedido.pedido_id)
     url = f"/api/pedido_lineas/{linea['pedido_linea_id']}"
     r = client.patch(url, json={"cantidad_cancelada": 5, "motivo_operacion_id": _motivo("ANULACION")})
     assert r.status_code == 400 and "más de lo solicitado (3)" in _errores(r)["cantidad_cancelada"]
@@ -214,14 +217,21 @@ def test_cancelar_mas_de_lo_solicitado(client, pedido, filtro):
 # Resumen, pantallas y borrado
 # ---------------------------------------------------------------------------
 
-def test_resumen_del_pedido(client, pedido, filtro):
-    assert client.get(f"/api/pedidos/{pedido.pedido_id}").get_json()["resumen"] == "Sin líneas"
+def test_resumen_del_pedido(client, pedido, filtro, enviar):
+    def resumen():
+        return client.get(f"/api/pedidos/{pedido.pedido_id}").get_json()["resumen"]
+
+    assert resumen() == "Sin líneas"
     ids = [_linea(client, pedido, material_id=filtro.material_id, cantidad=1, destino="a_identificar")
            .get_json()["pedido_linea_id"] for _ in range(3)]
+    assert resumen() == "Borrador: 3 líneas"
+    enviar(pedido.pedido_id)
     client.patch(f"/api/pedido_lineas/{ids[0]}", json={"estado": "en_cotizacion"})
-    assert client.get(f"/api/pedidos/{pedido.pedido_id}").get_json()["resumen"] == (
-        "3 líneas: 2 solicitadas, 1 en cotización")
+    assert resumen() == "3 líneas: 2 solicitadas, 1 en cotización"
     assert "2 solicitadas, 1 en cotización" in client.get("/pedidos").get_data(as_text=True)
+    # Una línea agregada después del envío queda en borrador.
+    _linea(client, pedido, material_id=filtro.material_id, cantidad=1, destino="a_identificar")
+    assert resumen() == "4 líneas: 1 en borrador, 2 solicitadas, 1 en cotización"
 
 
 def test_formularios(client, pedido, filtro):

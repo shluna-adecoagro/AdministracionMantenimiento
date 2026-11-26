@@ -36,10 +36,14 @@
 {% if acciones and not sub %}
 <div class="detalle-acciones">
     {% for a in acciones %}
+        {% if a.con_formulario %}
+            <a href="{{ a.url }}" class="btn-secondary">{{ a.label }}</a>
+        {% else %}
         <form method="POST" action="{{ a.url }}"
               {% if a.confirmar %}onsubmit="return confirm({{ a.confirmar | tojson }})"{% endif %}>
             <button type="submit" class="btn-secondary">{{ a.label }}</button>
         </form>
+        {% endif %}
     {% endfor %}
 </div>
 {% endif %}
@@ -97,9 +101,11 @@
                     Editar
                 </a>
 
+                {% if eliminable is not defined or eliminable %}
                 <a href="{{ url_for(endpoint_base + '_confirmar_eliminar', id=modelo[pk], **(args_padre or {})) }}" class="btn-eliminar">
                     Eliminar
                 </a>
+                {% endif %}
             </div>
 
         </div>

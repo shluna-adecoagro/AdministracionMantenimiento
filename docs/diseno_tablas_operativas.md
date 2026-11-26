@@ -77,7 +77,7 @@ Es lo que ve Compras y lo que se cotiza: un material y una cantidad total.
 | observaciones | texto | En el histórico, el texto original de lo que no se interpretó («Recibido?», precios ilegibles, columnas corridas) |
 | motivo_revision | texto | «A revisar (importación)»: cantidad sacada del texto, dos OC en una celda, OC que no se pudo deducir, etc. El gestor lo borra al revisarlo |
 | origen, clave_origen | texto | Histórico: `excel_pedidos|<hoja>|f<fila>` |
-| enviada_en | fecha y hora, opcional | Vacía = borrador. La pone «Enviar a Compras» (decidido 26/11). En el histórico, la fecha del pedido |
+| enviada_en | fecha y hora, opcional | Vacía = borrador. La pone «Enviar a Compras» (decidido 26/11); no se edita. En el histórico, la fecha del pedido |
 
 Derivadas: **solicitada** (suma de los destinos), ofertada, adjudicada, recibida, pendiente de comprar, pendiente de recibir y el **estado visible**.
 
@@ -96,7 +96,7 @@ Se guarda solo lo que no deja otro rastro; lo demás se calcula de los datos.
 | Recibido parcial / recibido | Calculado: tiene recepciones, por menos o por el total adjudicado |
 | Cerrado | Calculado: no queda nada pendiente de comprar ni de recibir, o `sin_conformidad` (cierre manual del histórico) |
 
-Prioridad del estado visible (decidido 23/11): anulado → cerrado → recibido → recibido parcial → OC emitida → adjudicado → el guardado. **Comprado** = la adjudicada si hay adjudicaciones; si no (compra directa o histórico), la solicitada menos la cancelada, pero solo si ya hay nº de OC o recepciones. Pendiente de comprar = solicitada − cancelada − comprado; pendiente de recibir = comprado − recibido. «OC emitida»: la línea o una oferta adjudicada tiene nº de OC. En la app, el guardado se llama «Estado de seguimiento» y el visible, «Estado».
+Prioridad del estado visible (decidido 23/11; «borrador», 26/11): anulado → borrador → cerrado → recibido → recibido parcial → OC emitida → adjudicado → el guardado. **Comprado** = la adjudicada si hay adjudicaciones; si no (compra directa o histórico), la solicitada menos la cancelada, pero solo si ya hay nº de OC o recepciones. Pendiente de comprar = solicitada − cancelada − comprado; pendiente de recibir = comprado − recibido. «OC emitida»: la línea o una oferta adjudicada tiene nº de OC. En la app, el guardado se llama «Estado de seguimiento» y el visible, «Estado».
 
 - **El estado visible es el calculado.** El guardado solo cuenta mientras no haya datos posteriores (adjudicaciones, OC, recepciones).
 - **Salteo de estados:** también se calcula (por ejemplo, una línea adjudicada que nunca pasó por «en cotización»). Ya no hay columna `estado_salteado`.
@@ -114,9 +114,14 @@ mecánicos; los de la PWA entran en borrador) y los envía cuando están complet
 - **Línea en borrador:** se edita todo, se agregan y sacan destinos, y se puede
   **eliminar** (queda en la auditoría). No se anula. El estado de seguimiento no se edita.
 - **Línea enviada:** material, descripción y cantidades de los destinos congelados (en la
-  web, la API y la importación); no se agregan ni sacan destinos sueltos. La
+  web, la API y la importación CSV); no se agregan ni sacan destinos sueltos. La
   **imputación sigue editable** (activo, modelo, ubicación, sector imputado, cuenta). No
-  se elimina.
+  se elimina. El material vacío **se puede completar** (identificar el material de las
+  líneas del histórico), pero no cambiar (decidido 26/11).
+- **Importación del histórico (decidido 26/11):** queda fuera de estas reglas: sus líneas
+  nacen enviadas con la fecha del pedido y, para ellas, la fuente es el Excel. Las líneas
+  que existían antes de la fase 13.2 quedaron enviadas con la fecha de su pedido.
+- Un pedido con líneas enviadas no se elimina.
 - **Redistribuir** (línea enviada): cambia todos los destinos juntos (entre activos,
   modelos y talleres), con altas y bajas de destinos, sin cambiar el total. Un destino que
   sigue apuntando a lo mismo conserva su sector y cuenta. Todo o nada. A definir con las
@@ -125,8 +130,13 @@ mecánicos; los de la PWA entran en borrador) y los envía cuando están complet
   la línea entera; con cantidad, la suma a `cantidad_cancelada`. **Si ya hay algo
   comprado no se anula entera:** solo se cancela hasta lo pendiente de comprar.
 - **Para pedir más** de una línea enviada: una línea nueva (nace en borrador).
-- El estado del pedido sigue sin guardarse: el resumen suma «Borrador» (ninguna línea
-  enviada) o «N líneas sin enviar».
+- **Estado visible «Borrador»** mientras la línea no se envió (decidido 26/11). El estado
+  del pedido sigue sin guardarse: el resumen dice «Borrador: 3 líneas» si ninguna se
+  envió, o «5 líneas: 1 en borrador, 3 solicitadas, 1 anulada».
+- «Enviar a Compras» envía también las líneas con destinos «a revisar», con un aviso
+  (decidido 26/11).
+- Las reglas de anular y cancelar las aplica el servicio (web, API, CSV); la pantalla
+  usa la acción «Anular o cancelar». La grilla no ofrece «Anulado» en el estado.
 
 ### pedido_linea_destinos (adónde va y quién paga)
 

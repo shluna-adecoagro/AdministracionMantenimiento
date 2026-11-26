@@ -177,14 +177,17 @@ def test_guardar_devuelve_la_fila_entera(client, linea):
     assert PedidoLinea.query.one().descripcion == "Filtro de aceite motor"
 
 
-def test_aplica_completar(client, linea):
+def test_aplica_completar(client, linea, enviar):
+    enviar(linea.pedido_id)  # el nº de OC se carga en líneas enviadas
     client.post(_url(linea, "nro_oc"), data={"nro_oc": " oc 4500 12 "})
     assert PedidoLinea.query.one().nro_oc == "OC450012"
 
 
-def test_auditoria_con_motivo_fijo(client, linea):
+def test_auditoria_con_motivo_fijo(client, linea, enviar):
+    enviar(linea.pedido_id)
     client.post(_url(linea, "nro_oc"), data={"nro_oc": "4500"})
-    log = AuditLog.query.filter_by(TablaAfectada="pedido_lineas", TipoDeCambio="UPDATE").one()
+    log = AuditLog.query.filter_by(TablaAfectada="pedido_lineas", TipoDeCambio="UPDATE",
+                                   motivo_operacion="Edición en línea").one()
     assert log.motivo_operacion == "Edición en línea"
     assert log.EstadoActual["nro_oc"] == "4500"
 

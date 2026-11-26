@@ -1,0 +1,93 @@
+{#
+  Formulario de una acción con campos (AccionSpec.campos), ej: «Anular o
+  cancelar» una línea de pedido, que pide el motivo y la cantidad. Lo arma
+  VistasEntidad._accion_con_formulario. No pide el motivo de la modificación
+  aparte: si la acción lo necesita, es uno de sus campos.
+
+  Variables: accion, registro_titulo, campos, valores, fk_data, con_lista,
+  errores, url_cancelar.
+#}
+{% extends "layout.html" %}
+{% from "crud/partials/_selector.html" import campo_lista %}
+
+{% block content %}
+
+<div class="form-container">
+
+    <h2 class="form-title">{{ accion.label }}: {{ registro_titulo }}</h2>
+
+    {% if accion.ayuda %}<p class="accion-ayuda">{{ accion.ayuda }}</p>{% endif %}
+
+    {% if errores %}
+        <div class="form-errores" role="alert">
+            <strong>No se pudo completar.</strong>
+            <p>{{ errores.get("_general") or "Revisá los campos marcados." }}</p>
+        </div>
+    {% endif %}
+
+    <form method="POST" id="form-accion">
+        {% for campo, cfg in campos.items() %}
+            {% set v = valores.get(campo) %}
+            <div class="form-group {% if errores.get(campo) %}form-group--error{% endif %}">
+                <label for="{{ campo }}">{{ cfg.label }}</label>
+
+                {% if cfg.tipo == "fk" and campo in con_lista %}
+                    {{ campo_lista(campo, campo, fk_data[campo], v, required=cfg.required,
+                                   placeholder="Escribí para buscar…") }}
+                {% elif cfg.tipo == "fk" %}
+                    <select name="{{ campo }}" id="{{ campo }}" {% if cfg.required %}required{% endif %}>
+                        <option value="">—</option>
+                        {% for opt in fk_data[campo] %}
+                            <option value="{{ opt.value }}" {% if v | string == opt.value | string %}selected{% endif %}>
+                                {{ opt.label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                {% elif cfg.tipo == "select" %}
+                    <select name="{{ campo }}" id="{{ campo }}" {% if cfg.required %}required{% endif %}>
+                        <option value="">—</option>
+                        {% for opt in cfg.options %}
+                            <option value="{{ opt.value }}" {% if v | string == opt.value | string %}selected{% endif %}>
+                                {{ opt.label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                {% elif cfg.tipo == "number" %}
+                    <input type="number" step="any" name="{{ campo }}" id="{{ campo }}" value="{{ v or '' }}"
+                           {% if cfg.required %}required{% endif %}>
+                {% elif cfg.tipo == "date" %}
+                    <input type="date" name="{{ campo }}" id="{{ campo }}" value="{{ v or '' }}"
+                           {% if cfg.required %}required{% endif %}>
+                {% elif cfg.tipo == "textarea" %}
+                    <textarea name="{{ campo }}" id="{{ campo }}"
+                              {% if cfg.required %}required{% endif %}>{{ v or '' }}</textarea>
+                {% else %}
+                    <input type="text" name="{{ campo }}" id="{{ campo }}" value="{{ v or '' }}"
+                           {% if cfg.required %}required{% endif %}>
+                {% endif %}
+
+                {% if errores.get(campo) %}
+                    <small class="form-error">{{ errores[campo] }}</small>
+                {% endif %}
+            </div>
+        {% endfor %}
+
+        <div class="form-actions">
+            <button type="submit" class="btn-primary"
+                    {% if accion.confirmar %}onclick="return confirm({{ accion.confirmar | tojson }})"{% endif %}>
+                {{ accion.label }}
+            </button>
+            <a href="{{ url_cancelar }}" class="btn-secondary">Cancelar</a>
+        </div>
+    </form>
+
+    <script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const form = document.getElementById("form-accion");
+        Selectores.enlazarDependientes(Selectores.de(form, "select[data-campo], input.campo-lista"), {});
+    });
+    </script>
+
+</div>
+
+{% endblock %}

@@ -303,6 +303,15 @@ def _linea(numero, nro=1):
     return PedidoLinea.query.join(Pedido).filter(Pedido.numero == numero, PedidoLinea.nro_linea == nro).one()
 
 
+def test_lineas_importadas_enviadas_con_la_fecha_del_pedido(maestros):
+    from datetime import datetime
+
+    _importar()
+    linea = _linea("1104", 2)
+    assert linea.enviada_en == datetime.combine(linea.pedido.fecha_pedido, datetime.min.time())
+    assert linea.estado_visible != "Borrador"
+
+
 def test_importa_pedidos_lineas_y_destinos(maestros):
     r = _importar()
     assert r.ok, r.resumen()
@@ -387,11 +396,17 @@ def test_reimportar_no_duplica_y_no_pisa_lo_identificado(db, maestros):
 
 
 def test_no_toca_destinos_cargados_en_la_app(client, maestros):
+    from app.crud.entidades import servicio
+
     _importar()
     l2 = _linea("1104", 2)
+    # Las líneas importadas nacen enviadas a Compras: en la app ya no se les
+    # agregan destinos sueltos (fase 13.2). Un destino cargado antes de eso:
     r = client.post("/api/pedido_linea_destinos", json={"pedido_linea_id": l2.pedido_linea_id, "cantidad": 1,
                                                         "destino": "gasto_general"})
-    assert r.status_code == 201, r.get_json()
+    assert r.status_code == 400
+    servicio("pedido_linea_destinos", reglas_de_edicion=False).crear(
+        {"pedido_linea_id": l2.pedido_linea_id, "cantidad": 1, "destino": "gasto_general"})
     r = _importar()
     assert r.ok
     assert len(_linea("1104", 2).destinos) == 3

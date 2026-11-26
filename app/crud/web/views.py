@@ -17,6 +17,14 @@ Si la spec declara `edicion_en_linea`, además (fase 13, grilla con htmx):
                                         la celda abierta y el error (422)
     GET  /<entidad>/<id>/fila           la fila en lectura (Esc)
 
+Si la spec declara `acciones`: /<entidad>/<id>/accion/<accion> (POST; con
+`campos`, además GET con el formulario de la acción).
+
+Las reglas de edición según el registro (`editable_si`, `eliminable_si`, fase
+13.2) las aplica el servicio; acá solo se reflejan: celdas congeladas en gris
+(y 404 si se pide editarlas), campos congelados deshabilitados en el formulario
+y el botón «Eliminar» oculto.
+
 La navegación (a dónde vuelve cada pantalla, qué pestañas tiene el detalle)
 se deduce de la spec: padre, hijos y nombre. No hay nombres de blueprint ni
 URLs escritas a mano.
@@ -40,7 +48,7 @@ from app.core.db import db
 from app.crud.core import coercion, dependencias, fk, repository
 from app.crud.core.coercion import ErroresValidacion
 from app.crud.core.files import ArchivoInvalido, guardar
-from app.crud.core.service import ErrorIntegridad, RegistroEnUso
+from app.crud.core.service import ErrorIntegridad, ServicioCRUD, permitido
 from app.crud.entidades import servicio
 from app.crud.meta.spec import EntitySpec, ParentSpec
 from app.crud.web.textos import etiqueta_tabla, inicial
@@ -88,7 +96,7 @@ class VistasEntidad:
         )
         if self.spec.acciones:
             bp.add_url_rule(f"{base}/<int:id>/accion/<accion>", f"{n}_accion",
-                            self.accion, methods=["POST"])
+                            self.accion, methods=["GET", "POST"])
         if self.spec.edicion_en_linea:
             bp.add_url_rule(f"{base}/<int:id>/celda/<campo>", f"{n}_celda", self.celda,
                             methods=["GET", "POST"])
@@ -293,7 +301,9 @@ class VistasEntidad:
         """Campos del formulario que se eligen tipeando (campo con lista) en lugar de un select."""
         return {c for c, ops in opciones.items() if fk.usa_lista(self.fields[c], ops)}
 
-    def _render_form(self, tipo_operacion, modelo, padre, url_cancelar, errores=None, status=200):
+    def _render_form(self, tipo_operacion, modelo, padre, url_cancelar, errores=None, status=200,
+                     congelados=None):
+        """congelados: {campo: (texto del valor, porqué)} que se muestran deshabilitados (editable_si)."""
         padre, padre_id = padre
         s = self.spec
         if tipo_operacion == "INSERT":
@@ -317,6 +327,7 @@ class VistasEntidad:
             con_lista=self._con_lista(opciones),
             sugerencias=fk.sugerencias_de(self.fields),
             campos_filtro=self._campos_filtro(),
+            congelados=congelados or {},
             errores=errores or {},
             url_cancelar=url_cancelar,
         ), status
@@ -329,7 +340,8 @@ class VistasEntidad:
         return {padre for f in self.fields.values() for padre in f.depende_de
                 if self.fields[padre].solo_lectura and self.fields[padre].tipo == "fk"}
 
-    def _guardar(self, operacion, tipo_operacion, modelo_actual, padre, url_cancelar, por_defecto=None):
+    def _guardar(self, operacion, tipo_operacion, modelo_actual, padre, url_cancelar, por_defecto=None,
+                 congelados=None):
         enviados = {**modelo_actual, **request.form.to_dict()}
         try:
             datos = self._leer_formulario(parcial=(tipo_operacion == "UPDATE"), por_defecto=por_defecto)
@@ -338,7 +350,7 @@ class VistasEntidad:
             errores = e.errores
         except ErrorIntegridad as e:
             errores = {e.campo or "_general": e.mensaje}
-        return self._render_form(tipo_operacion, enviados, padre, url_cancelar, errores, 400)
+        return self._render_form(tipo_operacion, enviados, padre, url_cancelar, errores, 400, congelados)
 
     # ------------------------------------------------------------------
     # CREAR
@@ -389,16 +401,38 @@ class VistasEntidad:
         registro = repository.obtener_o_404(self.spec.model, id)
         padre, padre_id = self._padre_de(registro)
         url_cancelar = self._url_detalle(id, padre, padre_id)
+        congelados = self._congelados_formulario(registro)
 
         if request.method == "GET":
-            return self._render_form("UPDATE", self._valores_formulario(registro), (padre, padre_id), url_cancelar)
+            return self._render_form("UPDATE", self._valores_formulario(registro), (padre, padre_id), url_cancelar,
+                                     congelados=congelados)
 
         def operacion(datos):
             self.servicio.actualizar(registro, datos, self._motivo())
             self._avisar(registro)
             return redirect(self._url_volver(*self._padre_de(registro)))
 
-        return self._guardar(operacion, "UPDATE", self._valores_formulario(registro), (padre, padre_id), url_cancelar)
+        return self._guardar(operacion, "UPDATE", self._valores_formulario(registro), (padre, padre_id), url_cancelar,
+                             congelados=congelados)
+
+    def _congelados_formulario(self, registro) -> dict:
+        """
+        {campo: (texto del valor, porqué)} de los campos congelados en este registro.
+        Se muestran deshabilitados (sin name: no se envían, y la edición es parcial).
+        """
+        resultado = {}
+        for campo, porque in self.servicio.congelados(registro).items():
+            f = self.fields[campo]
+            valor = getattr(registro, campo)
+            if f.tipo == "fk":
+                obj = fk.destino(registro, campo, f)
+                texto = fk.etiqueta(obj, f) if obj is not None else ""
+            elif f.tipo == "select":
+                texto = next((o["label"] for o in f.options if o["value"] == valor), valor)
+            else:
+                texto = coercion.valor_para_formulario(f, valor)
+            resultado[campo] = ("" if texto is None else str(texto), porque)
+        return resultado
 
     # ------------------------------------------------------------------
     # ELIMINAR
@@ -419,7 +453,7 @@ class VistasEntidad:
         else:
             try:
                 self.servicio.verificar_eliminable(registro)
-            except RegistroEnUso as e:
+            except ErrorIntegridad as e:
                 error = e.mensaje
 
         return render_template(
@@ -486,6 +520,7 @@ class VistasEntidad:
             sub=sub,
             tabla=tabla,
             acciones=self._acciones_de(registro, seccion),
+            eliminable=self.servicio.no_eliminable(registro) is None,
             url_volver=self._url_volver(padre, padre_id),
         )
 
@@ -498,29 +533,99 @@ class VistasEntidad:
     # ------------------------------------------------------------------
 
     def _acciones_de(self, registro, seccion):
-        id_ = getattr(registro, self.spec.pk)
-        return [
-            {"label": a.label, "confirmar": a.confirmar,
-             "url": url_for(endpoint(self.spec.name, "accion"), id=id_, accion=a.id, **request.args)}
-            for a in self.spec.acciones
-            if a.seccion == seccion and (a.visible is None or a.visible(registro))
-        ]
+        return acciones_visibles(self.spec, registro, lambda a: a.seccion == seccion, request.args)
 
     def accion(self, id, accion):
         registro = repository.obtener_o_404(self.spec.model, id)
         a = next((x for x in self.spec.acciones if x.id == accion), None)
         if a is None or (a.visible is not None and not a.visible(registro)):
             return ("Acción no disponible.", 404)
+        if request.method == "GET" and not a.campos:
+            abort(405)
+        # Desde la fila de una grilla se vuelve a la pestaña del padre; desde el
+        # detalle, a la pestaña de la acción.
+        args = {k: v for k, v in request.args.items() if k not in ("seccion", "desde")}
+        if request.args.get("desde") == "fila":
+            volver = self._url_volver(*self._padre_de(registro))
+        else:
+            volver = url_for(endpoint(self.spec.name, "detalle"), id=id, seccion=a.seccion, **args)
+        if a.campos:
+            return self._accion_con_formulario(registro, a, volver)
         try:
-            mensaje = a.funcion(registro)
+            self._flash_resultado(a.funcion(registro))
             db.session.commit()
-            if mensaje:
-                flash(mensaje, "ok")
         except (ErroresValidacion, ErrorIntegridad) as e:
             db.session.rollback()
             flash(getattr(e, "mensaje", None) or "; ".join(e.errores.values()), "error")
-        args = {k: v for k, v in request.args.items() if k != "seccion"}
-        return redirect(url_for(endpoint(self.spec.name, "detalle"), id=id, seccion=a.seccion, **args))
+        return redirect(volver)
+
+    def _accion_con_formulario(self, registro, a, volver):
+        """GET: el formulario de la acción. POST: la ejecuta, o vuelve al formulario con los errores."""
+        valores, errores = {}, {}
+        if request.method == "POST":
+            valores = request.form.to_dict()
+            try:
+                datos = {}
+                for c, f in a.campos.items():
+                    try:
+                        valor = coercion.convertir_sin_columna(f, valores.get(c))
+                    except ValueError as e:
+                        errores[c] = f"{f.label} {e}."
+                        continue
+                    if valor is None and f.required:
+                        errores[c] = f"{f.label} es obligatorio."
+                    datos[c] = valor
+                if errores:
+                    raise ErroresValidacion(errores)
+                fk.validar_existencia(a.campos, datos)
+                ServicioCRUD(self.spec.model, a.campos).verificar_opciones(datos)
+                self._flash_resultado(a.funcion(registro, datos))
+                db.session.commit()
+                return redirect(volver)
+            except ErroresValidacion as e:
+                db.session.rollback()
+                errores = self._errores_de_accion(a, e.errores)
+            except ErrorIntegridad as e:
+                db.session.rollback()
+                errores = {e.campo if e.campo in a.campos else "_general": e.mensaje}
+            registro = repository.obtener_o_404(self.spec.model, getattr(registro, self.spec.pk))
+        opciones = fk.opciones_de(a.campos)
+        return render_template(
+            "crud/accion.html",
+            **self._contexto(*self._padre_de(registro)),
+            titulo_pagina=f"{a.label} — {self._titulo_registro(registro)}",
+            accion=a,
+            registro_titulo=self._titulo_registro(registro),
+            campos=a.campos,
+            valores=valores,
+            fk_data=opciones,
+            con_lista={c for c, ops in opciones.items() if fk.usa_lista(a.campos[c], ops)},
+            errores=errores,
+            url_cancelar=volver,
+        ), (400 if errores else 200)
+
+    def _errores_de_accion(self, a, errores: dict) -> dict:
+        """Los errores de campos del registro (no del formulario) van arriba, con su etiqueta."""
+        resultado, generales = {}, []
+        for campo, texto in errores.items():
+            if campo in a.campos:
+                resultado[campo] = texto
+            else:
+                generales.append(texto)
+        if generales:
+            resultado["_general"] = " ".join(generales)
+        return resultado
+
+    def _flash_resultado(self, resultado):
+        """
+        Lo que devuelve la función de una acción: un texto (ok), una tupla
+        (categoría, texto) o una lista de ellos.
+        """
+        if not resultado:
+            return
+        for item in resultado if isinstance(resultado, list) else [resultado]:
+            categoria, texto = item if isinstance(item, tuple) else ("ok", item)
+            flash(texto, categoria)
 
     def _avisar(self, registro):
         for categoria, texto in getattr(registro, "avisos_guardado", []):
@@ -573,8 +678,9 @@ class VistasEntidad:
                                    {padre.fk: padre_id})
         return contexto_grilla(self.spec, self.spec.listado, {})
 
-    def _campo_en_linea(self, campo):
-        if campo not in self.spec.edicion_en_linea:
+    def _campo_en_linea(self, registro, campo):
+        """El campo, si se edita en la grilla y no está congelado en este registro; si no, 404."""
+        if campo not in self.spec.edicion_en_linea or campo in self.servicio.congelados(registro):
             abort(404)
         return self.fields[campo]
 
@@ -595,7 +701,8 @@ class VistasEntidad:
         if texto is None:
             texto = texto_celda(registro, campo, f, control)
         return {
-            "campo": campo, "cfg": f, "valor": texto, "error": error,
+            "campo": campo, "columna": self.spec.columna_en_linea.get(campo, campo),
+            "cfg": f, "valor": texto, "error": error,
             "control": control, "opciones": opciones,
             "id_lista": f"lista-{self.spec.name}-{campo}",
             "url": url_for(endpoint(self.spec.name, "celda"), id=id_, campo=campo, **grilla["args_fila"]),
@@ -604,7 +711,7 @@ class VistasEntidad:
 
     def celda(self, id, campo):
         registro = repository.obtener_o_404(self.spec.model, id)
-        f = self._campo_en_linea(campo)
+        f = self._campo_en_linea(registro, campo)
         if request.method == "GET":
             return render_template("crud/partials/_celda_edicion.html", celda=self._celda(registro, campo))
 
@@ -618,7 +725,7 @@ class VistasEntidad:
             error = self._mensaje_celda(campo, {e.campo or "_general": e.mensaje})
         else:
             self._avisar(registro)
-            return self._render_fila(registro, foco=campo)
+            return self._render_fila(registro, foco=self.spec.columna_en_linea.get(campo, campo))
         # Lo guardado se descartó (el servicio hace rollback): la fila se arma con lo
         # que hay en la base y la celda queda abierta con lo que se escribió.
         registro = repository.obtener_o_404(self.spec.model, id)
@@ -640,6 +747,9 @@ class VistasEntidad:
             except ValueError:
                 raise ErroresValidacion({campo: f"No encontré «{texto.strip()}». Elegí una opción de la lista."})
         datos = coercion.datos_de_entrada(self.spec.model, {campo: f}, entrada, parcial=True)
+        if f.excluir_en_linea and datos.get(campo) in f.excluir_en_linea:
+            opcion = next(o["label"] for o in f.options if o["value"] == datos[campo])
+            raise ErroresValidacion({campo: f"«{opcion}» no se elige en la grilla."})
         fk.validar_existencia(self.fields, datos)
         # Los campos de los que depende y que no se editan en la grilla se recalculan
         # (ej: la unidad de la línea, al cambiar el material): el servicio los
@@ -681,14 +791,29 @@ def contexto_grilla(spec: EntitySpec, columnas, args_fila: dict) -> dict:
         "entidad": spec.name,
         "endpoint_base": f"{BLUEPRINT}.{spec.name}",
         "args_fila": args_fila,
-        "editables": set(spec.edicion_en_linea),
+        # {columna: campo que se edita en ella} (casi siempre, el mismo).
+        "editables": {spec.columna_en_linea.get(c, c): c for c in spec.edicion_en_linea},
+        "con_eliminar": spec.eliminable_si is not None,
     }
 
 
 def item_fila(spec: EntitySpec, registro, columnas) -> dict:
-    """Valores de una fila: las columnas pedidas, la PK y la etiqueta (y color) de cada FK."""
+    """
+    Valores de una fila: las columnas pedidas, la PK y la etiqueta (y color) de
+    cada FK. Además, lo que depende del registro: los campos congelados (con el
+    porqué), si se puede eliminar y las acciones de la fila.
+    """
     item = {c: getattr(registro, c, None) for c in columnas}
     item[spec.pk] = getattr(registro, spec.pk)
+    item["_congelados"] = {}
+    for campo, regla in spec.editable_si.items():
+        if campo in spec.edicion_en_linea:
+            porque = permitido(regla(registro))
+            if porque is not None:
+                item["_congelados"][campo] = porque
+    item["_eliminable"] = spec.eliminable_si is None or permitido(spec.eliminable_si(registro)) is None
+    item["_acciones"] = [a for a in spec.acciones
+                         if a.en_fila and (a.visible is None or a.visible(registro))]
     for c in columnas:
         f = spec.fields.get(c)
         if f is None or f.tipo != "fk":
@@ -712,7 +837,7 @@ def control_celda(f) -> tuple[str, list]:
             return "busqueda", [o["label"] for o in opciones]
         return "select", opciones
     if f.tipo == "select":
-        return "select", list(f.options)
+        return "select", [o for o in f.options if o["value"] not in f.excluir_en_linea]
     if f.tipo == "datalist":
         return "datalist", fk.sugerencias_de({f.name: f}).get(f.name, [])
     if f.tipo in ("number", "date"):
@@ -727,6 +852,17 @@ def texto_celda(registro, campo, f, control) -> str:
         return fk.etiqueta(obj, f) if obj is not None else ""
     valor = coercion.valor_para_formulario(f, getattr(registro, campo))
     return "" if valor is None else str(valor)
+
+
+def acciones_visibles(spec: EntitySpec, registro, condicion, args) -> list[dict]:
+    """Botones de las acciones de un registro que cumplen `condicion` (y su `visible`)."""
+    id_ = getattr(registro, spec.pk)
+    return [
+        {"label": a.label, "confirmar": a.confirmar, "con_formulario": bool(a.campos),
+         "url": url_for(endpoint(spec.name, "accion"), id=id_, accion=a.id, **args)}
+        for a in spec.acciones
+        if condicion(a) and (a.visible is None or a.visible(registro))
+    ]
 
 
 def registrar_web(app, registry: dict[str, EntitySpec]):

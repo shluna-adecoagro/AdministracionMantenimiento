@@ -32,6 +32,7 @@ import io
 import re
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import datetime, time
 
 from app.core.db import db
 from app.crud.core.coercion import ErroresValidacion
@@ -386,7 +387,10 @@ class _Importador:
         from app.crud.entidades import servicio
 
         self.r, self.ident, self.motivo, self.usuario = r, ident, motivo, usuario
-        self.s = {e: servicio(e, confirmar=False) for e in (
+        # Sin las reglas de borrador y envío (fase 13.2): estas líneas nacen
+        # enviadas y, para ellas, la fuente es el Excel (una versión corregida
+        # puede cambiar el material, la descripción o las cantidades).
+        self.s = {e: servicio(e, confirmar=False, reglas_de_edicion=False) for e in (
             "pedidos", "pedido_lineas", "pedido_linea_destinos", "documentos_proveedor", "documento_lineas",
             "adjudicaciones")}
         self._motivo_anulacion = None
@@ -516,6 +520,8 @@ class _Importador:
         }
         if existente is None:
             datos["nro_linea"] = siguiente
+            # Enviada a Compras con la fecha del pedido (decidido 26/11).
+            datos["enviada_en"] = datetime.combine(h.fecha, time())  # sin fecha, la hoja no se importa
             siguiente += 1
         linea, accion = self._guardar("pedido_lineas", existente, datos, h.hoja, f.fila,
                                       protegidos=_PROTEGIDOS_LINEA, solo_alta=("motivo_revision",))

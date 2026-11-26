@@ -65,6 +65,9 @@ class FieldSpec:
     # <select>; con más, un campo con lista para buscar tipeando); "select" o
     # "lista" lo fijan.
     selector: str | None = None
+    # Opciones de un "select" que la grilla no ofrece ni acepta (ej: «Anulado»
+    # en el estado de una línea: se anula con su acción, que pide el motivo).
+    excluir_en_linea: tuple = ()
 
     # Presentación
     oculto: bool = False           # no se muestra en el formulario
@@ -174,6 +177,16 @@ class AccionSpec:
     seccion: str = "datos"
     confirmar: str | None = None   # pregunta antes de ejecutar
     visible: object = None
+    # Acción con formulario (ej: «Anular o cancelar», que pide el motivo y la
+    # cantidad): {campo: FieldSpec}, armados como los campos de alta. Si hay
+    # campos, el botón lleva a una página con el formulario y la función recibe
+    # además los datos ya convertidos: funcion(registro, datos).
+    campos: dict = field(default_factory=dict)
+    # También se muestra como botón en la fila del listado y de la pestaña del
+    # padre (además de en el detalle).
+    en_fila: bool = False
+    # Texto de ayuda arriba del formulario de la acción.
+    ayuda: str | None = None
 
 
 @dataclass(frozen=True)
@@ -216,6 +229,24 @@ class EntitySpec:
     # estar en `listado` y ser datos propios: ni calculados, ni archivos, ni de
     # solo importación (dueño: el ERP). Lo valida el registry.
     edicion_en_linea: tuple[str, ...] = ()
+    # Columna de la grilla en la que se edita cada campo, si no es la suya (ej:
+    # el estado de seguimiento se edita sobre la columna «Estado», el visible).
+    columna_en_linea: dict[str, str] = field(default_factory=dict)
+
+    # Reglas de edición según el registro (fase 13.2). Las aplica el servicio, así
+    # que valen en la grilla, el formulario, la API y la importación CSV:
+    #   editable_si   {campo: función(registro) -> True | False | texto}: si el
+    #                 campo se puede cambiar en ese registro. False o un texto (el
+    #                 porqué) = congelado. Solo se rechazan los cambios reales:
+    #                 mandar el mismo valor no es un error.
+    #   eliminable_si función(registro) -> True | False | texto: si se puede borrar.
+    #   creable_si    función(datos) -> True | False | texto: si se puede crear
+    #                 con esos datos (ej: un destino en una línea ya enviada, no).
+    # El importador del histórico de pedidos las saltea (para esas líneas, la
+    # fuente es el Excel): ver servicio(..., reglas_de_edicion=False).
+    editable_si: dict = field(default_factory=dict)
+    eliminable_si: object = None
+    creable_si: object = None
 
     @property
     def padre(self) -> ParentSpec | None:

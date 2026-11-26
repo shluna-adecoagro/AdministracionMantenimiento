@@ -58,6 +58,7 @@ DESTINOS = (
 
 # Estado visible → (singular, plural) para el resumen del pedido, en este orden.
 _ESTADO_PLURAL = {
+    "Borrador": ("en borrador", "en borrador"),
     "Solicitado": ("solicitada", "solicitadas"),
     "En cotización": ("en cotización", "en cotización"),
     "Ofertas cargadas": ("con ofertas cargadas", "con ofertas cargadas"),
@@ -105,10 +106,16 @@ class Pedido(db.Model, ModelMixin, AuditMixin, OrigenMixin):
 
     @property
     def resumen(self) -> str:
-        """«5 líneas: 3 recibidas, 1 adjudicada, 1 anulada» (por estado visible)."""
+        """
+        «5 líneas: 1 en borrador, 3 recibidas, 1 anulada» (por estado visible), o
+        «Borrador: 3 líneas» si ninguna se envió a Compras.
+        """
         lineas = self.lineas
         if not lineas:
             return "Sin líneas"
+        total = len(lineas)
+        if all(linea.enviada_en is None for linea in lineas):
+            return f"Borrador: {total} línea{'s' if total != 1 else ''}"
         conteo: dict[str, int] = {}
         for linea in lineas:
             conteo[linea.estado_visible] = conteo.get(linea.estado_visible, 0) + 1
@@ -117,7 +124,6 @@ class Pedido(db.Model, ModelMixin, AuditMixin, OrigenMixin):
             n = conteo.get(estado)
             if n:
                 partes.append(f"{n} {singular if n == 1 else plural}")
-        total = len(lineas)
         return f"{total} línea{'s' if total != 1 else ''}: {', '.join(partes)}"
 
 
@@ -163,9 +169,17 @@ class PedidoLinea(db.Model, ModelMixin, AuditMixin, OrigenMixin):
     observaciones = db.Column(db.String(1000), nullable=True)
     # Lo que la importación no pudo interpretar (el gestor lo borra al revisarlo).
     motivo_revision = db.Column(db.String(1000), nullable=True, info={"label": "A revisar (importación)"})
+    # Vacía = borrador. La pone «Enviar a Compras» (fase 13.2); en el histórico, la
+    # fecha del pedido. Al enviarla se congelan el material, la descripción y las
+    # cantidades de sus destinos (ver overrides/pedidos.py).
+    enviada_en = db.Column(db.DateTime, nullable=True, info={"label": "Enviada a Compras"})
 
     creado_en = db.Column(db.DateTime, default=datetime.utcnow)
     actualizado_en = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @property
+    def borrador(self) -> bool:
+        return self.enviada_en is None
 
     @property
     def se_cuenta_en(self) -> str | None:
