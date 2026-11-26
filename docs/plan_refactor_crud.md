@@ -902,6 +902,18 @@ en una sola celda; el destino se repite en la fila siguiente.
   «Enviar a Compras» que aparece sin recargar.
 - Tests: `tests/test_alta_rapida.py`.
 
+#### Dudas para revisar al empezar el PR 13.4
+
+- **Destinos con recepciones** al redistribuir: ver «A revisar con las recepciones» en
+  `propuesta_edicion_en_linea.md` (propuesta: no se sacan; su cantidad no baja de lo recibido).
+- **Tipo de destino:** completar el activo, el modelo o la ubicación lo define
+  (`completar_destino`, decisión 2 de la propuesta). Que quede coherente con el alta
+  rápida, que ya deduce «activo» o «stock» del texto (`FkEntre`).
+- **Subgrilla genérica:** la de destinos tiene que servir también para las operaciones de
+  la OT y sus recursos y materiales (fase 12), no solo para los pedidos.
+- **Botón «Agregar»** de la fila de alta: en pantallas angostas queda fuera de la vista
+  por el ancho de la tabla (Enter funciona igual). Ver si se acomoda.
+
 ## Arquitectura objetivo
 
 ```
