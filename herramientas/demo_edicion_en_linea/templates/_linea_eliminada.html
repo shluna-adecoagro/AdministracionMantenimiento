@@ -1,0 +1,4 @@
+{# Respuesta al eliminar una línea: la fila ya la saca hx-swap="delete"; acá van su fila de destinos, el estado y el aviso. #}
+<tr id="sub-{{ id }}" hx-swap-oob="delete"></tr>
+{% with oob=true %}{% include "_estado_pedido.html" %}{% endwith %}
+{% with aviso="Línea eliminada." %}{% include "_avisos.html" %}{% endwith %}

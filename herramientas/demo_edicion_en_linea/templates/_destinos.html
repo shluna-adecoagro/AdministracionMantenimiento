@@ -1,0 +1,37 @@
+{# Contenido de la fila #sub-<id>: la grilla de destinos de la línea. #}
+<td colspan="{{ N_COLUMNAS }}" class="sub-celda">
+    <div class="sub-grilla">
+        <table class="tabla-listado grilla">
+            <thead>
+                <tr>
+                    {% for col in COLUMNAS_DESTINO %}<th>{{ col.label }}</th>{% endfor %}
+                    <th>A revisar</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in l.destinos %}{% include "_fila_destino.html" %}{% endfor %}
+            </tbody>
+        </table>
+        {% if l.anulada %}
+            <p class="nota">Línea anulada.</p>
+        {% elif l.borrador %}
+            <form class="alta-destino" hx-post="/lineas/{{ l.id }}/destinos" hx-target="#sub-{{ l.id }}">
+                <input name="cantidad" inputmode="decimal" class="num" placeholder="Cant.">
+                <button type="submit" class="btn-secondary">Agregar destino</button>
+                {% if error is defined %}<span class="error-celda" role="alert">{{ error }}</span>{% endif %}
+            </form>
+        {% else %}
+            <div class="alta-destino">
+                <button type="button" class="btn-secondary"
+                        hx-get="/lineas/{{ l.id }}/redistribuir" hx-target="#sub-{{ l.id }}">Redistribuir…</button>
+                <span class="nota">Las cantidades están congeladas: la línea ya se envió a Compras.</span>
+                {% if error is defined %}<span class="error-celda" role="alert">{{ error }}</span>{% endif %}
+            </div>
+        {% endif %}
+    </div>
+</td>
+{% if oob_linea is defined and oob_linea %}
+    {% with l=oob_linea, oob=true %}{% include "_fila_linea.html" %}{% endwith %}
+{% endif %}
+{% if aviso is defined and aviso %}{% include "_avisos.html" %}{% endif %}

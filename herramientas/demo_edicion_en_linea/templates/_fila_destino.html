@@ -1,0 +1,29 @@
+{# Fila de un destino. Mismos opcionales que _fila_linea.html, y oob_linea. #}
+<tr id="destino-{{ d.id }}" class="fila" {% if foco is defined and foco %}data-foco="{{ foco }}"{% endif %}>
+    {% for col in COLUMNAS_DESTINO %}
+        {% if editar is defined and editar == col.campo %}
+            {% with r=d, url="/destinos/%d/celda/%s"|format(d.id, col.campo), url_cancelar="/destinos/%d/fila"|format(d.id) %}
+                {% include "_celda_edicion.html" %}
+            {% endwith %}
+        {% elif es_editable(d, col) %}
+            <td class="celda{% if col.num %} num{% endif %}" tabindex="-1" data-campo="{{ col.campo }}"
+                hx-get="/destinos/{{ d.id }}/celda/{{ col.campo }}" hx-trigger="editar" hx-swap="outerHTML">{{ mostrar(d, col) }}</td>
+        {% else %}
+            <td class="calc congelada{% if col.num %} num{% endif %}" tabindex="-1" data-campo="{{ col.campo }}"
+                title="Congelada: para cambiar el reparto, «Redistribuir»">{{ mostrar(d, col) }}</td>
+        {% endif %}
+    {% endfor %}
+    <td class="calc" tabindex="-1" data-campo="a_revisar">
+        {% if d.a_revisar %}<span class="badge badge-revisar">Sí</span>{% else %}No{% endif %}
+    </td>
+    <td class="calc acciones" tabindex="-1" data-campo="_acciones">
+        {% if d.linea.borrador and not d.linea.anulada %}
+            <button type="button" class="btn-icono" title="Sacar este destino"
+                    hx-delete="/destinos/{{ d.id }}" hx-target="#sub-{{ d.linea_id }}">🗑</button>
+        {% endif %}
+    </td>
+</tr>
+{# Fuera de banda: la fila de la línea (solicitada y «a revisar» cambian con el destino). #}
+{% if oob_linea is defined and oob_linea %}
+    {% with l=oob_linea, oob=true, foco=none, editar=none %}{% include "_fila_linea.html" %}{% endwith %}
+{% endif %}
