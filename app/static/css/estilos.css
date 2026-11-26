@@ -1069,3 +1069,35 @@ td.tabla-acciones { max-width: none; overflow: visible; }
 td.tabla-acciones form.form-en-linea { display: inline-block; margin: 0 6px 0 0; }
 td.tabla-acciones form.form-en-linea button { padding: 0.45rem 0.9rem; font-size: 0.9rem; }
 .accion-ayuda { color: #475569; margin: 0 0 1rem; }
+
+/* Botón de la fila de alta, debajo de la tabla (en una pantalla angosta, la
+   columna de acciones queda fuera de la vista). */
+.alta-pie { display: flex; align-items: center; gap: 0.75rem; margin: 0.6rem 0 0; }
+.alta-pie .nota { color: #64748b; font-size: 0.85rem; }
+
+/* Subgrillas (fase 13.4): los hijos de una fila, desplegados debajo de ella. */
+.btn-subgrilla { white-space: nowrap; }
+.btn-subgrilla[aria-expanded="true"] { background: #e0e7ff; }
+.grilla tr.sub-fila > td.sub-celda {
+    max-width: none; overflow: visible; background: #f1f5f9;
+    padding: 0.5rem 0.75rem 0.9rem 2rem; border-left: 4px solid #6366f1;
+}
+.sub-grilla { overflow-x: auto; }
+.sub-grilla table.grilla { background: #fff; font-size: 0.92rem; }
+.sub-encabezado { display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+                  margin: 0 0 0.4rem; }
+.sub-encabezado .seccion-botones { margin: 0; }
+.sub-mensaje { margin: 0.3rem 0; padding: 0.35rem 0.6rem; border-radius: 4px; font-size: 0.9rem; }
+.sub-mensaje--ok { background: #ecfdf5; color: #065f46; }
+.sub-mensaje--aviso { background: #fffbeb; color: #92400e; }
+.sub-mensaje--error { background: #fef2f2; color: #991b1b; }
+
+/* Acciones de varias filas (ej: «Redistribuir»). */
+.form-filas .tabla-filas td { vertical-align: top; max-width: none; overflow: visible; }
+.form-filas .tabla-filas input, .form-filas .tabla-filas select { width: 100%; min-width: 6rem; }
+.form-filas .tabla-filas input.num { text-align: right; max-width: 8rem; }
+.form-filas .tabla-filas td.nota { color: #64748b; font-size: 0.85rem; }
+.form-filas tr.con-error td { background: #fef2f2; }
+.form-filas .fila-form { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.6rem; flex-wrap: wrap; }
+.form-filas .total-distinto { color: #b91c1c; }
+.btn-icono { background: none; border: none; cursor: pointer; font-size: 1rem; padding: 0.2rem 0.4rem; }

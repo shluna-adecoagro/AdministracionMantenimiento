@@ -5,8 +5,14 @@
   columnas calculadas).
 
   Variables: grilla (contexto_grilla en web/views.py), item (item_fila).
-  Opcionales: celda (la celda que sigue en edición, con su error) y foco (la
-  columna que recibe el foco después de guardar; lo lee grilla.js).
+  Opcionales: celda (la celda que sigue en edición, con su error), foco (la
+  columna que recibe el foco después de guardar; lo lee grilla.js), oob (la fila
+  va fuera de banda) y fila_padre (fase 13.4: la fila del padre, que se manda
+  fuera de banda después de esta cuando se guardó un hijo desde la subgrilla).
+
+  Subgrillas (grilla.subgrillas): un botón por hijo («Destinos (2)») que
+  despliega sus registros en una fila debajo (grilla.js). En una fila de una
+  subgrilla (grilla.en_subgrilla), «Eliminar» se hace sin salir de la página.
 
   grilla.editables es {columna: campo que se edita en ella}. Una celda congelada
   en este registro (item._congelados, por editable_si) se ve en gris, con el
@@ -28,7 +34,7 @@
 {%- endmacro %}
 {% set g = grilla %}
 {% set id_fila = item[g.pk] %}
-<tr id="fila-{{ g.entidad }}-{{ id_fila }}" class="fila"{% if foco %} data-foco="{{ foco }}"{% endif %}>
+<tr id="fila-{{ g.entidad }}-{{ id_fila }}" class="fila"{% if foco %} data-foco="{{ foco }}"{% endif %}{% if oob %} hx-swap-oob="true"{% endif %}>
     {% for col in g.columnas %}
         {% set cfg = g.campos[col] %}
         {% set campo_edicion = g.editables.get(col) %}
@@ -49,6 +55,22 @@
         {% endif %}
     {% endfor %}
     <td class="tabla-acciones">
+        {% for sg in g.subgrillas %}
+            <button type="button" class="btn-secondary btn-subgrilla" aria-expanded="false"
+                    data-subgrilla="sub-{{ sg.entidad }}-{{ id_fila }}"
+                    data-url="{{ url_for(sg.endpoint, vista_padre=g.vista, **{sg.fk: id_fila}) }}">
+                <span class="flecha" aria-hidden="true">▸</span> {{ sg.label }} ({{ item._subgrillas[sg.entidad] }})
+            </button>
+        {% endfor %}
+        {% if g.en_subgrilla %}
+        <a href="{{ url_for(g.endpoint_base ~ '_detalle', id=id_fila) }}" class="btn-info">Ver</a>
+        {% if g.con_eliminar and item._eliminable %}
+            <button type="button" class="btn-eliminar"
+                    hx-post="{{ url_for(g.endpoint_base ~ '_eliminar_en_linea', id=id_fila, **g.args_fila) }}"
+                    hx-target="closest tr.sub-fila" hx-swap="outerHTML"
+                    hx-confirm="¿Eliminar {{ 'esta' if g.genero == 'f' else 'este' }} {{ g.label_singular }}?">Eliminar</button>
+        {% endif %}
+        {% else %}
         <a href="{{ url_for(g.endpoint_base ~ '_detalle', id=id_fila, **g.args_fila) }}"
            class="btn-info">Ver detalles</a>
         <a href="{{ url_for(g.endpoint_base ~ '_editar', id=id_fila, **g.args_fila) }}"
@@ -68,5 +90,11 @@
             <a href="{{ url_for(g.endpoint_base ~ '_confirmar_eliminar', id=id_fila, **g.args_fila) }}"
                class="btn-eliminar">Eliminar</a>
         {% endif %}
+        {% endif %}
     </td>
 </tr>
+{% if fila_padre %}
+    {% with grilla=fila_padre.grilla, item=fila_padre.item, oob=true, foco=None, celda=None, fila_padre=None %}
+        {% include "crud/partials/_fila.html" %}
+    {% endwith %}
+{% endif %}

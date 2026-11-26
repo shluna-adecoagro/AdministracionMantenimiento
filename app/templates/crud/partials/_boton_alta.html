@@ -1,0 +1,9 @@
+{#
+  Botón de la fila de alta (alta rápida), debajo de la tabla: así se ve también
+  en una pantalla angosta. Enter en cualquier celda de la fila hace lo mismo.
+  Variables: alta (contexto_alta), label_singular.
+#}
+<div class="alta-pie">
+    <button form="{{ alta.form_id }}" type="submit" class="btn-success">Agregar {{ label_singular }}</button>
+    <span class="nota">o Enter en la última fila de la tabla</span>
+</div>

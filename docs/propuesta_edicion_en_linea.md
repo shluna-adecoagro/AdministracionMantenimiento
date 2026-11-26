@@ -90,9 +90,9 @@ agregar líneas olvidadas a un pedido que Compras ya está cotizando.
 - **Para pedir más** de una línea enviada: una línea nueva (queda en borrador).
 - El estado de seguimiento (en cotización, ofertas cargadas) solo se edita en líneas
   enviadas.
-- A revisar con las recepciones (PR 10.5): si un destino ya tiene recepciones o
-  `comprada_corregida`, ¿se puede sacar al redistribuir? Propuesta: no, solo cambiar su
-  cantidad sin bajar de lo recibido.
+- Con las recepciones (decidido 26/11, PR 13.4): un destino con recepciones no se saca
+  al redistribuir ni baja de lo recibido. Si baja de su `comprada_corregida` (o se
+  saca), la corrección se limpia y se avisa: lo comprado vuelve a repartirse en proporción.
 
 ## Fases sugeridas
 

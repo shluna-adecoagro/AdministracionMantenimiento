@@ -1,0 +1,61 @@
+{#
+  Subgrilla (fase 13.4): la fila que se despliega debajo de la fila del padre,
+  con la grilla de sus hijos (ej: los destinos de una línea de pedido). La abre
+  y la cierra el botón de la fila del padre (grilla.js); también vuelve después
+  de eliminar un hijo o de terminar una acción de varias filas.
+
+  Variable: sg (contexto_subgrilla en web/views.py): id, label, url, colspan,
+  grilla, registros, alta, botones, error, mensajes y, opcional, form (una acción de
+  varias filas abierta en lugar de la grilla, ej: «Redistribuir»).
+  Opcional: fila_padre, la fila del padre fuera de banda (cambiaron sus
+  columnas calculadas).
+#}
+<tr id="{{ sg.id }}" class="sub-fila">
+    <td colspan="{{ sg.colspan }}" class="sub-celda">
+        <div class="sub-grilla">
+        {% if sg.form %}
+            {% with form=sg.form %}{% include "crud/partials/_accion_filas.html" %}{% endwith %}
+        {% else %}
+            <div class="sub-encabezado">
+                <strong>{{ sg.label }}</strong>
+                {% with botones=sg.botones %}{% include "crud/partials/_botones_seccion.html" %}{% endwith %}
+            </div>
+            {% for categoria, texto in sg.mensajes %}
+                <p class="sub-mensaje sub-mensaje--{{ categoria }}" role="status">{{ texto }}</p>
+            {% endfor %}
+            {% if sg.error %}<p class="sub-mensaje sub-mensaje--error" role="alert">{{ sg.error }}</p>{% endif %}
+            {% set grilla = sg.grilla %}
+            <table class="tabla-listado grilla">
+                <thead>
+                    <tr>
+                        {% for campo in grilla.columnas %}<th>{{ grilla.campos[campo].label }}</th>{% endfor %}
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in sg.registros %}
+                        {% with fila_padre=None %}{% include "crud/partials/_fila.html" %}{% endwith %}
+                    {% else %}
+                        {% if not sg.alta %}
+                        <tr><td colspan="{{ grilla.columnas | length + 1 }}" class="no-registros"><em>No hay registros</em></td></tr>
+                        {% endif %}
+                    {% endfor %}
+                    {% if sg.alta %}
+                        {% with alta=sg.alta %}{% include "crud/partials/_fila_alta.html" %}{% endwith %}
+                    {% endif %}
+                </tbody>
+            </table>
+            {% if sg.alta %}
+                <form id="{{ sg.alta.form_id }}" hx-post="{{ sg.alta.url }}" hx-target="#{{ sg.alta.id }}"
+                      hx-swap="outerHTML"></form>
+                {% with alta=sg.alta, label_singular=grilla.label_singular %}{% include "crud/partials/_boton_alta.html" %}{% endwith %}
+            {% endif %}
+        {% endif %}
+        </div>
+    </td>
+</tr>
+{% if fila_padre %}
+    {% with grilla=fila_padre.grilla, item=fila_padre.item, oob=true, foco=None, celda=None, fila_padre=None %}
+        {% include "crud/partials/_fila.html" %}
+    {% endwith %}
+{% endif %}

@@ -51,5 +51,8 @@
         {% endif %}
 
     </div>
+    {% if sub.alta %}
+        {% with alta=sub.alta, label_singular=sub.label_singular %}{% include "crud/partials/_boton_alta.html" %}{% endwith %}
+    {% endif %}
 
 </section>

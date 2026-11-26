@@ -5,7 +5,8 @@
   aparte: si la acción lo necesita, es uno de sus campos.
 
   Variables: accion, registro_titulo, campos, valores, fk_data, con_lista,
-  errores, url_cancelar.
+  errores, url_cancelar. Una acción de varias filas (AccionSpec.filas, ej:
+  «Redistribuir») trae form_filas y se arma con _accion_filas.html.
 #}
 {% extends "layout.html" %}
 {% from "crud/partials/_selector.html" import campo_lista %}
@@ -25,6 +26,9 @@
         </div>
     {% endif %}
 
+    {% if form_filas %}
+        {% with form=form_filas %}{% include "crud/partials/_accion_filas.html" %}{% endwith %}
+    {% else %}
     <form method="POST" id="form-accion">
         {% for campo, cfg in campos.items() %}
             {% set v = valores.get(campo) %}
@@ -87,6 +91,7 @@
         Selectores.enlazarDependientes(Selectores.de(form, "select[data-campo], input.campo-lista"), {});
     });
     </script>
+    {% endif %}
 
 </div>
 

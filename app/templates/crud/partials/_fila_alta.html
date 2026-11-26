@@ -5,6 +5,9 @@
   Los controles apuntan al form alta.form_id (atributo form=), que está fuera de
   la tabla: un <form> no puede ir dentro de un <tr>. Enter en cualquier celda
   agrega. alta.foco: la celda que recibe el foco (la lee grilla.js).
+
+  El botón «Agregar» va debajo de la tabla (_boton_alta.html), no en esta fila:
+  en una pantalla angosta, la columna de acciones queda fuera de la vista.
 #}
 {% set a = alta %}
 <tr id="{{ a.id }}" class="fila-alta">
@@ -38,7 +41,6 @@
         {% endif %}
     {% endfor %}
     <td class="tabla-acciones">
-        <button form="{{ a.form_id }}" type="submit" class="btn-success">Agregar</button>
         {% if a.error %}<div class="error-celda" role="alert">{{ a.error }}</div>{% endif %}
     </td>
 </tr>

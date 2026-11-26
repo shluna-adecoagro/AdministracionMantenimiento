@@ -187,6 +187,54 @@ class AccionSpec:
     en_fila: bool = False
     # Texto de ayuda arriba del formulario de la acción.
     ayuda: str | None = None
+    # Acción de varias filas (FilasAccionSpec, ej: «Redistribuir» los destinos de
+    # una línea): el formulario es una tabla, con una fila por registro hijo, y la
+    # función recibe la lista de filas ya interpretadas: funcion(registro, filas).
+    filas: "FilasAccionSpec | None" = None
+
+
+@dataclass(frozen=True)
+class CeldaFilaSpec:
+    """
+    Una celda de cada fila de una acción de varias filas.
+
+    nombre      name del input (y clave en la fila que recibe la función).
+    label       encabezado de la columna (y aria-label).
+    interprete  cómo se convierte lo escrito, con la spec de la entidad de las
+                filas (app/crud/core/interpretes.py; por defecto, Campo(nombre)).
+    sumar       la columna muestra su total en vivo (ej: la cantidad, que tiene
+                que sumar lo mismo que antes).
+    """
+
+    nombre: str
+    label: str
+    interprete: object
+    sumar: bool = False
+
+
+@dataclass(frozen=True)
+class FilasAccionSpec:
+    """
+    Formulario de una acción de varias filas (fase 13.4).
+
+    entidad    la entidad de las filas (un hijo del registro): sus campos
+               interpretan las celdas.
+    celdas     CeldaFilaSpec, en el orden de las columnas.
+    iniciales  función(registro) -> [{"id": pk, <celda>: texto, "_nota": texto}]:
+               las filas con las que se abre el formulario (una por hijo). La
+               nota se muestra al lado, sin editarse.
+    total      función(registro) -> número (opcional): lo que tiene que sumar la
+               celda con `sumar` (se muestra junto al total en vivo).
+
+    La función de la acción recibe [{"id": pk o None (fila nueva), "fila": n,
+    <campos interpretados>}], sin las filas vacías, y rechaza con
+    ErroresValidacion({"fila_<n>": ..., "_general": ...}). Todo o nada.
+    """
+
+    entidad: str
+    celdas: tuple[CeldaFilaSpec, ...]
+    iniciales: object
+    total: object = None
 
 
 @dataclass(frozen=True)
@@ -260,6 +308,11 @@ class EntitySpec:
     # celda es un CeldaAltaSpec; el alta va por servicio.crear, como el formulario.
     alta_en_linea: tuple[CeldaAltaSpec, ...] = ()
     alta_en_linea_padre: str | None = None
+    # Subgrillas (fase 13.4): hijos que se despliegan debajo de cada fila de la
+    # grilla de esta entidad (ej: los destinos, bajo cada línea de pedido). Cada
+    # hijo tiene que tener edicion_en_linea. Al cambiar un hijo, la fila de esta
+    # entidad se actualiza fuera de banda (cambian sus columnas calculadas).
+    subgrillas: tuple[str, ...] = ()
 
     # Reglas de edición según el registro (fase 13.2). Las aplica el servicio, así
     # que valen en la grilla, el formulario, la API y la importación CSV:
