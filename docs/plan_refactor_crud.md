@@ -721,6 +721,55 @@ servicio, no solo la pantalla.
 Sin control de concurrencia por ahora: los pedidos los carga y edita solo el gestor. Se
 revisa en la fase 14, cuando Compras escriba en la app.
 
+#### Notas del PR 13.1 (framework de edición en línea)
+
+- **Spec:** `EntitySpec.edicion_en_linea`. El registry exige que cada campo esté en
+  `listado` (la grilla muestra esas columnas) y rechaza calculados (`solo_lectura`,
+  `calculado_python`), archivos, campos de alta, ocultos, de solo importación (la marca de
+  las columnas cuyo dueño es el ERP: hoy `origen` y `clave_origen`; las de la fase 11 la
+  llevarán al crearse) y el **padre principal** (sería mover el registro). Un padre
+  secundario sí se edita: el material de una línea, que en la pestaña del material no se
+  muestra porque se oculta la columna del padre visitado.
+- **Rutas** (`web/views.py`, solo con `edicion_en_linea`): `GET/POST
+  /<entidad>/<id>/celda/<campo>` y `GET /<entidad>/<id>/fila`. Un campo que no está en la
+  lista da 404. El padre viaja en la URL (`?pedido_id=3`), como en el resto de las
+  pantallas, y define qué columna se oculta y a dónde apuntan los enlaces.
+- **Guardar:** `coercion.datos_de_entrada(parcial=True)` → `fk.validar_existencia` →
+  `servicio.actualizar(registro, {campo: valor}, "Edición en línea")`. El motivo es una
+  constante (`MOTIVO_EDICION_EN_LINEA`), no está en el catálogo. Error = 422 con la fila
+  y la celda abierta, con lo escrito. Lo que una regla marca en **otro** campo se muestra
+  en la celda editada con la etiqueta de ese campo («Material: Elegí el material…»).
+- **Campos que dependen de otro** (`depende_de`): al editar en línea el hijo, los padres
+  que no están en `edicion_en_linea` se vacían y el servicio los completa con los del
+  valor nuevo. Así, cambiar el material de una línea trae su unidad, en vez de dar «no
+  pertenece».
+- **FK por texto:** `_BuscadorFK` del importador CSV pasó a `core/fk.py` (`BuscadorFK`,
+  con `NoEncontrado` y `Ambiguo`), compartido por el CSV y la grilla. En la grilla además
+  vale el comienzo si corresponde a un solo registro (`por_prefijo`); el CSV sigue
+  pidiendo el texto exacto. Una FK con más de `UMBRAL_BUSQUEDA` (15) registros se edita
+  con `<input list>` (sugerencias que filtran por cualquier parte del texto); con menos,
+  con un `<select>`. Se cuenta al abrir la celda, respetando `fk_filtro`.
+- **Plantillas:** `crud/partials/_fila.html` (una fila; la usan `listado_entidad.html`,
+  `listado_subentidad.html` y las rutas de celda) y `_celda_edicion.html`. Las filas se
+  arman con `item_fila` (solo las columnas del listado, con etiqueta y color de cada FK).
+  De paso: los estados se ven como badge también en la pestaña del padre, los botones de
+  la pestaña quedan como en el listado («Ver detalles», «Editar») y se corrigió el
+  `colspan` de «No hay registros». El listado propio de la entidad (`/pedido_lineas`)
+  también es grilla.
+- **JS y htmx:** `static/js/grilla.js` (de la demo, sin destinos, redistribuir ni pegado)
+  y htmx 2.0.4 en `static/vendor/htmx/` con su licencia (0BSD), cargados en `layout.html`
+  con `defer`. El `meta htmx-config` hace que el 422 también reemplace la fila. Cambio
+  respecto de la demo: lo que se escribe mientras la celda se está abriendo queda en un
+  búfer (escribiendo rápido se perdían las primeras teclas) y un Enter o Tab apretado en
+  ese momento guarda al llegar el control. Estilos en la sección «Edición en línea» de
+  `estilos.css`; la celda en edición anula el `overflow: hidden` de las `td` para que se
+  vea el mensaje de error.
+- **Activada en** `pedido_lineas`: material, descripción y nº de OC. El estado y el motivo
+  pasan al PR 13.2, con `editable_si` (el estado solo se edita en líneas enviadas).
+- **Probado en el navegador** (Chromium, Playwright): escribir sobre la celda, Enter, Tab,
+  flechas, Esc, doble clic, clic afuera, error 422 y búsqueda por código y por comienzo.
+- Tests: `tests/test_edicion_en_linea.py`.
+
 ## Arquitectura objetivo
 
 ```
@@ -771,7 +820,7 @@ La API generada usa `GET/POST {url}` y `PUT/PATCH/DELETE {url}/{id}`.
 | **10. Pedidos y documentos de proveedores** | Pedidos con líneas y destinos (imputación), ofertas y presupuestos (cabecera + líneas), adjudicación por cantidad, recepciones (conformidad). Importación del Excel histórico de pedidos. Ver «Fases operativas». | ✅ Hecha |
 | **11. Solicitudes de trabajo, solicitudes internas y OC** | Solicitudes de trabajo (avisos de los mecánicos para llamar a un contratista) y su vínculo con los presupuestos (`documentos_proveedor.solicitud_trabajo_id`). Importación de los TSV de EAM (cabeceras, líneas, distribuciones) y de las OC; vínculo con los documentos adjudicados; distribución propuesta; detalle para Administración; conciliación por nº de OC. | Pendiente |
 | **12. Órdenes de trabajo** | Cabecera importada del ERP; la app agrega operaciones, recursos y materiales (previsto y utilizado). Incluye cuándo le toca un plan a cada activo. | Pendiente |
-| **13. Edición en línea, borrador y envío a Compras** | Listados editables tipo planilla con htmx, generados desde la spec (`edicion_en_linea`, `editable_si`). En pedidos: líneas en borrador y «Enviar a Compras» (`enviada_en`), eliminar en borrador, anular o cancelar con motivo, destinos desplegados y «Redistribuir», alta rápida, pegar desde Excel. Ver «Fase 13: edición en línea». Puede ir antes que la 11: trabaja sobre los pedidos de la fase 10. | Pendiente |
+| **13. Edición en línea, borrador y envío a Compras** | Listados editables tipo planilla con htmx, generados desde la spec (`edicion_en_linea`, `editable_si`). En pedidos: líneas en borrador y «Enviar a Compras» (`enviada_en`), eliminar en borrador, anular o cancelar con motivo, destinos desplegados y «Redistribuir», alta rápida, pegar desde Excel. Ver «Fase 13: edición en línea». Puede ir antes que la 11: trabaja sobre los pedidos de la fase 10. | En curso (13.1 hecho) |
 | **14. Circuito con Compras** | Usuarios, roles y auditoría con usuario; despliegue en un servidor. Vista de Compras (para cotizar, para emitir OC, reclamos), comparativo por línea, adjudicación y «Pedir OC». Ver [`propuesta_circuito_compras.md`](propuesta_circuito_compras.md). | En diseño |
 | **15. Sincronización con SharePoint** | Opción A: exportar periódicamente de la app a SharePoint, más copias de seguridad automáticas de la base. Al final, escribir en SharePoint directo (Microsoft Graph) en lugar de pasar por CSV. | Pendiente |
 

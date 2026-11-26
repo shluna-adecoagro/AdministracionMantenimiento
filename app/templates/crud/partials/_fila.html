@@ -1,0 +1,48 @@
+{#
+  Una fila de listado. La usan el listado de la entidad, la pestaña de una
+  subentidad en el detalle del padre y las rutas de la edición en línea (que
+  devuelven la fila entera después de guardar, para que se actualicen las
+  columnas calculadas).
+
+  Variables: grilla (contexto_grilla en web/views.py), item (item_fila).
+  Opcionales: celda (la celda que sigue en edición, con su error) y foco (el
+  campo que recibe el foco después de guardar; lo lee grilla.js).
+#}
+{% from "crud/partials/_valor.html" import valor %}
+{% macro contenido(item, col, cfg) -%}
+    {%- if cfg.tipo == "fk" -%}
+        {%- if cfg.es_estado -%}
+            {%- if item[col ~ "_label"] -%}
+                <span class="badge" style="background-color: {{ item[col ~ '_color'] }}">{{ item[col ~ "_label"] }}</span>
+            {%- else -%}-{%- endif -%}
+        {%- else -%}
+            {{ item[col ~ "_label"] | mostrar }}
+        {%- endif -%}
+    {%- else -%}
+        {{ valor(item[col], cfg) }}
+    {%- endif -%}
+{%- endmacro %}
+{% set g = grilla %}
+{% set id_fila = item[g.pk] %}
+<tr id="fila-{{ g.entidad }}-{{ id_fila }}" class="fila"{% if foco %} data-foco="{{ foco }}"{% endif %}>
+    {% for col in g.columnas %}
+        {% set cfg = g.campos[col] %}
+        {% if celda and celda.campo == col %}
+            {% include "crud/partials/_celda_edicion.html" %}
+        {% elif col in g.editables %}
+            <td class="celda" tabindex="-1" data-campo="{{ col }}"
+                hx-get="{{ url_for(g.endpoint_base ~ '_celda', id=id_fila, campo=col, **g.args_fila) }}"
+                hx-trigger="editar" hx-swap="outerHTML">{{ contenido(item, col, cfg) }}</td>
+        {% elif g.editables %}
+            <td class="calc" tabindex="-1" data-campo="{{ col }}">{{ contenido(item, col, cfg) }}</td>
+        {% else %}
+            <td>{{ contenido(item, col, cfg) }}</td>
+        {% endif %}
+    {% endfor %}
+    <td class="tabla-acciones">
+        <a href="{{ url_for(g.endpoint_base ~ '_detalle', id=id_fila, **g.args_fila) }}"
+           class="btn-info">Ver detalles</a>
+        <a href="{{ url_for(g.endpoint_base ~ '_editar', id=id_fila, **g.args_fila) }}"
+           class="btn-primary">Editar</a>
+    </td>
+</tr>

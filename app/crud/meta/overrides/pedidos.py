@@ -245,6 +245,9 @@ OVERRIDES = {
         "filtros": ["material_id", "descripcion", "estado", "nro_oc", "observaciones", "motivo_revision",
                     "origen"],
         "clave_natural": ["pedido_id", "nro_linea"],
+        # Grilla de la pestaña «Líneas» del pedido (fase 13). El estado y el motivo
+        # se suman en el PR 13.2, con las reglas de borrador y envío (editable_si).
+        "edicion_en_linea": ["material_id", "descripcion", "nro_oc"],
         "tabs_extra": [{"id": "recepciones_linea", "label": "Recepciones", "funcion": _tab_recepciones}],
         "completar": completar_linea,
         "al_guardar": al_guardar_linea,

@@ -65,11 +65,14 @@ CLAVES_ENTIDAD = frozenset({
     "campos_alta",        # {campo: {...}} campos que solo se piden al crear (no son columnas)
     "orden_campos",       # [campo, ...] primeros campos del formulario, en ese orden
     "clave_natural",      # [campo, ...] identifica el registro al importar (ej: nombre)
+    "edicion_en_linea",   # [campo, ...] campos editables en la grilla (fase 13)
 })
 
 # Tipos de widget que por defecto aparecen en listado y filtros.
 _TIPOS_LISTADO = {"text", "number", "date", "fk", "select", "datalist", "color"}
 _TIPOS_FILTRO = {"text", "textarea", "fk", "select", "datalist"}
+# Tipos de campo que la grilla sabe editar (un control de una línea).
+TIPOS_EDICION_EN_LINEA = frozenset({"text", "textarea", "number", "date", "fk", "select", "datalist"})
 
 
 class MetamodeloError(Exception):
@@ -359,6 +362,36 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
         if c not in campos:
             errores.append(f"{pref} clave_natural: '{c}' no es un campo de la entidad.{_sugerir(c, campos)}")
 
+    # --- edición en línea -------------------------------------------------
+    edicion_en_linea = tuple(ov.get("edicion_en_linea") or ())
+    # El padre principal no se edita en la grilla (sería mover el registro a otro
+    # padre). Los otros sí (ej: el material de una línea, que también cuelga del
+    # material): en la pestaña de cada padre se oculta la columna de ese padre.
+    fk_principal = padres[0].fk if padres else None
+    for c in edicion_en_linea:
+        f = campos.get(c)
+        motivo = None
+        if f is None:
+            motivo = f"no es un campo de la entidad.{_sugerir(c, campos)}"
+        elif f.solo_lectura or f.calculado_python:
+            motivo = "es calculado"
+        elif f.tipo == "file":
+            motivo = "es un archivo"
+        elif f.solo_importacion:
+            motivo = "es de solo importación (su dueño es el ERP u otra fuente)"
+        elif f.solo_alta:
+            motivo = "es un campo de alta (no se guarda)"
+        elif f.oculto:
+            motivo = "está oculto"
+        elif c == fk_principal:
+            motivo = "es la entidad padre principal"
+        elif f.tipo not in TIPOS_EDICION_EN_LINEA:
+            motivo = f"tiene tipo '{f.tipo}' (admitidos: {sorted(TIPOS_EDICION_EN_LINEA)})"
+        elif c not in listado:
+            motivo = "no está en el listado (la grilla muestra las columnas del listado)"
+        if motivo:
+            errores.append(f"{pref} edicion_en_linea: '{c}' {motivo}")
+
     # --- textos ----------------------------------------------------------
     label_plural = ov.get("label_plural", nombre.replace("_", " "))
     genero = ov.get("genero", "m")
@@ -390,6 +423,7 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
         al_guardar=al_guardar,
         completar=completar,
         clave_natural=clave_natural,
+        edicion_en_linea=edicion_en_linea,
     )
     return spec, errores
 

@@ -39,6 +39,7 @@ from sqlalchemy import types as T
 
 from app.core.db import db
 from app.crud.core import coercion
+from app.crud.core import fk as fk_core
 from app.crud.core.coercion import ErroresValidacion
 from app.crud.core.service import ErrorIntegridad
 from app.crud.introspect import normalizar_texto
@@ -132,39 +133,6 @@ def _alias(spec: EntitySpec) -> dict[str, tuple[str, str]]:
     return {a: next(iter(c)) for a, c in candidatos.items() if len(c) == 1}
 
 
-class _BuscadorFK:
-    """
-    Busca el ID de un registro relacionado por su texto (ej: "Activo" → 1). Además
-    de la etiqueta, reconoce los atributos de `__buscar_por__` del modelo (ej: el
-    código o la descripción de un material). Si un texto coincide con varios
-    registros, es ambiguo y hay que usar el ID.
-    """
-
-    def __init__(self, f):
-        self.f = f
-        atributo = f.fk_label or getattr(f.fk_model, "__label_field__", None)
-        self.indice: dict[str, set] = {}
-        if atributo:
-            pk = f.fk_model.__mapper__.primary_key[0].name
-            otros = getattr(f.fk_model, "__buscar_por__", ()) or ()
-            for obj in f.fk_model.query.all():
-                for a in (atributo, *otros):
-                    texto = getattr(obj, a, None)
-                    if texto not in (None, ""):
-                        self.indice.setdefault(_norm(texto), set()).add(getattr(obj, pk))
-        self.atributo = atributo
-
-    def buscar(self, texto: str):
-        if not self.atributo:
-            raise ValueError("no se puede buscar por nombre; usá la columna con el ID")
-        ids = self.indice.get(_norm(texto), [])
-        if not ids:
-            raise ValueError(f"no existe «{texto}»")
-        if len(ids) > 1:
-            raise ValueError(f"hay {len(ids)} registros llamados «{texto}»; usá el ID")
-        return next(iter(ids))
-
-
 # ---------------------------------------------------------------------------
 # Importación
 # ---------------------------------------------------------------------------
@@ -212,7 +180,7 @@ def importar(spec: EntitySpec, contenido: bytes, nombre_archivo: str = "archivo.
         return resultado
 
     # --- validación de todas las filas -----------------------------------
-    buscadores = {c: _BuscadorFK(spec.fields[c]) for _, c, modo in columnas if modo == "texto"}
+    buscadores = {c: fk_core.BuscadorFK(spec.fields[c]) for _, c, modo in columnas if modo == "texto"}
     campos_archivo = {c: spec.fields[c] for _, c, _ in columnas}
     # Columnas numéricas: sus valores se leen en formato argentino (ver numero_csv).
     # Las FK quedan afuera: se escriben por nombre o por ID, nunca con miles.
