@@ -59,6 +59,7 @@ def pedido(client, m):
                                                     "cantidad": cantidad, "destino": "a_identificar"})
         assert r.status_code == 201, r.get_json()
         lineas[clave] = db_get(PedidoLinea, r.get_json()["pedido_linea_id"])
+    assert client.post(f"/pedidos/{p['pedido_id']}/accion/enviar_a_compras").status_code == 302
     return lineas
 
 
@@ -222,10 +223,11 @@ def test_vincular_y_adjudicar(client, lange, m, pedido):
     assert lp["pendiente_comprar"] == 1
 
 
-def test_adjudicar_redondea_a_envases_enteros(client, lange, m):
+def test_adjudicar_redondea_a_envases_enteros(client, lange, m, enviar):
     p = client.post("/api/pedidos", json={"fecha_pedido": "2026-11-23"}).get_json()
     client.post("/api/pedido_lineas", json={"pedido_id": p["pedido_id"], "material_id": m["aceite"].material_id,
                                             "cantidad": 30, "destino": "a_identificar"})
+    enviar(p["pedido_id"])  # «Vincular con pedidos» toma solo las líneas enviadas
     doc = _oferta(client, lange)
     _linea_oferta(client, doc, m["bidon"], cantidad=5, precio=300)
     client.post(f"/documentos_proveedor/{doc.documento_id}/accion/vincular_pedidos")

@@ -175,7 +175,8 @@ def vincular_con_pedidos(doc) -> str:
         materiales = [lo.material_id] + ([lo.material.material_generico_id] if lo.material.material_generico_id else [])
         ya = {a.pedido_linea_id for a in lo.adjudicaciones}
         candidatas = (PedidoLinea.query
-                      .filter(PedidoLinea.material_id.in_(materiales), PedidoLinea.estado != "anulado")
+                      .filter(PedidoLinea.material_id.in_(materiales), PedidoLinea.estado != "anulado",
+                              PedidoLinea.enviada_en.isnot(None))  # las en borrador no se cotizan
                       .order_by(PedidoLinea.pedido_linea_id).all())
         for lp in candidatas:
             if lp.pedido_linea_id in ya or (lp.pendiente_comprar or 0) <= 0:

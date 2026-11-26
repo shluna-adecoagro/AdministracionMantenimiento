@@ -1,6 +1,6 @@
 {#
   Una celda en edición (grilla). Variable: celda (VistasEntidad._celda), con
-  campo, cfg, valor (texto del control), control, opciones, id_lista, url (POST),
+  campo, columna (donde se muestra: casi siempre, el mismo campo), cfg, valor (texto del control), control, opciones, id_lista, url (POST),
   url_cancelar (GET de la fila en lectura) y error (opcional).
 
   El form reemplaza la fila entera (closest tr): así se actualizan las columnas
@@ -8,7 +8,7 @@
   grilla.js.
 #}
 {% set c = celda %}
-<td class="celda editando{% if c.error %} con-error{% endif %}" data-campo="{{ c.campo }}"
+<td class="celda editando{% if c.error %} con-error{% endif %}" data-campo="{{ c.columna }}"
     data-cancelar="{{ c.url_cancelar }}">
     <form hx-post="{{ c.url }}" hx-target="closest tr" hx-swap="outerHTML" hx-sync="this:drop">
         {% if c.control == "select" %}

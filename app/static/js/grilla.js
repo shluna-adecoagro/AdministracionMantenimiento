@@ -45,7 +45,12 @@
 
     function guardar(td) {
         const form = td && td.querySelector("form");
-        if (form) form.requestSubmit();
+        if (!form) return;
+        // Si la celda acaba de llegar, htmx puede no haber procesado todavía su
+        // hx-post (elegir en un select al instante): sin esto, el form se enviaría
+        // solo, como GET a la página. process() no hace nada si ya está procesado.
+        htmx.process(form);
+        form.requestSubmit();
     }
 
     function cancelar(td) {

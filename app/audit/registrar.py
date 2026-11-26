@@ -19,8 +19,9 @@ def clean_dict(data, ignore_fields=None):
 
     """
     Limpia el dict antes de guardarlo en auditoría:
-    - elimina campos datetime (no serializables) y pasa las fechas (date) a texto ISO
-    - elimina campos globales que no deben auditarse
+    - pasa las fechas y fechas con hora a texto ISO (ej: enviada_en de una línea
+      de pedido, que dice cuándo se envió a Compras)
+    - elimina campos globales que no deben auditarse (creado_en, actualizado_en)
     """
     if data is None:
         return None
@@ -37,13 +38,9 @@ def clean_dict(data, ignore_fields=None):
         if ignore_fields and k in ignore_fields:
             continue
 
-        # Ignorar datetime (no serializable)
-        if isinstance(v, datetime):
-            continue
-
-        # Una fecha sin hora (ej: fecha del pedido) sí se audita, como texto ISO.
-        if isinstance(v, date):
-            v = v.isoformat()
+        # Fechas (con o sin hora) como texto ISO: el JSON no las serializa.
+        if isinstance(v, (date, datetime)):
+            v = v.isoformat(sep=" ") if isinstance(v, datetime) else v.isoformat()
 
         limpio[k] = v
 

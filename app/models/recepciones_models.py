@@ -180,11 +180,13 @@ _pend_recibir = PedidoLinea.pendiente_recibir.expression
 _GUARDADO = case(*[(PedidoLinea.estado == o["value"], o["label"]) for o in ESTADOS_LINEA],
                  else_=PedidoLinea.estado)
 
-# Estado visible, en orden de prioridad. Es el que se muestra; el guardado solo
+# Estado visible, en orden de prioridad («Borrador»: todavía no se envió a
+# Compras). Es el que se muestra; el guardado solo
 # cuenta mientras no haya datos posteriores (adjudicaciones, OC, recepciones).
 PedidoLinea.estado_visible = column_property(
     case(
         (PedidoLinea.estado == "anulado", "Anulado"),
+        (PedidoLinea.enviada_en.is_(None), "Borrador"),
         (PedidoLinea.sin_conformidad.is_(True), "Cerrado"),
         (and_(_solicitada > 0, _pend_comprar <= _EPS, _pend_recibir <= _EPS), "Cerrado"),
         (and_(_recibida > 0, _pend_recibir <= _EPS), "Recibido"),

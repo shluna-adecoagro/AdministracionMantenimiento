@@ -40,6 +40,21 @@ class RegistroEnUso(ErrorIntegridad):
         self.bloqueantes = bloqueantes
 
 
+class NoEliminable(ErrorIntegridad):
+    """No se puede borrar por una regla de la entidad (eliminable_si)."""
+
+
+def permitido(resultado) -> str | None:
+    """
+    Resultado de una regla (editable_si, eliminable_si, creable_si): True (o None)
+    = se puede; False o un texto (el porqué) = no. Devuelve None si se puede, o
+    el porqué ("" si la regla no lo dice).
+    """
+    if resultado is True or resultado is None:
+        return None
+    return resultado if isinstance(resultado, str) else ""
+
+
 def _etiqueta_por_defecto(tabla: str, cantidad: int) -> str:
     return f"{cantidad} registro{'s' if cantidad != 1 else ''} de {tabla.replace('_', ' ')}"
 
@@ -112,12 +127,19 @@ class ServicioCRUD:
                texto, o una tupla ("ok" | "aviso", texto)), queda en
                registro.avisos_guardado para mostrárselo al usuario.
 
+    editable_si, eliminable_si, creable_si
+               reglas de edición según el registro (ver EntitySpec). Con
+               reglas_de_edicion=False no se aplican (el importador del histórico
+               de pedidos: para esas líneas, la fuente es el Excel); al_guardar lo
+               ve en registro.reglas_de_edicion.
+
     Para armar el servicio de una entidad del registry: app.crud.entidades.servicio().
     """
 
     def __init__(self, model, fields: dict, auditoria: dict | None = None,
                  etiqueta_tabla=None, confirmar: bool = True, al_guardar=None,
-                 completar=None):
+                 completar=None, editable_si=None, eliminable_si=None, creable_si=None,
+                 reglas_de_edicion: bool = True):
         self.model = model
         self.fields = fields
         self.auditoria = auditoria or {"enabled": False}
@@ -126,6 +148,44 @@ class ServicioCRUD:
         self.confirmar = confirmar
         self.al_guardar = al_guardar
         self.completar = completar
+        self.editable_si = editable_si or {}
+        self.eliminable_si = eliminable_si
+        self.creable_si = creable_si
+        self.reglas_de_edicion = reglas_de_edicion
+
+    # ------------------------------------------------------------------
+    # Reglas de edición según el registro (fase 13.2)
+    # ------------------------------------------------------------------
+    def congelados(self, registro) -> dict[str, str]:
+        """{campo: porqué} de los campos que no se pueden cambiar en este registro."""
+        resultado = {}
+        for campo, regla in self.editable_si.items():
+            porque = permitido(regla(registro))
+            if porque is not None:
+                resultado[campo] = porque
+        return resultado
+
+    def verificar_editables(self, registro, datos: dict) -> None:
+        """Rechaza los cambios reales a campos congelados (el mismo valor no es un cambio)."""
+        if not self.reglas_de_edicion:
+            return
+        errores = {}
+        for campo, valor in datos.items():
+            regla = self.editable_si.get(campo)
+            if regla is None or getattr(registro, campo) == valor:
+                continue
+            porque = permitido(regla(registro))
+            if porque is not None:
+                label = self.fields[campo].get("label", campo) if campo in self.fields else campo
+                errores[campo] = f"{label} no se puede cambiar" + (f": {porque}." if porque else ".")
+        if errores:
+            raise ErroresValidacion(errores)
+
+    def no_eliminable(self, registro) -> str | None:
+        """El porqué, si una regla impide eliminar el registro; None si se puede."""
+        if not self.reglas_de_edicion or self.eliminable_si is None:
+            return None
+        return permitido(self.eliminable_si(registro))
 
     # ------------------------------------------------------------------
     def completar_dependencias(self, datos: dict, registro=None) -> dict:
@@ -205,6 +265,10 @@ class ServicioCRUD:
         if self.completar is not None:
             datos = self.completar(dict(datos), None)
         self.verificar_opciones(datos)
+        if self.reglas_de_edicion and self.creable_si is not None:
+            porque = permitido(self.creable_si(datos))
+            if porque is not None:
+                raise ErroresValidacion({"_general": porque or "No se puede crear este registro."})
         # Numeración automática: el campo vacío toma el siguiente número de su serie
         # (dentro de cada valor de numeracion_por, si lo tiene).
         for campo, cfg in self.fields.items():
@@ -227,6 +291,7 @@ class ServicioCRUD:
 
     def actualizar(self, registro, datos: dict, motivo: str | None = None, usuario: str = "sistema"):
         datos, _ = self._separar_alta(datos)  # los campos de alta no existen al modificar
+        self.verificar_editables(registro, datos)
         datos = self.completar_dependencias(datos, registro)
         if self.completar is not None:
             datos = self.completar(dict(datos), registro)
@@ -260,6 +325,9 @@ class ServicioCRUD:
         self._confirmar("DELETE", registro, anterior, motivo, usuario)
 
     def verificar_eliminable(self, registro):
+        porque = self.no_eliminable(registro)
+        if porque is not None:
+            raise NoEliminable(f"No se puede eliminar: {porque}." if porque else "No se puede eliminar.")
         bloqueos = dependencias.bloqueantes(registro)
         if bloqueos:
             partes = [self.etiqueta_tabla(tabla, n) for tabla, n in bloqueos]
@@ -307,6 +375,7 @@ class ServicioCRUD:
                     ignore_fields=self.auditoria.get("ignore_fields", []),
                 )
             if self.al_guardar is not None and tipo != "DELETE":
+                registro.reglas_de_edicion = self.reglas_de_edicion
                 aviso = self.al_guardar(registro, tipo, cambiados or set())
                 if isinstance(aviso, str):
                     aviso = ("aviso", aviso)

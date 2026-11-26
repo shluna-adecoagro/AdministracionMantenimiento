@@ -133,3 +133,12 @@ def categorias_activo(db, cuenta):
             resultado[n] = c
     db.session.commit()
     return resultado
+
+
+@pytest.fixture
+def enviar(client):
+    """enviar(pedido_id): «Enviar a Compras» las líneas en borrador del pedido (fase 13.2)."""
+    def _enviar(pedido_id):
+        r = client.post(f"/pedidos/{pedido_id}/accion/enviar_a_compras")
+        assert r.status_code == 302, r.get_data(as_text=True)
+    return _enviar

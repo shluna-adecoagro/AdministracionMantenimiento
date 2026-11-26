@@ -1043,3 +1043,13 @@ table.grilla { overflow: visible; }
   background: #fef2f2; border: 1px solid #fecaca; border-radius: 0 0 6px 6px;
 }
 .grilla tr.htmx-request td { opacity: 0.6; }
+/* Celda congelada (editable_si, fase 13.2): se ve como calculada, con el porqué
+   como título, y el cursor lo indica. */
+.grilla td.congelada { cursor: not-allowed; }
+
+/* Acciones de una fila (ej: «Anular o cancelar») y de un formulario de acción.
+   La columna de acciones no se recorta (las td tienen un ancho máximo). */
+td.tabla-acciones { max-width: none; overflow: visible; }
+td.tabla-acciones form.form-en-linea { display: inline-block; margin: 0 6px 0 0; }
+td.tabla-acciones form.form-en-linea button { padding: 0.45rem 0.9rem; font-size: 0.9rem; }
+.accion-ayuda { color: #475569; margin: 0 0 1rem; }

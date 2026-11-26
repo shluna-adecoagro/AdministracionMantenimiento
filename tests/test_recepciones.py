@@ -62,12 +62,19 @@ def oferta(client, db):
     return db.session.get(DocumentoProveedor, r.get_json()["documento_id"])
 
 
-def _linea(client, pedido, material, cantidad, **destino):
+def _linea(client, pedido, material, cantidad, enviar=True, **destino):
     destino = destino or {"destino": "a_identificar"}
     r = client.post("/api/pedido_lineas", json={"pedido_id": pedido["pedido_id"], "material_id": material.material_id,
                                                 "cantidad": cantidad, **destino})
     assert r.status_code == 201, r.get_json()
+    # Enviada a Compras (fase 13.2): el circuito de compra y recepción es el de una línea enviada.
+    if enviar:
+        _enviar(client, pedido)
     return r.get_json()["pedido_linea_id"]
+
+
+def _enviar(client, pedido):
+    assert client.post(f"/pedidos/{pedido['pedido_id']}/accion/enviar_a_compras").status_code == 302
 
 
 def _destino(client, linea_id, cantidad, **extra):
@@ -105,8 +112,9 @@ def _linea_api(client, linea_id):
 # ---------------------------------------------------------------------------
 
 def test_reparto_por_unidad_redondea_y_el_resto_va_al_primero(client, pedido, oferta, m):
-    linea = _linea(client, pedido, m["filtro"], 3)
-    _destino(client, linea, 2)
+    linea = _linea(client, pedido, m["filtro"], 3, enviar=False)
+    _destino(client, linea, 2)  # los destinos se reparten en borrador
+    _enviar(client, pedido)
     _adjudicar(client, oferta, m["filtro"], 3, linea, 3)  # se compraron 3 de 5
     d1, d2 = _destinos(linea)
     assert (d1.comprada, d2.comprada) == (2, 1)  # 1,8 y 1,2 → 1 y 1, y el resto al primero
@@ -118,8 +126,9 @@ def test_reparto_por_unidad_redondea_y_el_resto_va_al_primero(client, pedido, of
 
 
 def test_reparto_en_litros_no_redondea(client, pedido, oferta, m):
-    linea = _linea(client, pedido, m["aceite"], 30)
+    linea = _linea(client, pedido, m["aceite"], 30, enviar=False)
     _destino(client, linea, 10)
+    _enviar(client, pedido)
     _adjudicar(client, oferta, m["bidon"], 1, linea, 1)  # 20 L de 40
     assert [d.comprada for d in _destinos(linea)] == [15, 5]
 
@@ -219,9 +228,13 @@ def test_salteo_y_anulado(client, pedido, oferta, m):
     linea = _linea(client, pedido, m["filtro"], 2)
     _adjudicar(client, oferta, m["filtro"], 2, linea, 2)
     assert _linea_api(client, linea)["estado_salteado"] == "Sí"  # nunca pasó por «en cotización»
-    client.patch(f"/api/pedido_lineas/{linea}", json={"estado": "anulado", "motivo_operacion_id":
-                 MotivoOperacion.query.filter_by(tipo_operacion="ANULACION").first().motivo_operacion_id})
-    assert _linea_api(client, linea)["estado_visible"] == "Anulado"
+    anulacion = MotivoOperacion.query.filter_by(tipo_operacion="ANULACION").first().motivo_operacion_id
+    # Con algo comprado no se anula entera (fase 13.2).
+    r = client.patch(f"/api/pedido_lineas/{linea}", json={"estado": "anulado", "motivo_operacion_id": anulacion})
+    assert r.status_code == 400 and "ya hay compras" in _errores(r)["estado"]
+    otra = _linea(client, pedido, m["filtro"], 1)
+    client.patch(f"/api/pedido_lineas/{otra}", json={"estado": "anulado", "motivo_operacion_id": anulacion})
+    assert _linea_api(client, otra)["estado_visible"] == "Anulado"
 
 
 def test_sin_conformidad_cierra(client, pedido, m):
