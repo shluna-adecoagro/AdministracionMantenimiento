@@ -1001,3 +1001,33 @@ table {
   gap: 0.5rem;
 }
 .seccion-botones form { margin: 0; }
+
+/* ============================================================
+   EDICIÓN EN LÍNEA (grilla editable, fase 13; ver static/js/grilla.js)
+   ============================================================ */
+/* El mensaje de error sale por debajo de la celda: la tabla no lo recorta. */
+table.grilla { overflow: visible; }
+.grilla td.celda { cursor: cell; }
+.grilla td.calc { color: #64748b; background: #fafbfc; }
+.grilla td.activa,
+.grilla td:focus { outline: 2px solid #2563eb; outline-offset: -2px; }
+.grilla td.editando {
+  padding: 0; outline: 2px solid #2563eb; outline-offset: -2px; position: relative;
+  overflow: visible;  /* el mensaje de error sale por debajo (td recorta el texto largo) */
+}
+.grilla td.editando form { margin: 0; height: 100%; }
+.grilla td.editando input,
+.grilla td.editando select {
+  width: 100%; min-height: 2.75rem; border: 0; padding: 0 0.9rem;
+  font: inherit; background: #eff6ff; outline: none;
+}
+.grilla td.editando input.num { text-align: right; }
+.grilla td.con-error { outline-color: #dc2626; }
+.grilla td.con-error input,
+.grilla td.con-error select { background: #fef2f2; }
+.grilla .error-celda {
+  position: absolute; left: 0; top: 100%; z-index: 5; min-width: 16rem;
+  color: #b91c1c; font-size: 0.78rem; padding: 0.25rem 0.5rem;
+  background: #fef2f2; border: 1px solid #fecaca; border-radius: 0 0 6px 6px;
+}
+.grilla tr.htmx-request td { opacity: 0.6; }

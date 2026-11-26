@@ -195,6 +195,7 @@ Lo mínimo es `{"model": MiModelo}`. Claves disponibles:
 | `completar` | función `(datos, registro) -> datos` que corre **antes** de guardar (web, API e importación), para completar o normalizar datos; así la auditoría ya los registra. `registro` es `None` en un alta | sector y cuenta sugeridos del destino de un pedido, `overrides/pedidos.py` |
 | `campos_alta` | campos que solo se piden al crear (no son columnas): `{campo: {label, tipo, required, options, fk_model}}`. Llegan a `al_guardar` en `registro.datos_alta` | cantidad y destino principal de una línea de pedido |
 | `orden_campos` | primeros campos del formulario, en ese orden | la cantidad y el destino junto al material |
+| `edicion_en_linea` | campos que se editan en la grilla (listado y pestaña del padre), sin abrir el formulario: guardan con el mismo servicio (`completar`, `al_guardar`, auditoría con el motivo «Edición en línea»). Tienen que estar en `listado`; el registry rechaza calculados, archivos, campos de alta, de solo importación (ERP) y el padre principal. Una FK con más de 15 registros se edita escribiendo (código, etiqueta o el comienzo) | material, descripción y nº de OC de las líneas de pedido |
 | `auditoria`, `auditoria_ignorar` | activar o no el historial; campos que no se registran | — |
 
 Dentro de `fields`, cada campo acepta, entre otras: `label`, `tipo` (`text`, `number`,

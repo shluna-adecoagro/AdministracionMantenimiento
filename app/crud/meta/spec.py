@@ -203,6 +203,10 @@ class EntitySpec:
     # donde los IDs no coinciden. Los usa la importación para actualizar en vez
     # de duplicar. Ej: ("nombre_sector",) o ("nombre_ubicacion", "sector_id").
     clave_natural: tuple[str, ...] = ()
+    # Campos que se editan en la grilla (edición en línea, fase 13). Tienen que
+    # estar en `listado` y ser datos propios: ni calculados, ni archivos, ni de
+    # solo importación (dueño: el ERP). Lo valida el registry.
+    edicion_en_linea: tuple[str, ...] = ()
 
     @property
     def padre(self) -> ParentSpec | None:
