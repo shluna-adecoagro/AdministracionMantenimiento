@@ -25,6 +25,7 @@ OVERRIDES = {
             "sector_id", "ubicacion_id", "estado_activo_id",
         ],
         "clave_natural": ["numero_activo"],
+        "excluir": ["etiqueta"],  # es número + descripción, que ya se muestran
         # BOM: al crear el activo (o asignarle modelo, si su BOM está vacío) se
         # copia el del modelo; la acción trae los materiales nuevos del modelo.
         "al_guardar": bom.al_guardar_activo,

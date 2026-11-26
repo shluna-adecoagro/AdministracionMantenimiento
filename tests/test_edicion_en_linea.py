@@ -266,7 +266,7 @@ def test_umbral_de_busqueda(app, db, unidades):
     f = REGISTRY["pedido_lineas"].fields["material_id"]
     cat = CategoriaMaterial.query.first().categoria_material_id
     _guardar(db, *[Material(codigo=f"M{i}", descripcion=f"M {i}", categoria_material_id=cat)
-                   for i in range(fk.UMBRAL_BUSQUEDA)])
+                   for i in range(fk.UMBRAL_LISTA)])
     assert not fk.usa_busqueda(f)
     _guardar(db, Material(codigo="M-otro", descripcion="Uno más", categoria_material_id=cat))
     assert fk.usa_busqueda(f)

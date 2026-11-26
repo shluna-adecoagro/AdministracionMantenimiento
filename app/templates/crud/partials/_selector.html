@@ -1,0 +1,32 @@
+{#
+  Campo con lista: se elige una opción tipeando, y la lista se acorta a las que
+  contienen el texto (por número, código o descripción). Lo usan los formularios
+  y los filtros cuando la lista es larga (ver fk.usa_lista).
+
+  - El campo visible no se envía; el valor elegido (el ID) va en el oculto.
+  - Cada opción se identifica por su `texto`, que no se repite (fk.con_texto).
+  - El comportamiento (validar, filtrar dependientes) está en static/js/selectores.js.
+
+  id: id del campo visible (el oculto es <id>__valor y la lista <id>__lista).
+  campo: nombre del campo; con_nombre=False no lo envía (campo que solo filtra).
+#}
+{% macro campo_lista(id, campo, opciones, valor, con_nombre=True, required=False,
+                     placeholder="", clase="") -%}
+{%- set ns = namespace(texto="", valor="") -%}
+{%- if valor is not none and valor | string != "" -%}
+    {%- for o in opciones if o.value | string == valor | string -%}
+        {%- set ns.texto, ns.valor = o.texto, o.value -%}
+    {%- endfor -%}
+{%- endif -%}
+<input type="text" id="{{ id }}" class="campo-lista {{ clase }}" list="{{ id }}__lista"
+       data-campo="{{ campo }}" value="{{ ns.texto }}" autocomplete="off"
+       placeholder="{{ placeholder }}" {% if required %}required{% endif %}>
+<input type="hidden" id="{{ id }}__valor" {% if con_nombre %}name="{{ campo }}"{% endif %}
+       value="{{ ns.valor }}">
+<datalist id="{{ id }}__lista">
+    {%- for o in opciones %}
+    <option value="{{ o.texto }}" data-valor="{{ o.value }}"
+            {%- if o.deps %} data-deps='{{ o.deps | tojson }}'{% endif %}></option>
+    {%- endfor %}
+</datalist>
+{%- endmacro %}

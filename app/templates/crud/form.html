@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from "crud/partials/_selector.html" import campo_lista %}
 
 {% block content %}
 
@@ -59,8 +60,15 @@
                         <textarea name="{{ campo }}" id="{{ campo }}"
                                   {% if cfg.required %}required{% endif %}>{{ modelo.get(campo) if modelo.get(campo) is not none else '' }}</textarea>
 
+                    {% elif cfg.tipo in ("select", "fk") and campo in con_lista %}
+                        {# Lista larga: se elige tipeando (número, código o descripción). #}
+                        {{ campo_lista(campo, campo, fk_data[campo], modelo.get(campo),
+                                       con_nombre=not es_filtro, required=cfg.required,
+                                       placeholder="Escribí para buscar…") }}
+
                     {% elif cfg.tipo == "select" %}
-                        <select name="{{ campo }}" id="{{ campo }}" {% if cfg.required %}required{% endif %}>
+                        <select name="{{ campo }}" id="{{ campo }}" data-campo="{{ campo }}"
+                                {% if cfg.required %}required{% endif %}>
                             {% if not cfg.required %}<option value="">—</option>{% endif %}
                             {% for opt in cfg.options %}
                                 <option value="{{ opt.value }}"
@@ -72,7 +80,7 @@
 
                     {% elif cfg.tipo == "fk" %}
                         <select {% if not es_filtro %}name="{{ campo }}"{% endif %} id="{{ campo }}"
-                                {% if cfg.required %}required{% endif %}>
+                                data-campo="{{ campo }}" {% if cfg.required %}required{% endif %}>
                             {% if not cfg.required %}<option value="">—</option>{% endif %}
                             {% for opt in fk_data[campo] %}
                                 <option value="{{ opt.value }}"
@@ -158,67 +166,14 @@
         </div>
 
         <script>
-        /*
-         * Selects dependientes (ej: modelo según la marca y la categoría,
-         * ubicación según el sector). Cada opción del select hijo lleva data-deps:
-         * {id del select padre: valor del padre al que pertenece}.
-         *  - Con padres elegidos, el hijo muestra solo las opciones que coinciden
-         *    con todos.
-         *  - Si falta elegir algún padre, se ven los padres entre paréntesis; al
-         *    elegir una opción, los padres vacíos se completan solos.
-         */
+        // Selects y campos con lista dependientes (ej: modelo según la marca y la
+        // categoría, ubicación según el sector): ver static/js/selectores.js.
         document.addEventListener("DOMContentLoaded", function () {
             const form = document.getElementById("form-entidad");
-            const selects = Array.from(form.querySelectorAll("select"));
-            const originales = {};
-            selects.forEach(sel => {
-                originales[sel.id] = Array.from(sel.options).map(o => o.cloneNode(true));
-            });
-
-            const deps = o => (o && o.dataset.deps) ? JSON.parse(o.dataset.deps) : null;
-            const texto = v => (v === null || v === undefined) ? "" : String(v);
-
-            function padresDe(hijo) {
-                const d = deps(originales[hijo.id].find(o => o.dataset.deps));
-                return d ? Object.keys(d).map(id => document.getElementById(id)).filter(Boolean) : [];
-            }
-
-            function filtrar(hijo, padres) {
-                const elegidos = padres.filter(p => p.value);
-                const actual = hijo.value;
-                hijo.innerHTML = "";
-                originales[hijo.id].forEach(o => {
-                    const d = deps(o);
-                    if (d && elegidos.some(p => texto(d[p.id]) !== p.value)) return;
-                    const copia = o.cloneNode(true);
-                    if (d) {
-                        copia.textContent = (elegidos.length < padres.length && o.dataset.grupo)
-                            ? `${o.dataset.label} (${o.dataset.grupo})`
-                            : o.dataset.label;
-                    }
-                    hijo.appendChild(copia);
-                });
-                const sigue = Array.from(hijo.options).some(o => o.value === actual);
-                if (sigue) { hijo.value = actual; } else { hijo.selectedIndex = 0; }
-            }
-
-            selects.forEach(hijo => {
-                const padres = padresDe(hijo);
-                if (!padres.length) return;
-
-                filtrar(hijo, padres);
-                padres.forEach(p => p.addEventListener("change", () => filtrar(hijo, padres)));
-                hijo.addEventListener("change", () => {
-                    const d = deps(hijo.options[hijo.selectedIndex]);
-                    if (!d) return;
-                    padres.forEach(p => {
-                        if (!p.value && texto(d[p.id])) {
-                            p.value = texto(d[p.id]);
-                            p.dispatchEvent(new Event("change"));
-                        }
-                    });
-                });
-            });
+            Selectores.enlazarDependientes(
+                Selectores.de(form, "select[data-campo], input.campo-lista"),
+                { completarPadres: true },
+            );
         });
         </script>
 

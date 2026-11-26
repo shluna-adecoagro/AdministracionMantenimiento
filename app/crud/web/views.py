@@ -213,8 +213,9 @@ class VistasEntidad:
         opciones = fk.opciones_de(self.fields)
         for c in campos_select:
             if c not in opciones:  # opciones fijas y Sí/No
-                opciones[c] = [{"value": _valor_url(o["value"]), "label": o["label"], "deps": None, "grupo": None}
-                               for o in self.fields[c].options]
+                opciones[c] = fk.con_texto([
+                    {"value": _valor_url(o["value"]), "label": o["label"], "deps": None, "grupo": None}
+                    for o in self.fields[c].options])
 
         return render_template(
             "crud/listado_entidad.html",
@@ -229,6 +230,8 @@ class VistasEntidad:
             valores={c: _valor_url(v) for c, v in valores.items()},
             campo_actual=campo,
             fk_data=opciones,
+            # Filtros que se eligen tipeando (campo con lista) en lugar de un select.
+            con_lista={c for c in campos_select if fk.usa_lista(self.fields[c], opciones[c])},
             grilla=contexto_grilla(s, s.listado, {}),
             q=q,
         )
@@ -286,6 +289,10 @@ class VistasEntidad:
             for campo, valor in repository.valores(registro).items()
         }
 
+    def _con_lista(self, opciones: dict) -> set[str]:
+        """Campos del formulario que se eligen tipeando (campo con lista) en lugar de un select."""
+        return {c for c, ops in opciones.items() if fk.usa_lista(self.fields[c], ops)}
+
     def _render_form(self, tipo_operacion, modelo, padre, url_cancelar, errores=None, status=200):
         padre, padre_id = padre
         s = self.spec
@@ -293,6 +300,12 @@ class VistasEntidad:
             titulo = f"{'Nueva' if s.genero == 'f' else 'Nuevo'} {s.label_singular}"
         else:
             titulo = f"Editar {s.label_singular}"
+        opciones = fk.opciones_de(self.fields)
+        for c, f in self.fields.items():
+            if f.tipo == "select":  # opciones fijas: también pueden ir con lista
+                opciones[c] = fk.con_texto([
+                    {"value": o["value"], "label": o["label"], "deps": None, "grupo": None}
+                    for o in f.options])
         return render_template(
             "crud/form.html",
             **self._contexto(padre, padre_id),
@@ -300,7 +313,8 @@ class VistasEntidad:
             nombre_entidad=inicial(self.spec.label_singular),
             modelo=modelo,
             tipo_operacion=tipo_operacion,
-            fk_data=fk.opciones_de(self.fields),
+            fk_data=opciones,
+            con_lista=self._con_lista(opciones),
             sugerencias=fk.sugerencias_de(self.fields),
             campos_filtro=self._campos_filtro(),
             errores=errores or {},

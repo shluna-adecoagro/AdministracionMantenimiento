@@ -64,7 +64,11 @@ class Activo(db.Model, ModelMixin, AuditMixin):
     """
 
     __tablename__ = "activos"
-    __label_field__ = "descripcion"
+    # Se muestra como «AB123CD — Tractor John Deere 6110» (las descripciones se repiten).
+    __label_field__ = "etiqueta"
+    # Al importar, una FK a un activo se reconoce también por el número o por la
+    # descripción (si no se repite).
+    __buscar_por__ = ("numero_activo", "descripcion")
 
     activo_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     uuid = db.Column(
@@ -75,6 +79,9 @@ class Activo(db.Model, ModelMixin, AuditMixin):
     numero_activo = db.Column(db.String(50), nullable=False, unique=True,
                               info={"label": "Número de activo"})
     descripcion = db.Column(db.String(200), nullable=False, info={"label": "Descripción"})
+
+    # Cómo se muestra en selects, listados y exportaciones.
+    etiqueta = column_property(numero_activo + " — " + descripcion, info={"label": "Activo"})
 
     # FK → CategoriaActivo (el tipo de activo es el de la categoría)
     categoria_activo_id = db.Column(

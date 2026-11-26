@@ -32,6 +32,7 @@ from app.crud.meta.spec import (
     GENEROS,
     GRUPOS,
     AccionSpec,
+    SELECTORES,
     TIPOS_CAMPO,
     EntitySpec,
     FieldSpec,
@@ -245,6 +246,10 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
             errores.append(f"{pref} fields.{c}: tipo 'fk' sin 'fk_model'")
         if f.fk_filtro is not None and (f.tipo != "fk" or not callable(f.fk_filtro)):
             errores.append(f"{pref} fields.{c}: fk_filtro debe ser una función, en un campo FK")
+        if f.selector is not None and f.selector not in SELECTORES:
+            errores.append(f"{pref} fields.{c}: selector '{f.selector}' inválido (válidos: {sorted(SELECTORES)})")
+        elif f.selector is not None and f.tipo not in ("fk", "select"):
+            errores.append(f"{pref} fields.{c}: selector solo aplica a un campo 'fk' o 'select'")
         if f.extensiones and f.tipo != "file":
             errores.append(f"{pref} fields.{c}: extensiones solo aplica a un campo de tipo 'file'")
         if f.numeracion:

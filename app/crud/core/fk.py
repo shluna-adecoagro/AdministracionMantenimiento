@@ -56,6 +56,37 @@ def destino(registro, campo: str, cfg: dict):
 # Opciones para formularios y filtros
 # ---------------------------------------------------------------------------
 
+# Hasta esta cantidad de opciones se elige con un <select>; con más, con un campo
+# con lista (<datalist>) que se acorta al tipear: en formularios y filtros
+# (usa_lista) y en la grilla (usa_busqueda). FieldSpec.selector lo fija.
+UMBRAL_LISTA = 15
+
+
+def usa_lista(cfg: dict, opciones_campo: list[dict]) -> bool:
+    """True si el campo se elige con un campo con lista en lugar de un <select>."""
+    if cfg.get("selector"):
+        return cfg["selector"] == "lista"
+    return len(opciones_campo) > UMBRAL_LISTA
+
+
+def con_texto(opciones_campo: list[dict]) -> list[dict]:
+    """
+    Agrega a cada opción `texto`: lo que se ve y se tipea en un campo con lista.
+    Es la etiqueta más el grupo («5090E (John Deere, Tractor)») y no se repite:
+    el texto es lo que identifica la opción elegida. Si dos opciones quedan
+    iguales, se distinguen por el ID («Equipo (ID 7)»).
+    """
+    for o in opciones_campo:
+        o["texto"] = f"{o['label']} ({o['grupo']})" if o.get("grupo") else str(o["label"])
+    vistos: dict[str, int] = {}
+    for o in opciones_campo:
+        vistos[o["texto"].casefold()] = vistos.get(o["texto"].casefold(), 0) + 1
+    for o in opciones_campo:
+        if vistos[o["texto"].casefold()] > 1:
+            o["texto"] = f"{o['texto']} (ID {o['value']})"
+    return opciones_campo
+
+
 def opciones(cfg: dict) -> list[dict]:
     """
     Opciones de un <select> de FK.
@@ -87,7 +118,7 @@ def opciones(cfg: dict) -> list[dict]:
                     nombres.append(str(etiqueta(padre, {})))
             opcion["grupo"] = ", ".join(nombres) or None
         resultado.append(opcion)
-    return sorted(resultado, key=lambda o: (str(o["grupo"] or ""), str(o["label"] or "")))
+    return con_texto(sorted(resultado, key=lambda o: (str(o["grupo"] or ""), str(o["label"] or ""))))
 
 
 def opciones_de(fields: dict) -> dict[str, list[dict]]:
@@ -115,11 +146,6 @@ def sugerencias_de(fields: dict) -> dict[str, list[str]]:
 # ---------------------------------------------------------------------------
 # Búsqueda por texto (importación CSV y edición en línea)
 # ---------------------------------------------------------------------------
-
-# Una FK con más registros que esto se edita en la grilla con búsqueda por texto
-# (<input list>); con menos, con un <select>. Se cuenta al abrir la celda.
-UMBRAL_BUSQUEDA = 15
-
 
 class NoEncontrado(ValueError):
     """Ningún registro coincide con el texto."""
@@ -182,11 +208,17 @@ class BuscadorFK:
 
 
 def usa_busqueda(cfg: dict) -> bool:
-    """True si la FK tiene más de UMBRAL_BUSQUEDA opciones (se edita escribiendo)."""
+    """
+    True si la FK se edita en la grilla escribiendo (<input list>): con más de
+    UMBRAL_LISTA registros, o si FieldSpec.selector lo fija (mismo criterio que
+    usa_lista en formularios y filtros). Se cuenta al abrir la celda.
+    """
+    if cfg.get("selector"):
+        return cfg["selector"] == "lista"
     consulta = cfg["fk_model"].query
     if cfg.get("fk_filtro") is not None:
         consulta = consulta.filter(cfg["fk_filtro"]())
-    return consulta.limit(UMBRAL_BUSQUEDA + 1).count() > UMBRAL_BUSQUEDA
+    return consulta.limit(UMBRAL_LISTA + 1).count() > UMBRAL_LISTA
 
 
 def validar_existencia(fields: dict, datos: dict) -> None:
