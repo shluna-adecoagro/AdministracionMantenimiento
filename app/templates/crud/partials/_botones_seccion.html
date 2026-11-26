@@ -1,0 +1,25 @@
+{#
+  Botones del encabezado de un listado: las acciones de la pestaña (ej: «Enviar a
+  Compras» en las líneas del pedido) y «Crear». Con `botones.id`, el alta rápida
+  de la grilla los reemplaza fuera de banda (las acciones visibles pueden cambiar).
+  Variables: botones = {id (opcional), acciones, boton_url, boton_texto}; oob (opcional).
+#}
+<div class="seccion-botones"{% if botones.id %} id="{{ botones.id }}"{% endif %}{% if oob %} hx-swap-oob="true"{% endif %}>
+    {# Acciones de la pestaña (ej: «Traer ítems del modelo» en el BOM del activo) #}
+    {% for a in botones.acciones or [] %}
+        {% if a.con_formulario %}
+            <a href="{{ a.url }}" class="btn-secondary">{{ a.label }}</a>
+        {% else %}
+        <form method="POST" action="{{ a.url }}"
+              {% if a.confirmar %}onsubmit="return confirm({{ a.confirmar | tojson }})"{% endif %}>
+            <button type="submit" class="btn-secondary">{{ a.label }}</button>
+        </form>
+        {% endif %}
+    {% endfor %}
+
+    {% if botones.boton_url %}
+        <a href="{{ botones.boton_url }}" class="btn-success">
+            {{ botones.boton_texto }}
+        </a>
+    {% endif %}
+</div>

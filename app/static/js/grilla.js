@@ -3,7 +3,10 @@
 // htmx hace los pedidos y los reemplazos; esto solo maneja el teclado y el foco:
 //   * flechas para moverse; Enter, F2 o empezar a escribir para editar;
 //   * en edición: Enter guarda y baja, Tab guarda y va a la derecha, Esc cancela;
-//     salir de la celda (clic afuera) también guarda.
+//     salir de la celda (clic afuera) también guarda;
+//   * fila de alta (tr.fila-alta, alta rápida): inputs comunes de un form; Enter
+//     agrega la línea. Flecha abajo desde la última fila lleva a la de alta y
+//     flecha arriba desde la de alta, a la última fila.
 //
 // Las filas y celdas las arma el servidor desde la spec (crud/partials/_fila.html
 // y _celda_edicion.html). Viene de la demo herramientas/demo_edicion_en_linea/.
@@ -87,6 +90,17 @@
             }
             return;
         }
+        // --- Fila de alta: flecha arriba vuelve a la última fila de la grilla.
+        const alta = e.target.closest && e.target.closest(".grilla tr.fila-alta");
+        if (alta) {
+            if (e.key === "ArrowUp" && !e.target.matches("select")) {
+                const filas = Array.from(alta.closest("tbody").querySelectorAll(":scope > tr.fila"));
+                const ultima = filas[filas.length - 1];
+                if (ultima) { e.preventDefault(); enfocar(celdasDe(ultima)[0]); }
+            }
+            return;
+        }
+
         const td = e.target.closest && e.target.closest(".grilla td[data-campo]");
         if (!td) return;
 
@@ -100,7 +114,15 @@
 
         // --- Celda en lectura
         const flechas = { ArrowDown: "abajo", ArrowUp: "arriba", ArrowRight: "derecha", ArrowLeft: "izquierda" };
-        if (flechas[e.key]) { e.preventDefault(); enfocar(vecina(td, flechas[e.key])); return; }
+        if (flechas[e.key]) {
+            e.preventDefault();
+            const otra = vecina(td, flechas[e.key]);
+            // Desde la última fila, abajo lleva a la fila de alta (si la hay).
+            const alta = !otra && e.key === "ArrowDown" ? td.closest("tbody").querySelector(":scope > tr.fila-alta") : null;
+            if (alta) alta.querySelector("input, select").focus();
+            else enfocar(otra);
+            return;
+        }
         if (e.key === "Tab") {
             const otra = vecina(td, e.shiftKey ? "izquierda" : "derecha");
             if (otra) { e.preventDefault(); enfocar(otra); }
@@ -147,6 +169,15 @@
 
     // ------------------------------------------------------------ después de cada reemplazo
     document.addEventListener("htmx:afterSettle", () => {
+        // Alta rápida: la fila de alta nueva (o con errores) dice qué celda recibe el foco.
+        const deAlta = document.querySelector(".grilla tr.fila-alta [data-foco-alta]");
+        if (deAlta) {
+            deAlta.removeAttribute("data-foco-alta");
+            deAlta.focus();
+            if (deAlta.select) deAlta.select();
+            return;
+        }
+
         // Se abrió una celda para editar: foco en su control.
         const td = editando();
         if (td) {

@@ -1,0 +1,44 @@
+{#
+  Fila de alta de la grilla (alta rápida, fase 13.3): la última de la pestaña del
+  padre. Variable: alta (contexto_alta en web/views.py).
+
+  Los controles apuntan al form alta.form_id (atributo form=), que está fuera de
+  la tabla: un <form> no puede ir dentro de un <tr>. Enter en cualquier celda
+  agrega. alta.foco: la celda que recibe el foco (la lee grilla.js).
+#}
+{% set a = alta %}
+<tr id="{{ a.id }}" class="fila-alta">
+    {% for c in a.layout %}
+        {% if c %}
+            <td colspan="{{ c.colspan }}" class="celda-alta{% if c.error %} con-error{% endif %}">
+                {% if c.control == "select" %}
+                    <select form="{{ a.form_id }}" name="{{ c.nombre }}" aria-label="{{ c.label }}"
+                            {% if a.foco == c.nombre %}data-foco-alta{% endif %}>
+                        <option value="">{{ c.label }}</option>
+                        {% for o in c.opciones %}
+                            <option value="{{ o.value }}" {% if o.value | string == c.valor | string %}selected{% endif %}>{{ o.label }}</option>
+                        {% endfor %}
+                    </select>
+                {% else %}
+                    <input form="{{ a.form_id }}" name="{{ c.nombre }}" value="{{ c.valor }}" autocomplete="off"
+                           placeholder="{{ c.label }}" aria-label="{{ c.label }}"
+                           {% if c.control == "lista" %}list="{{ c.id_lista }}"{% endif %}
+                           {% if c.control == "number" %}inputmode="decimal" class="num"{% endif %}
+                           {% if a.foco == c.nombre %}data-foco-alta{% endif %}>
+                    {% if c.control == "lista" %}
+                        <datalist id="{{ c.id_lista }}">
+                            {% for texto in c.opciones %}<option value="{{ texto }}"></option>{% endfor %}
+                        </datalist>
+                    {% endif %}
+                {% endif %}
+                {% if c.error %}<div class="error-celda" role="alert">{{ c.error }}</div>{% endif %}
+            </td>
+        {% else %}
+            <td></td>
+        {% endif %}
+    {% endfor %}
+    <td class="tabla-acciones">
+        <button form="{{ a.form_id }}" type="submit" class="btn-success">Agregar</button>
+        {% if a.error %}<div class="error-celda" role="alert">{{ a.error }}</div>{% endif %}
+    </td>
+</tr>

@@ -17,6 +17,13 @@ Si la spec declara `edicion_en_linea`, además (fase 13, grilla con htmx):
                                         la celda abierta y el error (422)
     GET  /<entidad>/<id>/fila           la fila en lectura (Esc)
 
+Si declara `alta_en_linea` (fase 13.3, alta rápida), la pestaña del padre
+termina con una fila de alta:
+
+    POST /<entidad>/alta_en_linea?<fk del padre>=<id>
+                                        crea; la fila nueva y una fila de alta
+                                        vacía, o la fila de alta con los errores (422)
+
 Si la spec declara `acciones`: /<entidad>/<id>/accion/<accion> (POST; con
 `campos`, además GET con el formulario de la acción).
 
@@ -48,6 +55,7 @@ from app.core.db import db
 from app.crud.core import coercion, dependencias, fk, repository
 from app.crud.core.coercion import ErroresValidacion
 from app.crud.core.files import ArchivoInvalido, guardar
+from app.crud.core.interpretes import buscar_por_texto
 from app.crud.core.service import ErrorIntegridad, ServicioCRUD, permitido
 from app.crud.entidades import servicio
 from app.crud.meta.spec import EntitySpec, ParentSpec
@@ -57,6 +65,7 @@ BLUEPRINT = "crud"
 # Motivo que la auditoría registra para lo guardado desde la grilla. Es fijo: no
 # está en el catálogo de motivos (ver propuesta_edicion_en_linea.md, decisión 1).
 MOTIVO_EDICION_EN_LINEA = "Edición en línea"
+MOTIVO_ALTA_EN_LINEA = "Alta en línea"
 ACCIONES = ("listar", "crear", "detalle", "editar", "confirmar_eliminar")
 
 
@@ -101,6 +110,9 @@ class VistasEntidad:
             bp.add_url_rule(f"{base}/<int:id>/celda/<campo>", f"{n}_celda", self.celda,
                             methods=["GET", "POST"])
             bp.add_url_rule(f"{base}/<int:id>/fila", f"{n}_fila", self.fila)
+        if self.spec.alta_en_linea:
+            bp.add_url_rule(f"{base}/alta_en_linea", f"{n}_alta_en_linea", self.alta_en_linea,
+                            methods=["POST"])
 
     # ------------------------------------------------------------------
     # Navegación
@@ -655,6 +667,8 @@ class VistasEntidad:
             "template_listado": "crud/listado_subentidad.html",
             "items": [item_fila(hijo, o, columnas) for o in objetos],
             "grilla": contexto_grilla(hijo, columnas, {rel.fk: id}),
+            "alta": (contexto_alta(hijo, columnas, {rel.fk: id})
+                     if hijo.alta_en_linea and hijo.alta_en_linea_padre == self.spec.name else None),
             "entidad": hijo.name,
             # Las columnas del listado de la entidad (no todas: la tabla desbordaría).
             "fields": {c: hijo.fields[c] for c in hijo.listado},
@@ -731,6 +745,55 @@ class VistasEntidad:
         registro = repository.obtener_o_404(self.spec.model, id)
         return self._render_fila(registro, 422, celda=self._celda(registro, campo, texto, error))
 
+    def alta_en_linea(self):
+        """
+        Alta rápida desde la última fila de la grilla (en la pestaña del padre). Cada
+        celda pasa por su intérprete y el registro se crea con servicio.crear, como
+        en el formulario (completar, al_guardar, auditoría y reglas valen igual).
+        """
+        padre, padre_id = self._padre_desde_url()
+        if padre is None or padre.entidad != self.spec.alta_en_linea_padre:
+            abort(404)
+        spec_padre = self.registry[padre.entidad]
+        registro_padre = repository.obtener_o_404(spec_padre.model, padre_id)
+        columnas = [c for c in self.spec.listado if c != padre.fk]
+        args = {padre.fk: padre_id}
+
+        textos = {c.nombre: request.form.get(c.nombre, "") for c in self.spec.alta_en_linea}
+        datos, errores = {padre.fk: padre_id}, {}
+        for c in self.spec.alta_en_linea:
+            try:
+                datos.update(c.interprete.interpretar(textos[c.nombre], self.spec))
+            except ErroresValidacion as e:
+                errores.update(e.errores)
+        nuevo = None
+        if not errores:
+            try:
+                nuevo = self.servicio.crear(datos, MOTIVO_ALTA_EN_LINEA)
+            except ErroresValidacion as e:
+                errores = e.errores
+            except ErrorIntegridad as e:
+                errores = {e.campo or "_general": e.mensaje}
+        if errores:
+            alta = contexto_alta(self.spec, columnas, args, textos, errores)
+            return render_template("crud/partials/_fila_alta.html", alta=alta), 422
+
+        self._avisar(nuevo)
+        grilla = contexto_grilla(self.spec, columnas, args)
+        repetidos = {c.nombre: textos[c.nombre] for c in self.spec.alta_en_linea if c.repetir}
+        alta = contexto_alta(self.spec, columnas, args, repetidos, foco=True)
+        # Las acciones de la pestaña pueden cambiar (ej: «Enviar a Compras» aparece
+        # con la primera línea en borrador): se reemplazan fuera de banda.
+        botones = {
+            "id": f"botones-{self.spec.name}",
+            "acciones": acciones_visibles(spec_padre, registro_padre, lambda a: a.seccion == self.spec.name,
+                                          {"seccion": self.spec.name}),
+            "boton_url": url_for(endpoint(self.spec.name, "crear"), **args),
+            "boton_texto": "Crear " + self.spec.label_singular,
+        }
+        return render_template("crud/partials/_alta_creada.html", grilla=grilla,
+                               item=item_fila(self.spec, nuevo, columnas), alta=alta, botones=botones)
+
     def _dato_de_celda(self, campo, f, texto) -> dict:
         """
         {campo: valor} de lo escrito en la celda, por el mismo camino que el
@@ -739,13 +802,7 @@ class VistasEntidad:
         """
         entrada = {campo: texto}
         if f.tipo == "fk" and texto.strip() and fk.usa_busqueda(f):
-            try:
-                entrada[campo] = str(fk.BuscadorFK(f, por_prefijo=True).buscar(texto.strip()))
-            except fk.Ambiguo as e:
-                raise ErroresValidacion({campo: f"«{texto.strip()}» coincide con {e.cantidad} opciones. "
-                                                "Elegí una de la lista."})
-            except ValueError:
-                raise ErroresValidacion({campo: f"No encontré «{texto.strip()}». Elegí una opción de la lista."})
+            entrada[campo] = str(buscar_por_texto(f, campo, texto))
         datos = coercion.datos_de_entrada(self.spec.model, {campo: f}, entrada, parcial=True)
         if f.excluir_en_linea and datos.get(campo) in f.excluir_en_linea:
             opcion = next(o["label"] for o in f.options if o["value"] == datos[campo])
@@ -794,6 +851,62 @@ def contexto_grilla(spec: EntitySpec, columnas, args_fila: dict) -> dict:
         # {columna: campo que se edita en ella} (casi siempre, el mismo).
         "editables": {spec.columna_en_linea.get(c, c): c for c in spec.edicion_en_linea},
         "con_eliminar": spec.eliminable_si is not None,
+    }
+
+
+def contexto_alta(spec: EntitySpec, columnas, args_fila: dict, textos: dict | None = None,
+                  errores: dict | None = None, foco: bool = False) -> dict:
+    """
+    Lo que crud/partials/_fila_alta.html necesita: una celda por cada columna de la
+    grilla (las de alta con su colspan), con lo escrito y su error.
+
+    textos   lo escrito en cada celda (después de un error, o lo que se repite).
+    errores  {campo: mensaje} del intérprete o del servicio: cada uno va en la
+             celda que produce ese campo; los que no son de ninguna, junto al botón.
+    foco     True: el foco va a la primera celda con error o, si no hay, a la primera.
+    """
+    textos, errores = textos or {}, dict(errores or {})
+    por_campo = {}
+    for c in spec.alta_en_linea:
+        for campo in (c.nombre, *c.interprete.campos):
+            por_campo.setdefault(campo, c.nombre)
+    mensajes: dict[str, list[str]] = {}
+    for campo, texto in errores.items():
+        destino = por_campo.get(campo)
+        if destino is None:  # de un campo que no es de ninguna celda: junto al botón, con su etiqueta
+            label = spec.fields[campo].label if campo in spec.fields else None
+            texto = texto if not label or texto.startswith(label) else f"{label}: {texto}"
+            destino = "_general"
+        mensajes.setdefault(destino, []).append(texto)
+
+    celdas_por_columna = {c.columnas[0]: c for c in spec.alta_en_linea}
+    cubiertas = {col for c in spec.alta_en_linea for col in c.columnas[1:]}
+    layout = []
+    for col in columnas:
+        if col in cubiertas:
+            continue
+        c = celdas_por_columna.get(col)
+        if c is None:
+            layout.append(None)
+            continue
+        control = c.interprete.control(spec)
+        layout.append({
+            "nombre": c.nombre, "label": c.label, "colspan": len(c.columnas), "control": control,
+            "opciones": c.interprete.opciones(spec) if control in ("lista", "select") else [],
+            "id_lista": f"lista-alta-{spec.name}-{c.nombre}",
+            "valor": textos.get(c.nombre, ""),
+            "error": " ".join(mensajes.get(c.nombre, [])) or None,
+        })
+    con_error = [x["nombre"] for x in layout if x and x["error"]]
+    primera = next(x["nombre"] for x in layout if x)
+    return {
+        "entidad": spec.name,
+        "id": f"alta-{spec.name}",
+        "form_id": f"form-alta-{spec.name}",
+        "url": url_for(endpoint(spec.name, "alta_en_linea"), **args_fila),
+        "layout": layout,
+        "error": " ".join(mensajes.get("_general", [])) or None,
+        "foco": (con_error[0] if con_error else primera) if (foco or errores) else None,
     }
 
 

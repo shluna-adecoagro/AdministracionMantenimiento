@@ -1,14 +1,16 @@
 {#
   Pestaña de una subentidad en el detalle del padre (ej: «Líneas» del pedido).
   Si la entidad declara edicion_en_linea, la tabla es una grilla editable
-  (grilla.js + htmx): ver crud/partials/_fila.html.
+  (grilla.js + htmx): ver crud/partials/_fila.html. Si además declara
+  alta_en_linea para este padre, termina con la fila de alta (_fila_alta.html).
 #}
 <section class="p-8">
 
     {% with 
         titulo=sub.label,
         boton_url=url_for(endpoint_base + '_crear', **{ fk|string : padre_id }),
-        boton_texto="Crear " ~ sub.label_singular
+        boton_texto="Crear " ~ sub.label_singular,
+        id_botones="botones-" ~ entidad
     %}
         {% include "crud/partials/_listado_header.html" %}
     {% endwith %}
@@ -30,14 +32,23 @@
                 {% for item in items %}
                     {% include "crud/partials/_fila.html" %}
                 {% else %}
+                {% if not sub.alta %}
                 <tr>
                     <td colspan="{{ grilla.columnas | length + 1 }}" class="no-registros">
                         <em>No hay registros</em>
                     </td>
                 </tr>
+                {% endif %}
                 {% endfor %}
+                {% if sub.alta %}
+                    {% with alta=sub.alta %}{% include "crud/partials/_fila_alta.html" %}{% endwith %}
+                {% endif %}
             </tbody>
         </table>
+        {% if sub.alta %}
+            <form id="{{ sub.alta.form_id }}" hx-post="{{ sub.alta.url }}" hx-target="#{{ sub.alta.id }}"
+                  hx-swap="outerHTML"></form>
+        {% endif %}
 
     </div>
 
