@@ -1,0 +1,5 @@
+{# Avisos, siempre fuera de banda. #}
+<div id="avisos" hx-swap-oob="true">
+    {% if aviso is defined and aviso %}<p class="flash flash-ok">{{ aviso }}</p>{% endif %}
+    {% if error is defined and error %}<p class="flash flash-error">{{ error }}</p>{% endif %}
+</div>

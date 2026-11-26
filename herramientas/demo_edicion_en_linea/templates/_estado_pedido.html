@@ -1,0 +1,11 @@
+{# Estado del pedido (resumen de sus líneas) y el botón de envío. oob: para mandarlo fuera de banda. #}
+{% set e = estado_pedido() %}
+<div id="estado-pedido" class="estado-pedido" {% if oob is defined and oob %}hx-swap-oob="true"{% endif %}>
+    <span class="badge {{ 'badge-borrador' if e.sin_enviar else 'badge-enviado' }}">{{ e.texto }}</span>
+    {% if e.sin_enviar %}
+        <button class="btn-primary" hx-post="/enviar" hx-target="#cuerpo-lineas"
+                hx-confirm="¿Enviar {{ e.sin_enviar }} línea{{ 's' if e.sin_enviar != 1 }} a Compras? Después, las cantidades solo se cambian anulando o cancelando con motivo.">
+            Enviar a Compras ({{ e.sin_enviar }})
+        </button>
+    {% endif %}
+</div>

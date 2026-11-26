@@ -1,0 +1,49 @@
+{#
+  Fila de una línea. Opcionales: foco (campo que recibe el foco después de
+  guardar), editar/valor/error (celda que sigue en edición con un error),
+  oob (se manda fuera de banda, para actualizar la fila al cambiar un destino).
+#}
+<tr id="linea-{{ l.id }}" class="fila{% if l.anulada %} anulada{% endif %}{% if l.borrador %} en-borrador{% endif %}"
+    {% if foco is defined and foco %}data-foco="{{ foco }}"{% endif %}
+    {% if oob is defined and oob %}hx-swap-oob="true"{% endif %}>
+    {% for col in COLUMNAS_LINEA %}
+        {% if editar is defined and editar == col.campo %}
+            {% with r=l, url="/lineas/%d/celda/%s"|format(l.id, col.campo), url_cancelar="/lineas/%d/fila"|format(l.id) %}
+                {% include "_celda_edicion.html" %}
+            {% endwith %}
+        {% elif es_editable(l, col) %}
+            <td class="celda{% if col.num %} num{% endif %}" tabindex="-1" data-campo="{{ col.campo }}"
+                hx-get="/lineas/{{ l.id }}/celda/{{ col.campo }}" hx-trigger="editar" hx-swap="outerHTML">{{ mostrar(l, col) }}</td>
+        {% else %}
+            <td class="calc{% if col.num %} num{% endif %}{% if col.editable is not false %} congelada{% endif %}"
+                tabindex="-1" data-campo="{{ col.campo }}"
+                {% if col.editable is not false and not l.anulada %}title="Congelada: la línea ya se envió a Compras"{% endif %}>
+                {%- if col.campo == "estado" -%}
+                    <span class="estado estado-{{ l.estado_visible|lower|replace(' ', '-') }}">{{ mostrar(l, col) }}</span>
+                {%- else -%}{{ mostrar(l, col) }}{%- endif -%}
+            </td>
+        {% endif %}
+    {% endfor %}
+    <td class="calc" tabindex="-1" data-campo="_envio">
+        {% if l.borrador %}<span class="badge badge-borrador">Sin enviar</span>
+        {% else %}{{ l.enviada_en.strftime("%d/%m %H:%M") }}{% endif %}
+    </td>
+    <td class="calc" tabindex="-1" data-campo="_destinos">
+        <button type="button" class="btn-destinos" data-sub="sub-{{ l.id }}"
+                hx-get="/lineas/{{ l.id }}/destinos" hx-target="#sub-{{ l.id }}">
+            ▸ {{ l.destinos|length }}
+        </button>
+        {% if l.destinos_a_revisar %}<span class="badge badge-revisar">{{ l.destinos_a_revisar }} a revisar</span>{% endif %}
+    </td>
+    <td class="calc acciones" tabindex="-1" data-campo="_acciones">
+        {% if l.anulada %}
+        {% elif l.borrador %}
+            <button type="button" class="btn-icono" title="Eliminar la línea"
+                    hx-delete="/lineas/{{ l.id }}" hx-target="closest tr" hx-swap="delete"
+                    hx-confirm="¿Eliminar la línea {{ l.nro }}?">🗑</button>
+        {% else %}
+            <button type="button" class="btn-link"
+                    hx-get="/lineas/{{ l.id }}/anular" hx-target="#sub-{{ l.id }}">Anular o cancelar…</button>
+        {% endif %}
+    </td>
+</tr>

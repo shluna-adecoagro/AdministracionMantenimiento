@@ -1,0 +1,47 @@
+{#
+  Contenido de #sub-<id>: los destinos de una línea enviada, todos juntos, para
+  cambiar cuánto va a cada activo o taller sin cambiar el total.
+  Una fila que se quita (o queda en 0) saca ese destino.
+#}
+<td colspan="{{ N_COLUMNAS }}" class="sub-celda">
+    <form class="sub-grilla redistribuir" hx-post="/lineas/{{ l.id }}/redistribuir" hx-target="#sub-{{ l.id }}"
+          data-total="{{ '%g'|format(l.solicitada) }}">
+        <p><strong>Redistribuir la línea {{ l.nro }}</strong> — el total tiene que seguir siendo
+            {{ '%g'|format(l.solicitada) }} {{ l.unidad }}. Completá el activo <i>o</i> la ubicación de cada destino.</p>
+        <table class="tabla-listado">
+            <thead>
+                <tr><th>Cantidad</th><th>Activo</th><th>Ubicación (taller)</th><th>Otro</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for f in filas %}
+                <tr>
+                    <td><input type="hidden" name="id" value="{{ f.id }}">
+                        <input name="cantidad" value="{{ f.cantidad }}" inputmode="decimal" class="num"></td>
+                    <td><input name="activo" value="{{ f.activo }}" list="dl-activos" autocomplete="off"></td>
+                    <td><input name="ubicacion" value="{{ f.ubicacion }}" list="dl-ubicaciones" autocomplete="off"></td>
+                    <td class="nota">{{ f.otro }}</td>
+                    <td><button type="button" class="btn-icono btn-quitar-fila" title="Sacar">🗑</button></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <template>
+                <tr>
+                    <td><input type="hidden" name="id" value="">
+                        <input name="cantidad" inputmode="decimal" class="num"></td>
+                    <td><input name="activo" list="dl-activos" autocomplete="off"></td>
+                    <td><input name="ubicacion" list="dl-ubicaciones" autocomplete="off"></td>
+                    <td class="nota">Nuevo</td>
+                    <td><button type="button" class="btn-icono btn-quitar-fila" title="Sacar">🗑</button></td>
+                </tr>
+            </template>
+        </table>
+        <div class="fila-form">
+            <button type="button" class="btn-secondary btn-agregar-fila">+ Destino</button>
+            <span class="total-redistribuir">Total: <b class="suma"></b> de {{ '%g'|format(l.solicitada) }}</span>
+            <button type="submit" class="btn-primary">Guardar</button>
+            <button type="button" class="btn-secondary"
+                    hx-get="/lineas/{{ l.id }}/destinos" hx-target="#sub-{{ l.id }}">Cancelar</button>
+        </div>
+        {% if error is defined %}<p class="error-celda" role="alert">{{ error }}</p>{% endif %}
+    </form>
+</td>

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block titulo %}Pedido {{ PEDIDO.numero }}{% endblock %}
+{% block content %}
+
+<div class="seccion-header">
+    <h2>Pedido {{ PEDIDO.numero }} — {{ PEDIDO.referencia }}</h2>
+    <div class="header-acciones">
+        {% include "_estado_pedido.html" %}
+        <button class="btn-secondary" hx-post="/reiniciar" hx-target="#cuerpo-lineas">Reiniciar datos</button>
+    </div>
+</div>
+
+<details class="ayuda">
+    <summary>Cómo se usa</summary>
+    <ul>
+        <li><b>Flechas</b> para moverse. <b>Enter</b> o <b>F2</b> edita la celda; también empezar a escribir.</li>
+        <li>Al editar: <b>Enter</b> guarda y baja, <b>Tab</b> guarda y pasa a la derecha, <b>Esc</b> cancela. Salir de la celda también guarda.</li>
+        <li><b>Borrador:</b> las líneas nuevas se editan enteras, se les agregan o sacan destinos y se pueden eliminar.
+            <b>Enviar a Compras</b> las congela (celdas en gris). Lo que se agrega después queda en borrador hasta el próximo envío.</li>
+        <li><b>Línea enviada:</b> la imputación (activo, ubicación, sector, cuenta) sigue editable. Para cambiar cuánto va a cada destino, <b>Redistribuir</b> (el total no cambia).
+            Para pedir menos, <b>Anular o cancelar</b>, con motivo. Si ya hay algo comprado, solo se cancela lo pendiente.</li>
+        <li><b>Pegar desde Excel:</b> con una celda seleccionada, <b>Ctrl+V</b> de filas con <i>código o descripción · cantidad · destino</i>. Primero se muestra una vista previa.</li>
+    </ul>
+</details>
+
+<div id="avisos"></div>
+
+<div class="tabla-container">
+    <table class="tabla-listado grilla" id="grilla-lineas">
+        <thead>
+            <tr>
+                {% for col in COLUMNAS_LINEA %}<th>{{ col.label }}</th>{% endfor %}
+                <th>Envío</th>
+                <th>Destinos</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody id="cuerpo-lineas">
+            {% include "_cuerpo_lineas.html" %}
+        </tbody>
+    </table>
+</div>
+
+{# El alta de una línea: los inputs de la última fila apuntan a este form (atributo form=). #}
+<form id="form-nueva" hx-post="/lineas" hx-target="#fila-nueva" hx-swap="outerHTML"></form>
+
+<div id="pegado"></div>
+
+{% endblock %}

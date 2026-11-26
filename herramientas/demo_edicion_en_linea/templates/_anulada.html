@@ -1,0 +1,4 @@
+{# Respuesta a anular o cancelar: el formulario se cierra (contenido vacío) y se actualizan la fila, el estado y el aviso. #}
+{% with oob=true %}{% include "_fila_linea.html" %}{% endwith %}
+{% with oob=true %}{% include "_estado_pedido.html" %}{% endwith %}
+{% include "_avisos.html" %}

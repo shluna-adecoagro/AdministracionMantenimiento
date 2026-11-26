@@ -158,9 +158,9 @@ Decisiones del usuario:
   categorías de materiales vienen de SharePoint (se importan cuando esas entidades pasen
   al registry, Fase 7).
 - Interés en **mantener sincronizadas** la base local y SharePoint, como respaldo mutuo.
-  Leer SharePoint directo queda como última fase (13).
+  Leer SharePoint directo queda como última fase (15; era la 13 hasta el 26/11).
 
-**Dirección de la sincronización (Fase 13): decidida la opción A.** La app es la fuente de
+**Dirección de la sincronización (Fase 15): decidida la opción A.** La app es la fuente de
 verdad, donde se gestionan los datos; SharePoint es una copia para mostrar, que se
 actualiza exportando desde la app. El respaldo se completa con copias periódicas del
 archivo de la base.
@@ -696,6 +696,31 @@ son independientes entre sí; los demás van en orden.
 - `repository.consulta_listado(valores=...)` y `campos_de_filtro(...)`.
 - Tests: `tests/test_filtros_listado.py`.
 
+## Fase 13: edición en línea (acordada 26/11)
+
+Diseño completo y decisiones: [`propuesta_edicion_en_linea.md`](propuesta_edicion_en_linea.md).
+Reglas de borrador y envío: «Borrador y envío a Compras» en
+[`diseno_tablas_operativas.md`](diseno_tablas_operativas.md). Demo de referencia:
+`herramientas/demo_edicion_en_linea/`.
+
+Principio: **sin rutas a mano**. La grilla se genera desde la spec y guarda con el mismo
+camino que el formulario y la API (`coercion` → `fk.validar_existencia` →
+`servicio.actualizar`), así que `completar`, `al_guardar`, la auditoría y los mensajes de
+error valen igual. Las reglas de qué se puede editar (`editable_si`) también las aplica el
+servicio, no solo la pantalla.
+
+| PR | Cubre |
+|---|---|
+| **13.1 Framework** | `EntitySpec.edicion_en_linea` (validada por el registry: ni calculados, ni archivos, ni columnas del ERP). Rutas genéricas `GET/POST /<entidad>/<id>/celda/<campo>` y `GET /<entidad>/<id>/fila`; error de validación = 422 con la celda abierta. Parciales `_fila.html` y `_celda_edicion.html`. `static/js/grilla.js` (teclado y foco) y htmx en `static/vendor/` (sin CDN). Auditoría con el motivo fijo «Edición en línea» (no va al catálogo de motivos). Se activa en la pestaña «Líneas» del pedido. |
+| **13.2 Borrador y envío** | `pedido_lineas.enviada_en` (migración; el histórico, con la fecha del pedido). `editable_si` en la spec, aplicado por la grilla, el formulario, la API y el servicio. Acción «Enviar a Compras». Eliminar en borrador. «Anular o cancelar» con motivo, sin anular entera una línea con compras. Resumen del pedido con «Borrador» / «N líneas sin enviar». |
+| **13.3 Alta rápida** | Última fila de la grilla con `campos_alta` (material o descripción, cantidad, destino). |
+| **13.4 Destinos y «Redistribuir»** | Subgrilla de destinos bajo cada línea, con la fila de la línea actualizada fuera de banda. Completar el activo, el modelo o la ubicación define el tipo de destino (`completar_destino`). «Redistribuir» en líneas enviadas: todo o nada, sin cambiar el total. |
+| **13.5 Pegar desde Excel** | Vista previa y confirmación todo o nada (`servicio(confirmar=False)`), con un adaptador «pegado» al formato interno común. Lo no identificado queda como descripción o «a identificar». |
+| **13.6 Colas de «a revisar»** | Destinos sin sector o cuenta, líneas sin material identificado: listas editables para resolverlas. |
+
+Sin control de concurrencia por ahora: los pedidos los carga y edita solo el gestor. Se
+revisa en la fase 14, cuando Compras escriba en la app.
+
 ## Arquitectura objetivo
 
 ```
@@ -746,7 +771,9 @@ La API generada usa `GET/POST {url}` y `PUT/PATCH/DELETE {url}/{id}`.
 | **10. Pedidos y documentos de proveedores** | Pedidos con líneas y destinos (imputación), ofertas y presupuestos (cabecera + líneas), adjudicación por cantidad, recepciones (conformidad). Importación del Excel histórico de pedidos. Ver «Fases operativas». | ✅ Hecha |
 | **11. Solicitudes de trabajo, solicitudes internas y OC** | Solicitudes de trabajo (avisos de los mecánicos para llamar a un contratista) y su vínculo con los presupuestos (`documentos_proveedor.solicitud_trabajo_id`). Importación de los TSV de EAM (cabeceras, líneas, distribuciones) y de las OC; vínculo con los documentos adjudicados; distribución propuesta; detalle para Administración; conciliación por nº de OC. | Pendiente |
 | **12. Órdenes de trabajo** | Cabecera importada del ERP; la app agrega operaciones, recursos y materiales (previsto y utilizado). Incluye cuándo le toca un plan a cada activo. | Pendiente |
-| **13. Sincronización con SharePoint** | Opción A: exportar periódicamente de la app a SharePoint, más copias de seguridad automáticas de la base. Al final, escribir en SharePoint directo (Microsoft Graph) en lugar de pasar por CSV. | Pendiente |
+| **13. Edición en línea, borrador y envío a Compras** | Listados editables tipo planilla con htmx, generados desde la spec (`edicion_en_linea`, `editable_si`). En pedidos: líneas en borrador y «Enviar a Compras» (`enviada_en`), eliminar en borrador, anular o cancelar con motivo, destinos desplegados y «Redistribuir», alta rápida, pegar desde Excel. Ver «Fase 13: edición en línea». Puede ir antes que la 11: trabaja sobre los pedidos de la fase 10. | Pendiente |
+| **14. Circuito con Compras** | Usuarios, roles y auditoría con usuario; despliegue en un servidor. Vista de Compras (para cotizar, para emitir OC, reclamos), comparativo por línea, adjudicación y «Pedir OC». Ver [`propuesta_circuito_compras.md`](propuesta_circuito_compras.md). | En diseño |
+| **15. Sincronización con SharePoint** | Opción A: exportar periódicamente de la app a SharePoint, más copias de seguridad automáticas de la base. Al final, escribir en SharePoint directo (Microsoft Graph) en lugar de pasar por CSV. | Pendiente |
 
 ## Cómo agregar o modificar una entidad
 
