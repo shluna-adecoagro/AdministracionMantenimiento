@@ -17,8 +17,7 @@ OVERRIDES = {
             "usuario_asignado": {"tipo": "datalist", "fk_model": Empleado, "fk_label": "nombre_completo"},
         },
         "listado": [
-            "numero_activo", "descripcion", "tipo_activo_id", "categoria_activo_id", "marca_id",
-            "modelo_id", "sector_id", "ubicacion_id", "estado_activo_id",
+            "numero_activo", "descripcion", "estado_activo_id",
         ],
         "filtros": [
             "numero_activo", "descripcion", "numero_serie", "numero_motor", "usuario_asignado",
