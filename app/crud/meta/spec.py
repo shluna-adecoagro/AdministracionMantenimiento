@@ -190,6 +190,29 @@ class AccionSpec:
 
 
 @dataclass(frozen=True)
+class CeldaAltaSpec:
+    """
+    Una celda de la fila de alta de la grilla (alta rápida, fase 13.3).
+
+    nombre      name del input (y clave del error).
+    label       texto de ayuda (placeholder y aria-label).
+    columnas    columnas consecutivas del listado que ocupa (colspan).
+    interprete  cómo se convierte lo escrito en datos (app/crud/core/interpretes.py):
+                interpretar(texto, spec) -> dict, sugerencias(spec) -> [texto],
+                control ("text" | "number" | "lista" | "select") y campos (los que
+                produce: ubican los errores del servicio en esta celda).
+    repetir     lo escrito queda en la fila de alta siguiente (ej: el destino, que
+                suele ser el mismo para varias líneas seguidas).
+    """
+
+    nombre: str
+    label: str
+    columnas: tuple[str, ...]
+    interprete: object
+    repetir: bool = False
+
+
+@dataclass(frozen=True)
 class EntitySpec:
     name: str
     model: type
@@ -232,6 +255,11 @@ class EntitySpec:
     # Columna de la grilla en la que se edita cada campo, si no es la suya (ej:
     # el estado de seguimiento se edita sobre la columna «Estado», el visible).
     columna_en_linea: dict[str, str] = field(default_factory=dict)
+    # Alta rápida (fase 13.3): última fila de la grilla, en la pestaña del padre
+    # `alta_en_linea_padre` (la entidad padre; por defecto, el principal). Cada
+    # celda es un CeldaAltaSpec; el alta va por servicio.crear, como el formulario.
+    alta_en_linea: tuple[CeldaAltaSpec, ...] = ()
+    alta_en_linea_padre: str | None = None
 
     # Reglas de edición según el registro (fase 13.2). Las aplica el servicio, así
     # que valen en la grilla, el formulario, la API y la importación CSV:

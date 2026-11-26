@@ -1,0 +1,10 @@
+{#
+  Respuesta del alta rápida: la fila nueva, una fila de alta vacía (con lo que se
+  repite, ej: el destino) y los botones de la pestaña, fuera de banda. El <template>
+  es para htmx: un <div> suelto entre filas de una tabla no se puede interpretar.
+#}
+{% include "crud/partials/_fila.html" %}
+{% include "crud/partials/_fila_alta.html" %}
+<template>
+    {% with oob=true %}{% include "crud/partials/_botones_seccion.html" %}{% endwith %}
+</template>

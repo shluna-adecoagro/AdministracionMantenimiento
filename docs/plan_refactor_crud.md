@@ -861,6 +861,47 @@ revisa en la fase 14, cuando Compras escriba en la app.
 - Tests: `tests/test_borrador_envio.py`; los de pedidos, documentos y recepciones envían
   las líneas antes de comprarlas (fixture `enviar` en `conftest.py`).
 
+#### Notas del PR 13.3 (alta rápida)
+
+Decidido con el gestor (26/11): sin renumerar las fases (ver «Fases»); destino escrito
+en una sola celda; el destino se repite en la fila siguiente.
+
+- **Spec:** `alta_en_linea`, una lista de celdas (`CeldaAltaSpec`: `nombre`, `label`,
+  `columnas`, `interprete`, `repetir`), y `alta_en_linea_padre` (la pestaña donde va; por
+  defecto, el padre principal). El registry exige columnas consecutivas de esa pestaña (el
+  listado sin la columna del padre), sin superponerse, y que los campos de cada intérprete
+  sean datos que se cargan (ni calculados, ni archivos, ni de solo importación, ni el padre).
+- **Intérpretes** (`core/interpretes.py`): convierten el texto de la celda en datos, por
+  el mismo camino que el formulario (`coercion` + `fk.validar_existencia`), y dicen qué
+  control mostrar. `Campo(nombre)` (por defecto), `FkOTexto(fk, texto)` y
+  `FkEntre({fk: datos extra}, vacio=...)`. `buscar_por_texto` (antes en la vista de la
+  celda) lo comparten la grilla y el alta.
+- **Ruta:** `POST /<entidad>/alta_en_linea?<fk del padre>=<id>` (404 sin el padre o con
+  otro). Crea con `servicio.crear` y el motivo fijo «Alta en línea», así que valen
+  `completar`, `al_guardar`, `creable_si` y la auditoría. Responde la fila nueva, una fila
+  de alta vacía (con lo que se repite) y los botones de la pestaña fuera de banda
+  (`_botones_seccion.html`, dentro de un `<template>` para que htmx lo lea entre filas):
+  «Enviar a Compras» aparece con la primera línea en borrador. Error = 422 con la fila de
+  alta, lo escrito, la celda marcada y el foco en ella; un error de un campo que no es de
+  ninguna celda va junto al botón, con su etiqueta.
+- **Plantillas:** `_fila_alta.html` (inputs con `form=`, porque un `<form>` no puede ir
+  dentro de un `<tr>`; el form está después de la tabla) y `_alta_creada.html`. Con fila
+  de alta, la pestaña vacía ya no muestra «No hay registros».
+- **Líneas de pedido:** material (código, etiqueta o comienzo; si no coincide con
+  ninguno, va a la descripción; si coincide con varios, error), cantidad (campo de alta)
+  y destino: un activo (destino «activo»), una ubicación (destino «stock») o vacío («a
+  identificar»). Modelo y gasto general se eligen en el destino (PR 13.4). El destino
+  vale por el texto de la sugerencia, por la etiqueta, el número o la descripción del
+  activo, o por el comienzo, si en activos y ubicaciones juntos hay uno solo. La línea
+  nace en borrador, también en un pedido ya enviado.
+- **`grilla.js`:** foco en la celda que indica la fila de alta (`data-foco-alta`); flecha
+  abajo desde la última fila lleva a la fila de alta y flecha arriba, de vuelta.
+- **Probado en el navegador** (Chromium, Playwright): tres líneas cargadas solo con el
+  teclado (material, Tab, cantidad, Tab, destino, Enter), destino repetido, error por
+  material ambiguo y corrección, flechas entre la grilla y la fila de alta, y el botón
+  «Enviar a Compras» que aparece sin recargar.
+- Tests: `tests/test_alta_rapida.py`.
+
 ## Arquitectura objetivo
 
 ```
@@ -896,6 +937,11 @@ La API generada usa `GET/POST {url}` y `PUT/PATCH/DELETE {url}/{id}`.
 
 ## Fases
 
+Las filas van en el orden en que se hacen. Los números identifican a cada fase (aparecen
+en PR, commits, migraciones y tests), así que no se renumeran: la 13 y la 14 se
+adelantaron a la 11 y la 12 (decidido 26/11). La sincronización con SharePoint es
+siempre la última.
+
 | Fase | Contenido | Estado |
 |---|---|---|
 | **0. Red de seguridad** | Tests con pytest para sectores, ubicaciones y cuentas (web y API). Errores conocidos marcados como `xfail`. README. `.gitignore` permite `requirements*.txt`. | ✅ Hecha |
@@ -909,10 +955,10 @@ La API generada usa `GET/POST {url}` y `PUT/PATCH/DELETE {url}/{id}`.
 | **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. Ver «Notas de la Fase 8». | ✅ Hecha |
 | **9. Planes preventivos** | Planes por categoría de activo (período por uso y/o por tiempo, plan que incluye a otro), tareas, materiales por modelo; categoría en el modelo y tipo de medidor. Ver «Fase 9: planes preventivos». | ✅ Hecha |
 | **10. Pedidos y documentos de proveedores** | Pedidos con líneas y destinos (imputación), ofertas y presupuestos (cabecera + líneas), adjudicación por cantidad, recepciones (conformidad). Importación del Excel histórico de pedidos. Ver «Fases operativas». | ✅ Hecha |
+| **13. Edición en línea, borrador y envío a Compras** | Listados editables tipo planilla con htmx, generados desde la spec (`edicion_en_linea`, `editable_si`). En pedidos: líneas en borrador y «Enviar a Compras» (`enviada_en`), eliminar en borrador, anular o cancelar con motivo, destinos desplegados y «Redistribuir», alta rápida, pegar desde Excel. Ver «Fase 13: edición en línea». | En curso (13.1 a 13.3 hechos) |
+| **14. Circuito con Compras** | Usuarios, roles y auditoría con usuario; despliegue en un servidor. Vista de Compras (para cotizar, para emitir OC, reclamos), comparativo por línea, adjudicación y «Pedir OC». Ver [`propuesta_circuito_compras.md`](propuesta_circuito_compras.md). | En diseño |
 | **11. Solicitudes de trabajo, solicitudes internas y OC** | Solicitudes de trabajo (avisos de los mecánicos para llamar a un contratista) y su vínculo con los presupuestos (`documentos_proveedor.solicitud_trabajo_id`). Importación de los TSV de EAM (cabeceras, líneas, distribuciones) y de las OC; vínculo con los documentos adjudicados; distribución propuesta; detalle para Administración; conciliación por nº de OC. | Pendiente |
 | **12. Órdenes de trabajo** | Cabecera importada del ERP; la app agrega operaciones, recursos y materiales (previsto y utilizado). Incluye cuándo le toca un plan a cada activo. | Pendiente |
-| **13. Edición en línea, borrador y envío a Compras** | Listados editables tipo planilla con htmx, generados desde la spec (`edicion_en_linea`, `editable_si`). En pedidos: líneas en borrador y «Enviar a Compras» (`enviada_en`), eliminar en borrador, anular o cancelar con motivo, destinos desplegados y «Redistribuir», alta rápida, pegar desde Excel. Ver «Fase 13: edición en línea». Puede ir antes que la 11: trabaja sobre los pedidos de la fase 10. | En curso (13.1 y 13.2 hechos) |
-| **14. Circuito con Compras** | Usuarios, roles y auditoría con usuario; despliegue en un servidor. Vista de Compras (para cotizar, para emitir OC, reclamos), comparativo por línea, adjudicación y «Pedir OC». Ver [`propuesta_circuito_compras.md`](propuesta_circuito_compras.md). | En diseño |
 | **15. Sincronización con SharePoint** | Opción A: exportar periódicamente de la app a SharePoint, más copias de seguridad automáticas de la base. Al final, escribir en SharePoint directo (Microsoft Graph) en lugar de pasar por CSV. | Pendiente |
 
 ## Cómo agregar o modificar una entidad

@@ -28,6 +28,7 @@ from sqlalchemy.exc import NoInspectionAvailable
 from app.crud.core.numeracion import FormatoInvalido, validar_formato
 from app.crud.introspect import columnas_hacia, fk_apunta_a, inferir_entidad
 from app.crud.meta.spec import (
+    CeldaAltaSpec,
     AUDITORIA_IGNORAR_DEFAULT,
     GENEROS,
     GRUPOS,
@@ -70,6 +71,8 @@ CLAVES_ENTIDAD = frozenset({
     "editable_si",        # {campo: función(registro)} si el campo se puede cambiar (fase 13.2)
     "eliminable_si",      # función(registro): si se puede eliminar
     "creable_si",         # función(datos): si se puede crear con esos datos
+    "alta_en_linea",      # [{"nombre", "columnas", "interprete"...}] fila de alta de la grilla (fase 13.3)
+    "alta_en_linea_padre",  # entidad padre en cuya pestaña está la fila de alta (por defecto, el principal)
 })
 
 # Tipos de widget que por defecto aparecen en listado y filtros.
@@ -431,6 +434,8 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
         if motivo:
             errores.append(f"{pref} edicion_en_linea: '{c}' {motivo}")
 
+    alta_en_linea, alta_en_linea_padre = _alta_en_linea(ov, campos, listado, padres, pref, errores)
+
     # --- reglas de edición según el registro (fase 13.2) --------------------
     editable_si = dict(ov.get("editable_si") or {})
     for c, regla in editable_si.items():
@@ -475,6 +480,8 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
         clave_natural=clave_natural,
         edicion_en_linea=edicion_en_linea,
         columna_en_linea=columna_en_linea,
+        alta_en_linea=alta_en_linea,
+        alta_en_linea_padre=alta_en_linea_padre,
         editable_si=editable_si,
         eliminable_si=ov.get("eliminable_si"),
         creable_si=ov.get("creable_si"),
@@ -485,6 +492,86 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
 # ---------------------------------------------------------------------------
 # Construcción del registry completo
 # ---------------------------------------------------------------------------
+
+def _alta_en_linea(ov, campos, listado, padres, pref, errores):
+    """
+    Celdas de la fila de alta de la grilla (fase 13.3) y el padre en cuya pestaña
+    está. Cada celda ocupa columnas consecutivas de esa pestaña (el listado sin la
+    columna del padre) y sus campos tienen que ser datos que se cargan.
+    """
+    from app.crud.core.interpretes import Campo
+
+    items = ov.get("alta_en_linea") or ()
+    if not items:
+        if ov.get("alta_en_linea_padre"):
+            errores.append(f"{pref} alta_en_linea_padre sin alta_en_linea")
+        return (), None
+    if not padres:
+        errores.append(f"{pref} alta_en_linea: solo en una subentidad (el alta va en la pestaña del padre)")
+        return (), None
+    nombre_padre = ov.get("alta_en_linea_padre") or padres[0].entidad
+    padre = next((p for p in padres if p.entidad == nombre_padre), None)
+    if padre is None:
+        errores.append(f"{pref} alta_en_linea_padre: '{nombre_padre}' no es un padre de la entidad")
+        return (), None
+
+    columnas_tab = [c for c in listado if c != padre.fk]
+    ocupadas: set[str] = set()
+    celdas = []
+    for item in items:
+        if not isinstance(item, dict) or "nombre" not in item or "columnas" not in item:
+            errores.append(f"{pref} alta_en_linea: cada celda es {{'nombre', 'columnas', ...}}, no {item!r}")
+            continue
+        sobrantes = set(item) - {"nombre", "label", "columnas", "interprete", "repetir"}
+        if sobrantes:
+            errores.append(f"{pref} alta_en_linea.{item['nombre']}: claves desconocidas {sorted(sobrantes)}")
+        nombre = item["nombre"]
+        columnas = (item["columnas"],) if isinstance(item["columnas"], str) else tuple(item["columnas"])
+        faltan = [c for c in columnas if c not in columnas_tab]
+        if faltan or not columnas:
+            errores.append(f"{pref} alta_en_linea.{nombre}: las columnas {faltan or '()'} no están en la "
+                           f"pestaña de '{nombre_padre}' (el listado sin '{padre.fk}')")
+            continue
+        i = columnas_tab.index(columnas[0])
+        if list(columnas) != columnas_tab[i:i + len(columnas)]:
+            errores.append(f"{pref} alta_en_linea.{nombre}: las columnas {list(columnas)} no son consecutivas")
+        if ocupadas & set(columnas):
+            errores.append(f"{pref} alta_en_linea.{nombre}: la columna {sorted(ocupadas & set(columnas))} "
+                           "ya es de otra celda")
+        ocupadas |= set(columnas)
+
+        interprete = item.get("interprete")
+        if interprete is None:
+            if nombre not in campos:
+                errores.append(f"{pref} alta_en_linea.{nombre}: no es un campo; indicá el 'interprete'."
+                               f"{_sugerir(nombre, campos)}")
+                continue
+            interprete = Campo(nombre)
+        elif not all(hasattr(interprete, a) for a in ("campos", "control", "opciones", "interpretar")):
+            errores.append(f"{pref} alta_en_linea.{nombre}: el intérprete no es válido (ver core/interpretes.py)")
+            continue
+        for c in interprete.campos:
+            f = campos.get(c)
+            motivo = None
+            if f is None:
+                motivo = f"no es un campo de la entidad.{_sugerir(c, campos)}"
+            elif f.solo_lectura or f.calculado_python:
+                motivo = "es calculado"
+            elif f.tipo == "file":
+                motivo = "es un archivo"
+            elif f.solo_importacion:
+                motivo = "es de solo importación (su dueño es el ERP u otra fuente)"
+            elif c == padre.fk:
+                motivo = "es el padre (viene de la pestaña)"
+            if motivo:
+                errores.append(f"{pref} alta_en_linea.{nombre}: '{c}' {motivo}")
+        label = item.get("label") or (campos[nombre].label if nombre in campos else nombre)
+        celdas.append(CeldaAltaSpec(nombre=nombre, label=label, columnas=columnas, interprete=interprete,
+                                    repetir=bool(item.get("repetir"))))
+    if len({c.nombre for c in celdas}) != len(celdas):
+        errores.append(f"{pref} alta_en_linea: hay celdas con el mismo nombre")
+    return tuple(celdas), nombre_padre
+
 
 def construir_registry(overrides: dict[str, dict]) -> dict[str, EntitySpec]:
     """Construye y valida todas las entidades. Lanza MetamodeloError si algo falla."""

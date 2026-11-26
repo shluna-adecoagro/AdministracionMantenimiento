@@ -1046,6 +1046,22 @@ table.grilla { overflow: visible; }
 /* Celda congelada (editable_si, fase 13.2): se ve como calculada, con el porqué
    como título, y el cursor lo indica. */
 .grilla td.congelada { cursor: not-allowed; }
+/* Fila de alta (alta rápida, fase 13.3): la última de la grilla, con inputs
+   comunes. El error sale por debajo, como en una celda en edición. */
+.grilla tr.fila-alta td { background: #f8fafc; border-top: 2px solid #cbd5e1; }
+.grilla td.celda-alta {
+  padding: 0; position: relative; overflow: visible; max-width: none;
+}
+.grilla td.celda-alta input,
+.grilla td.celda-alta select {
+  width: 100%; min-height: 2.75rem; border: 0; padding: 0 0.9rem;
+  font: inherit; background: transparent;
+}
+.grilla td.celda-alta input:focus,
+.grilla td.celda-alta select:focus { outline: 2px solid #2563eb; outline-offset: -2px; background: #eff6ff; }
+.grilla td.celda-alta input.num { text-align: right; }
+.grilla td.celda-alta.con-error { outline: 2px solid #dc2626; outline-offset: -2px; }
+.grilla tr.fila-alta td.tabla-acciones { position: relative; }
 
 /* Acciones de una fila (ej: «Anular o cancelar») y de un formulario de acción.
    La columna de acciones no se recorta (las td tienen un ancho máximo). */

@@ -18,6 +18,9 @@ Reglas (se verifican al guardar, en la web, la API y la importación):
     agregan ni sacan destinos y no se elimina: se anula o se cancela una parte,
     con motivo (no se anula entera si ya hay algo comprado). El estado de
     seguimiento solo se edita en líneas enviadas, sin compras.
+  * Alta rápida (fase 13.3): la última fila de la pestaña «Líneas» crea una línea
+    con el material (o la descripción, si no se reconoce), la cantidad y el
+    destino (un activo, una ubicación o, vacío, «a identificar»).
   * Destino: un activo, un modelo, el stock de un taller (ubicación), gasto
     general o «a identificar». El sector imputado y la cuenta, si llegan vacíos,
     se completan con la sugerencia; si no hay de dónde, quedan «a revisar».
@@ -29,6 +32,7 @@ from datetime import datetime
 
 from app.core.db import db
 from app.crud.core.coercion import ErroresValidacion
+from app.crud.core.interpretes import FkEntre, FkOTexto
 from app.models.activos_models import Activo
 from app.models.marcas_modelos_models import Modelo
 from app.models.motivos_models import MotivoOperacion
@@ -438,6 +442,20 @@ OVERRIDES = {
             "nro_oc": enviada,
         },
         "eliminable_si": linea_eliminable,
+        # Alta rápida (fase 13.3): última fila de la pestaña «Líneas» del pedido.
+        # El destino es un activo o una ubicación (stock); vacío, «a identificar».
+        # Modelo y gasto general se eligen en el destino (subgrilla, PR 13.4).
+        "alta_en_linea": [
+            {"nombre": "material", "label": "Material (código o descripción) o texto tal como se pidió",
+             "columnas": ["material_id", "descripcion"],
+             "interprete": FkOTexto("material_id", "descripcion")},
+            {"nombre": "cantidad", "label": "Cantidad", "columnas": ["solicitada"]},
+            {"nombre": "destino", "label": "Destino: activo o ubicación (vacío: a identificar)",
+             "columnas": ["adjudicada", "recibida", "pendiente_comprar", "pendiente_recibir", "se_cuenta_en"],
+             "interprete": FkEntre({"activo_id": {"destino": "activo"}, "ubicacion_id": {"destino": "stock"}},
+                                   vacio={"destino": "a_identificar"}),
+             "repetir": True},
+        ],
         "acciones": [ACCION_ANULAR],
         "tabs_extra": [{"id": "recepciones_linea", "label": "Recepciones", "funcion": _tab_recepciones}],
         "completar": completar_linea,
