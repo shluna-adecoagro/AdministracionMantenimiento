@@ -294,9 +294,21 @@ body {
   color: #475569;
 }
 
-.filtro-fila select {
+.filtro-fila select,
+.filtro-fila .campo-lista {
   flex: 0 1 22rem;
   min-width: 0;
+}
+
+/* Campo con lista (datalist): se elige tipeando. */
+.filtro-select.campo-lista:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+}
+
+.campo-lista:user-invalid {
+  border-color: #dc2626;
 }
 
 .filtro-quitar {

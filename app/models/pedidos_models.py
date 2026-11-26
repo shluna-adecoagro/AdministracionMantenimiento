@@ -335,7 +335,7 @@ PedidoLineaDestino.nombre = column_property(
     .scalar_subquery()
     + " → "
     + func.coalesce(
-        select(Activo.descripcion).where(Activo.activo_id == PedidoLineaDestino.activo_id)
+        select(Activo.etiqueta).where(Activo.activo_id == PedidoLineaDestino.activo_id)
         .correlate_except(Activo).scalar_subquery(),
         select(Modelo.nombre_modelo).where(Modelo.modelo_id == PedidoLineaDestino.modelo_id)
         .correlate_except(Modelo).scalar_subquery(),

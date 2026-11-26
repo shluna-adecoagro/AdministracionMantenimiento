@@ -20,6 +20,7 @@
 
     <!-- Tus estilos -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css', v=version_estatico('css/estilos.css')) }}">
+    <script defer src="{{ url_for('static', filename='js/selectores.js', v=version_estatico('js/selectores.js')) }}"></script>
 
 
     {# Título de la pestaña: «<página> · Mantenimiento Tambos». Cada plantilla define
@@ -134,6 +135,10 @@ let tipoOperacionActual = null;
 let formularioActual = null;
 
 function abrirModalMotivo(tipoOperacion, formulario) {
+    // Antes de pedir el motivo, el formulario tiene que estar completo (ej: un
+    // campo con lista con un texto que no es una opción).
+    if (!formulario.reportValidity()) return;
+
     tipoOperacionActual = tipoOperacion;
     formularioActual = formulario;
 

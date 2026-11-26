@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {% from "crud/partials/_valor.html" import valor %}
+{% from "crud/partials/_selector.html" import campo_lista %}
 
 {% block title %}{{ label_plural | inicial }}{% endblock %}
 
@@ -59,16 +60,25 @@
             {% for c in campos_select %}
                 <div class="filtro-fila" data-campo="{{ c }}" {% if c not in valores %}hidden{% endif %}>
                     <label for="filtro-{{ c }}">{{ fields[c].label }}</label>
-                    <select class="filtro-select filtro-combinable" name="{{ c }}" id="filtro-{{ c }}">
+                    {% if c in con_lista %}
+                        {# Lista larga: se elige tipeando; vacío = todos. #}
+                        {{ campo_lista("filtro-" ~ c, c, fk_data[c], valores.get(c),
+                                       placeholder="Todos (escribí para buscar)",
+                                       clase="filtro-select filtro-combinable") }}
+                    {% else %}
+                    <select class="filtro-select filtro-combinable" name="{{ c }}" id="filtro-{{ c }}"
+                            data-campo="{{ c }}">
                         <option value="">Todos</option>
                         {% for opt in fk_data[c] %}
                             <option value="{{ opt.value }}"
-                                {% if opt.deps %}data-deps='{{ opt.deps | tojson }}'{% endif %}
+                                {% if opt.deps %}data-deps='{{ opt.deps | tojson }}'
+                                data-grupo="{{ opt.grupo or '' }}" data-label="{{ opt.label }}"{% endif %}
                                 {% if valores.get(c) == opt.value | string %}selected{% endif %}>
                                 {{ opt.label }}{% if opt.grupo %} ({{ opt.grupo }}){% endif %}
                             </option>
                         {% endfor %}
                     </select>
+                    {% endif %}
                     <button type="button" class="filtro-quitar" title="Quitar filtro"
                             aria-label="Quitar el filtro {{ fields[c].label }}">×</button>
                 </div>
@@ -157,38 +167,38 @@
     <script>
     document.addEventListener("DOMContentLoaded", function () {
         const form = document.getElementById("filtros-form");
-        const selects = Array.from(form.querySelectorAll("select.filtro-combinable"));
-        const porNombre = Object.fromEntries(selects.map(s => [s.name, s]));
-
-        // Selects dependientes: una opción se oculta si no corresponde a lo elegido
-        // en los selects de los que depende (ej: los modelos de la categoría elegida).
-        function filtrarOpciones() {
-            selects.forEach(function (sel) {
-                Array.from(sel.options).forEach(function (opt) {
-                    if (!opt.dataset.deps) return;
-                    const deps = JSON.parse(opt.dataset.deps);
-                    opt.hidden = Object.entries(deps).some(function ([campo, valor]) {
-                        const padre = porNombre[campo];
-                        return padre && padre.value !== "" && String(valor) !== padre.value;
-                    });
-                });
-                if (sel.selectedOptions.length && sel.selectedOptions[0].hidden) sel.value = "";
-            });
-        }
+        // Un select o un campo con lista por filtro (ver static/js/selectores.js).
+        const selectores = Selectores.de(form, ".filtro-combinable");
+        // Las opciones dependientes se acotan a lo elegido en los filtros de los
+        // que dependen (ej: los modelos de la categoría elegida).
+        Selectores.enlazarDependientes(selectores);
 
         // URL limpia (para guardarla o compartirla): no se envían los campos vacíos.
-        form.addEventListener("submit", limpiarVacios);
+        form.addEventListener("submit", function (e) {
+            if (!form.checkValidity()) { e.preventDefault(); form.reportValidity(); return; }
+            limpiarVacios();
+        });
         function limpiarVacios() {
             form.querySelectorAll("select, input").forEach(function (el) {
                 if (el.name && (el.value === "" || (el.name === "campo" && el.value === "todos"))) el.disabled = true;
             });
         }
+        function enviar() {
+            if (!form.reportValidity()) return;
+            limpiarVacios();
+            form.submit();
+        }
 
-        filtrarOpciones();
-        selects.forEach(sel => sel.addEventListener("change", function () {
-            filtrarOpciones();
-            if (sel.value !== "") { limpiarVacios(); form.submit(); }
-        }));
+        // Al terminar de elegir un valor distinto del aplicado, se vuelve a buscar
+        // (en un campo con lista, no mientras se tipea). Vaciar un filtro que
+        // tenía valor lo quita.
+        const aplicados = {};  // valor de cada filtro en la URL
+        Object.values(selectores).forEach(function (s) {
+            aplicados[s.campo] = s.valor();
+            s.alCambiar(function ({ elegido }) {
+                if (elegido && s.valor() !== aplicados[s.campo]) enviar();
+            });
+        });
 
         // «+ Agregar filtro»: muestra la fila del campo elegido y abre su select.
         const agregar = document.getElementById("agregar-filtro");
@@ -209,7 +219,7 @@
                 const opcion = agregar.querySelector(`option[value="${campo}"]`);
                 opcion.hidden = opcion.disabled = true;
                 actualizarAgregar();
-                fila.querySelector("select").focus();
+                selectores[campo].el.focus();
             });
         }
 
@@ -217,21 +227,20 @@
         form.querySelectorAll(".filtro-quitar").forEach(function (boton) {
             boton.addEventListener("click", function () {
                 const fila = boton.closest(".filtro-fila");
-                const sel = fila.querySelector("select");
-                const teniaValor = sel.value !== "";
-                sel.value = "";
+                const selector = selectores[fila.dataset.campo];
+                const teniaValor = aplicados[fila.dataset.campo] !== "";
+                selector.fijar("");
                 fila.hidden = true;
                 const opcion = agregar.querySelector(`option[value="${fila.dataset.campo}"]`);
                 opcion.hidden = opcion.disabled = false;
                 actualizarAgregar();
-                filtrarOpciones();
-                if (teniaValor) { limpiarVacios(); form.submit(); }
+                if (teniaValor) enviar();
             });
         });
 
         // Cambiar el campo de búsqueda vuelve a buscar solo si hay texto.
         document.getElementById("campo-select").addEventListener("change", function () {
-            if (document.getElementById("search-input").value.trim()) { limpiarVacios(); form.submit(); }
+            if (document.getElementById("search-input").value.trim()) enviar();
         });
     });
     </script>

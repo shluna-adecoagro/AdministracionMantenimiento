@@ -105,7 +105,8 @@ se escribe una propiedad y se declara en `__calculados__ = {"resumen": "Resumen"
 `Pedido.resumen`): se ve en listado, detalle, API y exportación, pero no sirve de filtro.
 
 **Búsqueda al importar.** Una FK se busca por la etiqueta del destino (`__label_field__`)
-y, si el modelo declara `__buscar_por__` (ej: `Material`: código y descripción), también
+y, si el modelo declara `__buscar_por__` (ej: `Material`: código y descripción; `Activo`:
+número y descripción), también
 por esos atributos. Un texto que coincide con varios registros es ambiguo.
  Si trae una FK (ej:
 `Activo.tipo_activo_id`, el tipo de la categoría), además funciona como filtro en el
@@ -202,7 +203,9 @@ Dentro de `fields`, cada campo acepta, entre otras: `label`, `tipo` (`text`, `nu
 `options` (para `select`), `alias` (otros nombres de columna al importar),
 `solo_lectura`, `oculto`, `depende_de` (`None` para desactivar un select dependiente
 inferido, o un campo o una lista para limitarlo a esos), `fk_filtro` (función que
-devuelve la condición que deben cumplir las opciones de una FK), `extensiones` (las de
+devuelve la condición que deben cumplir las opciones de una FK), `selector` (`"lista"`
+o `"select"`: cómo se elige una FK o un `select`; por defecto, un campo con lista si hay
+más de 15 opciones y un select si hay menos), `extensiones` (las de
 un campo de archivo, ej: `[".pdf"]`: arman el `accept` del formulario y se verifican al
 guardar), `numeracion` (ver abajo) y `solo_importacion` (dato cuyo dueño es el ERP: se ve
 en la app, pero solo lo carga la importación; la web lo muestra deshabilitado y la API

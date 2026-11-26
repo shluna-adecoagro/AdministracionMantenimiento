@@ -696,6 +696,33 @@ son independientes entre sí; los demás van en orden.
 - `repository.consulta_listado(valores=...)` y `campos_de_filtro(...)`.
 - Tests: `tests/test_filtros_listado.py`.
 
+#### Notas: campos con lista y activo como «número — descripción» (26/11, fuera de fase)
+
+- **Campo con lista** (`<datalist>`) en formularios y filtros cuando una FK, un `select`
+  de opciones fijas o un filtro Sí/No tiene más de `fk.UMBRAL_LISTA` (15) opciones; con
+  menos, sigue el `<select>`. `FieldSpec.selector` (`"lista"` o `"select"`) lo fija en un
+  campo. Al tipear, la lista se acorta a las opciones que contienen el texto (por
+  número, código o descripción).
+- Cómo funciona: el campo visible no se envía; el ID va en un oculto (`<campo>__valor`).
+  Cada opción se identifica por su texto (`fk.con_texto`): la etiqueta más los padres
+  entre paréntesis en un dependiente («5090E (Tractor, John Deere)») y, si aun así se
+  repite, «(ID n)». Un texto que no es una opción deja el campo inválido: el formulario
+  no pide el motivo y el filtro no busca.
+- Formularios: antes de pedir el motivo se validan los campos (`reportValidity`), así
+  que ahora también se avisan en el navegador los obligatorios vacíos.
+- Filtros: se busca al tomar una opción de la lista o al salir del campo, no mientras se
+  tipea; vaciar un filtro aplicado lo quita.
+- Selects y campos con lista comparten el código (`app/static/js/selectores.js`): misma
+  interfaz para los dependientes (el hijo se acota a lo elegido en los padres; en el
+  formulario, elegir el hijo completa los padres vacíos, aunque sean de distinto tipo).
+  Plantilla del campo: `crud/partials/_selector.html`.
+- **Activo como «número — descripción»** (`Activo.etiqueta`, como `Material.etiqueta`)
+  en selectores, listados, detalle, exportación, API (`activo_id_label`) y nombre del
+  destino de un pedido. La búsqueda de texto lo encuentra por número. Al importar, una FK
+  a un activo acepta el número, esa forma o la descripción, si no se repite. El historial
+  ya guardado sigue mostrando solo la descripción.
+- Tests: `tests/test_selector_lista.py`.
+
 ## Arquitectura objetivo
 
 ```

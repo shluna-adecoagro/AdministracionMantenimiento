@@ -17,6 +17,9 @@ TIPOS_CAMPO = frozenset(
     {"text", "number", "textarea", "date", "fk", "datalist", "file", "select", "color"}
 )
 
+# Cómo se elige una opción (FieldSpec.selector): un <select> o un campo con lista.
+SELECTORES = frozenset({"select", "lista"})
+
 # Grupos del menú lateral, en el orden en que se muestran.
 GRUPOS = {
     "operativos": "Operaciones",    # el día a día: OT, pedidos, solicitudes de OC, documentos
@@ -56,6 +59,12 @@ class FieldSpec:
     # argumentos que devuelve la condición SQLAlchemy sobre fk_model (ej: las
     # unidades que tienen tipo de medidor). Filtra el select y se verifica al guardar.
     fk_filtro: object = None
+
+    # Cómo se elige una opción (FK, "select" de opciones fijas o filtro Sí/No):
+    # None = según el largo de la lista (hasta fk.UMBRAL_LISTA opciones, un
+    # <select>; con más, un campo con lista para buscar tipeando); "select" o
+    # "lista" lo fijan.
+    selector: str | None = None
 
     # Presentación
     oculto: bool = False           # no se muestra en el formulario
