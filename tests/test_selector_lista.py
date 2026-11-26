@@ -10,7 +10,6 @@ import pytest
 
 from app.crud.core import fk
 from app.crud.entidades import REGISTRY
-from app.crud.intercambio.csv_entidades import _BuscadorFK
 from app.crud.meta.registry import construir_registry
 from app.models.activos_models import Activo, CategoriaActivo, EstadoActivo, TipoActivo
 
@@ -57,7 +56,7 @@ def test_activo_se_muestra_con_numero_y_descripcion(app, activos):
 
 
 def test_activo_al_importar_por_numero_o_descripcion(app, activos):
-    buscador = _BuscadorFK(REGISTRY["medidores"].fields["activo_id"])
+    buscador = fk.BuscadorFK(REGISTRY["medidores"].fields["activo_id"])
     assert buscador.buscar("eq-01") == activos[1].activo_id
     assert buscador.buscar("EQ-01 — Tractor 1") == activos[1].activo_id
     with pytest.raises(ValueError, match="usá el ID"):
@@ -92,6 +91,14 @@ def test_usa_lista_segun_el_largo_o_el_override():
     assert fk.usa_lista({}, larga)
     assert fk.usa_lista({"selector": "lista"}, corta)
     assert not fk.usa_lista({"selector": "select"}, larga)
+
+
+def test_la_grilla_respeta_el_selector(app, activos):
+    """La grilla (fase 13) usa el mismo umbral y el mismo override que formularios y filtros."""
+    f = REGISTRY["medidores"].fields["activo_id"]
+    assert fk.usa_busqueda(f)  # más de UMBRAL_LISTA activos
+    assert not fk.usa_busqueda({**{k: f.get(k) for k in ("fk_model", "fk_filtro")}, "selector": "select"})
+    assert fk.usa_busqueda({"fk_model": f.fk_model, "selector": "lista"})
 
 
 def test_texto_de_cada_opcion_no_se_repite():

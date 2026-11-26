@@ -18,6 +18,14 @@
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/brands.min.css">
 
 
+    <!-- htmx (copiado en static/vendor: la app tiene que andar sin internet) y la
+         grilla editable. responseHandling: el 422 de una celda con error también
+         se muestra (htmx, por defecto, no reemplaza nada ante un 4xx). -->
+    <meta name="htmx-config"
+          content='{"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"422","swap":true},{"code":"[45]..","swap":false,"error":true}]}'>
+    <script src="{{ url_for('static', filename='vendor/htmx/htmx.min.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/grilla.js', v=version_estatico('js/grilla.js')) }}" defer></script>
+
     <!-- Tus estilos -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css', v=version_estatico('css/estilos.css')) }}">
     <script defer src="{{ url_for('static', filename='js/selectores.js', v=version_estatico('js/selectores.js')) }}"></script>

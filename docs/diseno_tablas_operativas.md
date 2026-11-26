@@ -77,6 +77,7 @@ Es lo que ve Compras y lo que se cotiza: un material y una cantidad total.
 | observaciones | texto | En el histórico, el texto original de lo que no se interpretó («Recibido?», precios ilegibles, columnas corridas) |
 | motivo_revision | texto | «A revisar (importación)»: cantidad sacada del texto, dos OC en una celda, OC que no se pudo deducir, etc. El gestor lo borra al revisarlo |
 | origen, clave_origen | texto | Histórico: `excel_pedidos|<hoja>|f<fila>` |
+| enviada_en | fecha y hora, opcional | Vacía = borrador. La pone «Enviar a Compras» (decidido 26/11). En el histórico, la fecha del pedido |
 
 Derivadas: **solicitada** (suma de los destinos), ofertada, adjudicada, recibida, pendiente de comprar, pendiente de recibir y el **estado visible**.
 
@@ -101,6 +102,32 @@ Prioridad del estado visible (decidido 23/11): anulado → cerrado → recibido 
 - **Salteo de estados:** también se calcula (por ejemplo, una línea adjudicada que nunca pasó por «en cotización»). Ya no hay columna `estado_salteado`.
 - **Tiempos por etapa:** salen de la auditoría de los estados guardados y de las fechas de adjudicaciones, OC y recepciones.
 
+#### Borrador y envío a Compras (decidido 26/11)
+
+Se congela **cada línea al enviarla**, no el pedido entero: así se pueden agregar líneas
+olvidadas a un pedido que Compras ya está cotizando. El gestor carga y supervisa los
+pedidos que le mandan los mecánicos (mail, WhatsApp o, más adelante, la PWA del site de
+mecánicos; los de la PWA entran en borrador) y los envía cuando están completos.
+
+- **«Enviar a Compras»** (acción del pedido): pone `enviada_en` en las líneas en borrador
+  no anuladas. Sirve para el primer envío y para los agregados.
+- **Línea en borrador:** se edita todo, se agregan y sacan destinos, y se puede
+  **eliminar** (queda en la auditoría). No se anula. El estado de seguimiento no se edita.
+- **Línea enviada:** material, descripción y cantidades de los destinos congelados (en la
+  web, la API y la importación); no se agregan ni sacan destinos sueltos. La
+  **imputación sigue editable** (activo, modelo, ubicación, sector imputado, cuenta). No
+  se elimina.
+- **Redistribuir** (línea enviada): cambia todos los destinos juntos (entre activos,
+  modelos y talleres), con altas y bajas de destinos, sin cambiar el total. Un destino que
+  sigue apuntando a lo mismo conserva su sector y cuenta. Todo o nada. A definir con las
+  recepciones: un destino con recepciones no se saca ni baja de lo recibido.
+- **Anular o cancelar** (línea enviada), con motivo de tipo «Anulación»: sin cantidad anula
+  la línea entera; con cantidad, la suma a `cantidad_cancelada`. **Si ya hay algo
+  comprado no se anula entera:** solo se cancela hasta lo pendiente de comprar.
+- **Para pedir más** de una línea enviada: una línea nueva (nace en borrador).
+- El estado del pedido sigue sin guardarse: el resumen suma «Borrador» (ninguna línea
+  enviada) o «N líneas sin enviar».
+
 ### pedido_linea_destinos (adónde va y quién paga)
 
 Una línea de pedido tiene uno o más destinos. Ejemplos reales: "Carros de arena A1E3, A4E3, A5E3, A7E3" (cuatro activos), "Molienda" (una instalación o sector), "W20F" o "580" (un modelo), o una imputación "50% CC-01, 50% CC-02".
@@ -120,6 +147,7 @@ Una línea de pedido tiene uno o más destinos. Ejemplos reales: "Carros de aren
 - Derivadas por destino: recibida y pendiente de recibir. Así cada taller da la conformidad de su parte; y **«a revisar»**: destino «a identificar», o sin sector imputado o sin cuenta (cuando no hubo de dónde sugerirlos).
 - **Alta de la línea (decidido 23/11):** el alta de una línea pide la cantidad y el destino principal (activo, modelo, stock con su ubicación, gasto general o a identificar) y crea su primer destino con toda la cantidad. Para repartir entre varios destinos se usa la pestaña «Destinos» de la línea.
 - El activo y la ubicación no corrigen el sector imputado: quien paga puede ser otro sector (préstamos).
+- **Tipo de destino (decidido 26/11):** completar el activo, el modelo o la ubicación define el tipo de destino (para poder editar celda por celda); cambiar el tipo limpia los datos que ya no corresponden.
 - **Compra parcial (decidido 21/11):** si se adjudica menos de lo solicitado, la app reparte lo comprado entre los destinos **en proporción** a sus cantidades; el gestor lo corrige. Para materiales que se cuentan por unidad, el reparto se redondea a enteros y el resto va al primer destino.
 - **Corrección del reparto (decidido 23/11):** columna `comprada_corregida` (opcional) en el destino: si está cargada manda, y el resto se reparte entre los demás. Se cuenta por unidad si el material es una presentación (envases), si la unidad es de tipo «Cantidad» o si no hay unidad. El reparto no se guarda: se calcula.
 

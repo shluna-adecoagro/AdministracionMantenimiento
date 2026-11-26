@@ -1,0 +1,36 @@
+{# Vista previa de lo pegado: nada se guarda hasta confirmar. #}
+<section class="pegado">
+    <h3>Vista previa de lo pegado</h3>
+    <table class="tabla-listado">
+        <thead>
+            <tr><th>#</th><th>Material</th><th>Descripción</th><th>Cantidad</th><th>Destino</th><th>Avisos</th></tr>
+        </thead>
+        <tbody>
+            {% for f in filas %}
+            <tr class="{{ '' if f.valida else 'invalida' }}">
+                <td>{{ f.n }}</td>
+                <td>{{ MATERIALES[f.material_id].codigo if f.material_id else '—' }}</td>
+                <td>{{ f.descripcion or (MATERIALES[f.material_id].descripcion if f.material_id else '') }}</td>
+                <td class="num">{{ '%g'|format(f.cantidad) if f.cantidad else '—' }}</td>
+                <td>
+                    {% if f.activo_id %}{{ ACTIVOS[f.activo_id].nombre }}
+                    {% elif f.ubicacion_id %}{{ UBICACIONES[f.ubicacion_id].nombre }}
+                    {% else %}A identificar{% endif %}
+                </td>
+                <td>{{ f.avisos|join('; ') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% set validas = filas|selectattr('valida')|list %}
+    <form hx-post="/pegar/confirmar" hx-target="#cuerpo-lineas" class="acciones-pegado">
+        <input type="hidden" name="texto" value="{{ texto }}">
+        <button type="submit" class="btn-primary" {% if not validas %}disabled{% endif %}>
+            Agregar {{ validas|length }} línea{{ 's' if validas|length != 1 }}
+        </button>
+        <button type="button" class="btn-secondary" onclick="this.closest('#pegado').innerHTML = ''">Descartar</button>
+        {% if validas|length < filas|length %}
+            <span class="error-celda">Las filas en rojo no tienen cantidad y no se cargan.</span>
+        {% endif %}
+    </form>
+</section>

@@ -1,0 +1,28 @@
+{#
+  Última fila: alta rápida de una línea (material o descripción + cantidad).
+  Después de crear una, la respuesta trae la línea nueva y una fila de alta vacía.
+#}
+{% if nueva is defined and nueva %}
+    {% with l=nueva %}{% include "_fila_linea.html" %}{% endwith %}
+    <tr id="sub-{{ nueva.id }}" class="sub"></tr>
+    {% if oob_estado is defined and oob_estado %}
+        {% with oob=true %}{% include "_estado_pedido.html" %}{% endwith %}
+    {% endif %}
+{% endif %}
+<tr id="fila-nueva" class="fila-nueva">
+    <td class="calc">+</td>
+    <td colspan="2">
+        <input form="form-nueva" name="material" list="dl-materiales" autocomplete="off"
+               placeholder="Código del material o descripción tal como se pidió"
+               value="{{ form.get('material', '') if form is defined else '' }}"
+               {% if nueva is defined or error is defined %}autofocus{% endif %}>
+    </td>
+    <td>
+        <input form="form-nueva" name="cantidad" inputmode="decimal" class="num" placeholder="Cant."
+               value="{{ form.get('cantidad', '') if form is defined else '' }}">
+    </td>
+    <td colspan="{{ N_COLUMNAS - 4 }}">
+        <button form="form-nueva" type="submit" class="btn-primary">Agregar línea</button>
+        {% if error is defined %}<span class="error-celda" role="alert">{{ error }}</span>{% endif %}
+    </td>
+</tr>

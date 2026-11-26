@@ -1,0 +1,11 @@
+{% for l in lineas %}
+    {% include "_fila_linea.html" %}
+    <tr id="sub-{{ l.id }}" class="sub"></tr>
+{% endfor %}
+{% include "_fila_nueva.html" %}
+{% if aviso is defined %}
+    {# Fuera de banda: aviso, estado del pedido y la vista previa del pegado (que se cierra). #}
+    {% include "_avisos.html" %}
+    {% with oob=true %}{% include "_estado_pedido.html" %}{% endwith %}
+    <div id="pegado" hx-swap-oob="true"></div>
+{% endif %}

@@ -1,5 +1,4 @@
 {% extends "layout.html" %}
-{% from "crud/partials/_valor.html" import valor %}
 {% from "crud/partials/_selector.html" import campo_lista %}
 
 {% block title %}{{ label_plural | inicial }}{% endblock %}
@@ -99,7 +98,7 @@
     <!-- Tabla -->
     <div class="tabla-container">
 
-        <table>
+        <table{% if grilla.editables %} class="grilla"{% endif %}>
             <thead>
                 <tr>
                     {% for col in columns %}
@@ -110,54 +109,15 @@
             </thead>
 
             <tbody>
-            {% if registros %}
-                {% for r in registros %}
-                    {% set rowloop = loop %}
-                    <tr>
-
-                        {% for col in columns %}
-                            <td>
-
-                                {% if fields[col].tipo == "fk" %}
-
-                                    {% if fields[col].get("es_estado") %}
-                                        {% set est = fk_labels[rowloop.index0][col] %}
-                                        {% if est %}
-                                            <span class="badge" style="background-color: {{ est.color }}">
-                                                {{ est.label }}
-                                            </span>
-                                        {% else %}
-                                            -
-                                        {% endif %}
-                                    {% else %}
-                                        {{ fk_labels[rowloop.index0][col] | mostrar }}
-                                    {% endif %}
-
-                                {% else %}
-                                    {{ valor(r[col], fields[col]) }}
-                                {% endif %}
-
-                            </td>
-                        {% endfor %}
-
-                    <td class="tabla-acciones">
-                        <a href="{{ url_for(endpoint_base + '_detalle', id=r[pk]) }}"
-                        class="btn-info">Ver detalles</a>
-
-                        <a href="{{ url_for(endpoint_base + '_editar', id=r[pk]) }}"
-                        class="btn-primary">Editar</a>
-                    </td>
-
-                </tr>
-                {% endfor %}
-
+            {% for item in registros %}
+                {% include "crud/partials/_fila.html" %}
             {% else %}
                 <tr>
                     <td colspan="{{ columns|length + 1 }}" class="no-registros">
                         No hay registros
                     </td>
                 </tr>
-            {% endif %}
+            {% endfor %}
             </tbody>
 
         </table>

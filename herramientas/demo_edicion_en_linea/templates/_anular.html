@@ -1,0 +1,31 @@
+{# Contenido de #sub-<id>: anular la línea o cancelar una parte, con motivo. #}
+<td colspan="{{ N_COLUMNAS }}" class="sub-celda">
+    <form class="sub-grilla form-anular" hx-post="/lineas/{{ l.id }}/anular" hx-target="#sub-{{ l.id }}">
+        <strong>Línea {{ l.nro }}:</strong>
+        {% if l.adjudicada %}
+            ya hay {{ '%g'|format(l.adjudicada) }} comprados, así que no se anula entera.
+            Se puede cancelar hasta {{ '%g'|format(l.pendiente_comprar) }} (lo pendiente de comprar).
+        {% else %}
+            dejá la cantidad vacía para anularla entera, o indicá cuánto cancelar
+            (hasta {{ '%g'|format(l.pendiente_comprar) }}).
+        {% endif %}
+        <div class="fila-form">
+            <label>Motivo
+                <select name="motivo_id" autofocus>
+                    <option value="">—</option>
+                    {% for k, v in MOTIVOS.items() %}
+                        <option value="{{ k }}" {% if form is defined and form.get('motivo_id') == k|string %}selected{% endif %}>{{ v }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>Cantidad a cancelar
+                <input name="cantidad" inputmode="decimal" class="num"
+                       value="{{ form.get('cantidad', '') if form is defined else '' }}"
+                       placeholder="{{ 'Obligatoria' if l.adjudicada else 'Vacío = toda' }}">
+            </label>
+            <button type="submit" class="btn-primary">Confirmar</button>
+            <button type="button" class="btn-secondary" onclick="this.closest('tr.sub').innerHTML = ''">Cerrar</button>
+        </div>
+        {% if error is defined %}<p class="error-celda" role="alert">{{ error }}</p>{% endif %}
+    </form>
+</td>

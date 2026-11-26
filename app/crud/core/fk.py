@@ -57,7 +57,8 @@ def destino(registro, campo: str, cfg: dict):
 # ---------------------------------------------------------------------------
 
 # Hasta esta cantidad de opciones se elige con un <select>; con más, con un campo
-# con lista (<datalist>) que se acorta al tipear. FieldSpec.selector lo fija.
+# con lista (<datalist>) que se acorta al tipear: en formularios y filtros
+# (usa_lista) y en la grilla (usa_busqueda). FieldSpec.selector lo fija.
 UMBRAL_LISTA = 15
 
 
@@ -140,6 +141,84 @@ def sugerencias_de(fields: dict) -> dict[str, list[str]]:
                        if e is not None}
         resultado[c] = sorted(t for t in textos if t)
     return resultado
+
+
+# ---------------------------------------------------------------------------
+# Búsqueda por texto (importación CSV y edición en línea)
+# ---------------------------------------------------------------------------
+
+class NoEncontrado(ValueError):
+    """Ningún registro coincide con el texto."""
+
+
+class Ambiguo(ValueError):
+    """Varios registros coinciden con el texto. `cantidad`: cuántos."""
+
+    def __init__(self, mensaje: str, cantidad: int):
+        super().__init__(mensaje)
+        self.cantidad = cantidad
+
+
+def _norm(texto) -> str:
+    from app.crud.introspect import normalizar_texto
+
+    return normalizar_texto(str(texto).replace("_", " "))
+
+
+class BuscadorFK:
+    """
+    Busca el ID de un registro relacionado por su texto (ej: "Activo" → 1). Además
+    de la etiqueta, reconoce los atributos de `__buscar_por__` del modelo (ej: el
+    código o la descripción de un material). Sin importar mayúsculas ni tildes.
+
+    por_prefijo  True: si ningún texto coincide exacto, vale el comienzo siempre que
+                 corresponda a un solo registro («RE5048» → el filtro RE504836).
+
+    Lanza NoEncontrado o Ambiguo (los dos son ValueError).
+    """
+
+    def __init__(self, f, *, por_prefijo: bool = False):
+        self.f = f
+        self.por_prefijo = por_prefijo
+        fk_model = f.get("fk_model")
+        atributo = f.get("fk_label") or getattr(fk_model, "__label_field__", None)
+        self.indice: dict[str, set] = {}
+        if atributo:
+            pk = fk_model.__mapper__.primary_key[0].name
+            otros = getattr(fk_model, "__buscar_por__", ()) or ()
+            for obj in fk_model.query.all():
+                for a in (atributo, *otros):
+                    texto = getattr(obj, a, None)
+                    if texto not in (None, ""):
+                        self.indice.setdefault(_norm(texto), set()).add(getattr(obj, pk))
+        self.atributo = atributo
+
+    def buscar(self, texto: str):
+        if not self.atributo:
+            raise ValueError("no se puede buscar por nombre; usá la columna con el ID")
+        buscado = _norm(texto)
+        ids = self.indice.get(buscado, set())
+        if not ids and self.por_prefijo and buscado:
+            ids = {i for clave, grupo in self.indice.items() if clave.startswith(buscado) for i in grupo}
+        if not ids:
+            raise NoEncontrado(f"no existe «{texto}»")
+        if len(ids) > 1:
+            raise Ambiguo(f"hay {len(ids)} registros llamados «{texto}»; usá el ID", len(ids))
+        return next(iter(ids))
+
+
+def usa_busqueda(cfg: dict) -> bool:
+    """
+    True si la FK se edita en la grilla escribiendo (<input list>): con más de
+    UMBRAL_LISTA registros, o si FieldSpec.selector lo fija (mismo criterio que
+    usa_lista en formularios y filtros). Se cuenta al abrir la celda.
+    """
+    if cfg.get("selector"):
+        return cfg["selector"] == "lista"
+    consulta = cfg["fk_model"].query
+    if cfg.get("fk_filtro") is not None:
+        consulta = consulta.filter(cfg["fk_filtro"]())
+    return consulta.limit(UMBRAL_LISTA + 1).count() > UMBRAL_LISTA
 
 
 def validar_existencia(fields: dict, datos: dict) -> None:

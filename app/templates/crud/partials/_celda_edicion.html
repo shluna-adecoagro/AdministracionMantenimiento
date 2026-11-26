@@ -1,0 +1,39 @@
+{#
+  Una celda en edición (grilla). Variable: celda (VistasEntidad._celda), con
+  campo, cfg, valor (texto del control), control, opciones, id_lista, url (POST),
+  url_cancelar (GET de la fila en lectura) y error (opcional).
+
+  El form reemplaza la fila entera (closest tr): así se actualizan las columnas
+  calculadas. Guardar con Enter, Tab o al salir, y cancelar con Esc, lo maneja
+  grilla.js.
+#}
+{% set c = celda %}
+<td class="celda editando{% if c.error %} con-error{% endif %}" data-campo="{{ c.campo }}"
+    data-cancelar="{{ c.url_cancelar }}">
+    <form hx-post="{{ c.url }}" hx-target="closest tr" hx-swap="outerHTML" hx-sync="this:drop">
+        {% if c.control == "select" %}
+            <select name="{{ c.campo }}" aria-label="{{ c.cfg.label }}">
+                {% if not c.cfg.required %}<option value="">—</option>{% endif %}
+                {% for o in c.opciones %}
+                    <option value="{{ o.value }}" {% if o.value | string == c.valor | string %}selected{% endif %}>
+                        {{ o.label }}{% if o.grupo %} ({{ o.grupo }}){% endif %}
+                    </option>
+                {% endfor %}
+            </select>
+        {% elif c.control in ("busqueda", "datalist") %}
+            <input name="{{ c.campo }}" value="{{ c.valor }}" list="{{ c.id_lista }}" autocomplete="off"
+                   aria-label="{{ c.cfg.label }}">
+            <datalist id="{{ c.id_lista }}">
+                {% for texto in c.opciones %}<option value="{{ texto }}"></option>{% endfor %}
+            </datalist>
+        {% elif c.control == "number" %}
+            <input name="{{ c.campo }}" value="{{ c.valor }}" inputmode="decimal" class="num"
+                   autocomplete="off" aria-label="{{ c.cfg.label }}">
+        {% elif c.control == "date" %}
+            <input type="date" name="{{ c.campo }}" value="{{ c.valor }}" aria-label="{{ c.cfg.label }}">
+        {% else %}
+            <input name="{{ c.campo }}" value="{{ c.valor }}" autocomplete="off" aria-label="{{ c.cfg.label }}">
+        {% endif %}
+    </form>
+    {% if c.error %}<div class="error-celda" role="alert">{{ c.error }}</div>{% endif %}
+</td>

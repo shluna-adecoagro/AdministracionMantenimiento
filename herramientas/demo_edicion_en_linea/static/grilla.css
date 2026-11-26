@@ -1,0 +1,103 @@
+/* Estilos mínimos, con la paleta de app/static/css/estilos.css. */
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; font-family: "Inter", system-ui, sans-serif; background: #f8fafc; color: #1e293b; line-height: 1.5; }
+.content { padding: 2rem 2.5rem; }
+
+.seccion-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.seccion-header h2 { margin: 0; font-size: 1.35rem; }
+
+.btn-primary, .btn-secondary {
+    border: 0; border-radius: 6px; padding: .4rem .9rem; font: inherit; font-size: .875rem; cursor: pointer;
+}
+.btn-primary { background: #2563eb; color: white; }
+.btn-primary:hover { background: #1d4ed8; }
+.btn-primary:disabled { background: #94a3b8; cursor: not-allowed; }
+.btn-secondary { background: #e2e8f0; color: #1e293b; }
+.btn-secondary:hover { background: #cbd5e1; }
+
+.ayuda { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: .6rem 1rem; margin-bottom: 1rem; font-size: .875rem; }
+.ayuda summary { cursor: pointer; font-weight: 600; }
+.ayuda ul { margin: .5rem 0 0; padding-left: 1.2rem; }
+
+.flash { padding: .5rem .9rem; border-radius: 6px; font-size: .875rem; }
+.flash-ok { background: #dcfce7; color: #166534; }
+
+.tabla-container { background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow-x: auto; }
+.tabla-listado { width: 100%; border-collapse: collapse; font-size: .875rem; }
+.tabla-listado th { background: #f1f5f9; text-align: left; padding: .5rem .6rem; font-weight: 600; white-space: nowrap; border-bottom: 1px solid #e2e8f0; }
+.tabla-listado td { padding: 0 .6rem; height: 2.25rem; border-bottom: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* --- Grilla editable */
+.grilla td.celda { cursor: cell; }
+.grilla td.calc { color: #64748b; background: #fafbfc; }
+.grilla td.activa { outline: 2px solid #2563eb; outline-offset: -2px; }
+.grilla td:focus { outline: 2px solid #2563eb; outline-offset: -2px; }
+.grilla td.editando { padding: 0; outline: 2px solid #2563eb; outline-offset: -2px; position: relative; }
+.grilla td.editando input, .grilla td.editando select {
+    width: 100%; height: 2.25rem; border: 0; padding: 0 .6rem; font: inherit; background: #eff6ff; outline: none;
+}
+.grilla td.con-error { outline-color: #dc2626; }
+.grilla td.con-error input, .grilla td.con-error select { background: #fef2f2; }
+.error-celda {
+    color: #b91c1c; font-size: .78rem; padding: .25rem .5rem;
+}
+.grilla td.editando .error-celda {
+    position: absolute; left: 0; top: 100%; z-index: 5; min-width: 16rem;
+    background: #fef2f2; border: 1px solid #fecaca; border-radius: 0 0 6px 6px;
+}
+.grilla tr.anulada td { text-decoration: line-through; color: #94a3b8; }
+.grilla tr.htmx-request td { opacity: .6; }
+
+.badge { display: inline-block; padding: 0 .45rem; border-radius: 999px; font-size: .72rem; font-weight: 600; }
+.badge-revisar { background: #fef3c7; color: #92400e; }
+
+.btn-destinos { border: 1px solid #cbd5e1; background: white; border-radius: 6px; padding: .1rem .5rem; cursor: pointer; font: inherit; }
+
+/* --- Destinos (fila desplegable) */
+tr.sub:empty { display: none; }
+.sub-celda { padding: .5rem .6rem .75rem 2.5rem !important; background: #f8fafc; height: auto !important; }
+.sub-grilla { border-left: 3px solid #93c5fd; padding-left: .75rem; }
+.sub-grilla .tabla-listado { background: white; border: 1px solid #e2e8f0; }
+.alta-destino { display: flex; gap: .5rem; align-items: center; margin-top: .5rem; }
+.alta-destino input { width: 6rem; padding: .3rem .5rem; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; }
+
+/* --- Alta rápida */
+.fila-nueva td { background: #f8fafc; padding: .3rem .6rem; }
+.fila-nueva input { width: 100%; padding: .3rem .5rem; border: 1px dashed #94a3b8; border-radius: 6px; font: inherit; background: white; }
+
+/* --- Pegado */
+.pegado { margin-top: 1.25rem; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; }
+.pegado h3 { margin: 0 0 .5rem; font-size: 1rem; }
+.pegado tr.invalida td { background: #fef2f2; color: #991b1b; }
+.acciones-pegado { display: flex; gap: .5rem; align-items: center; margin-top: .75rem; }
+
+/* --- Borrador, envío y acciones */
+.header-acciones { display: flex; gap: .75rem; align-items: center; }
+.estado-pedido { display: flex; gap: .5rem; align-items: center; }
+.badge-borrador { background: #e0e7ff; color: #3730a3; }
+.badge-enviado { background: #dcfce7; color: #166534; }
+.grilla td.congelada { color: #475569; background: #f1f5f9; cursor: not-allowed; }
+.grilla tr.en-borrador > td:first-child { box-shadow: inset 3px 0 0 #6366f1; }
+.flash-error { background: #fee2e2; color: #991b1b; }
+.btn-icono { border: 0; background: none; cursor: pointer; font-size: 1rem; opacity: .6; padding: .1rem .3rem; }
+.btn-icono:hover { opacity: 1; }
+.btn-link { border: 0; background: none; color: #2563eb; cursor: pointer; font: inherit; padding: 0; white-space: nowrap; }
+.btn-link:hover { text-decoration: underline; }
+.acciones { white-space: nowrap; }
+.nota { color: #64748b; font-size: .8rem; }
+.estado-anulado { color: #94a3b8; }
+.estado-adjudicado { color: #166534; font-weight: 600; }
+.estado-borrador { color: #3730a3; }
+
+/* --- Formularios dentro de la fila desplegable */
+.fila-form { display: flex; gap: .75rem; align-items: end; flex-wrap: wrap; margin-top: .5rem; }
+.fila-form label { display: flex; flex-direction: column; font-size: .8rem; color: #475569; gap: .15rem; }
+.fila-form select, .fila-form input, .redistribuir input {
+    padding: .3rem .5rem; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; background: white;
+}
+.redistribuir td input { width: 100%; }
+.redistribuir td { padding: .2rem .4rem; }
+.total-redistribuir { font-size: .875rem; }
+.total-redistribuir.descuadre { color: #b91c1c; }
+.form-anular p { margin: .25rem 0; }

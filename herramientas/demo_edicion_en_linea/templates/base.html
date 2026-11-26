@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>{% block titulo %}Demo htmx{% endblock %}</title>
+    {# 422 (error de validación) se reemplaza igual que un 200: trae la celda con el mensaje. #}
+    <meta name="htmx-config" content='{"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"422","swap":true},{"code":"[45]..","swap":false,"error":true}]}'>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='grilla.css') }}">
+    <script src="{{ url_for('static', filename='grilla.js') }}" defer></script>
+</head>
+<body>
+    {# Opciones de los campos con lista (en la app: las mismas que arma fk.opciones_de). #}
+    <datalist id="dl-materiales">
+        {% for m in MATERIALES.values() %}<option value="{{ m.codigo }} — {{ m.descripcion }}">{% endfor %}
+    </datalist>
+    <datalist id="dl-activos">
+        {% for a in ACTIVOS.values() %}<option value="{{ a.nombre }}">{% endfor %}
+    </datalist>
+    <datalist id="dl-ubicaciones">
+        {% for u in UBICACIONES.values() %}<option value="{{ u.nombre }}">{% endfor %}
+    </datalist>
+
+    <main class="content">{% block content %}{% endblock %}</main>
+</body>
+</html>

@@ -10,6 +10,13 @@ Por cada entidad del registry se generan cinco pantallas:
     /<entidad>/<id>/editar              edición
     /<entidad>/<id>/confirmar_eliminar  baja
 
+Si la spec declara `edicion_en_linea`, además (fase 13, grilla con htmx):
+
+    GET  /<entidad>/<id>/celda/<campo>  la celda en edición (<td>)
+    POST /<entidad>/<id>/celda/<campo>  guarda; la fila entera (<tr>), o la fila con
+                                        la celda abierta y el error (422)
+    GET  /<entidad>/<id>/fila           la fila en lectura (Esc)
+
 La navegación (a dónde vuelve cada pantalla, qué pestañas tiene el detalle)
 se deduce de la spec: padre, hijos y nombre. No hay nombres de blueprint ni
 URLs escritas a mano.
@@ -26,7 +33,7 @@ el modelo y en el material). El padre "activo" es el que viene en la URL
 """
 from __future__ import annotations
 
-from flask import current_app, flash, redirect, render_template, request, url_for
+from flask import abort, current_app, flash, redirect, render_template, request, url_for
 
 from app.core.db import db
 
@@ -39,6 +46,9 @@ from app.crud.meta.spec import EntitySpec, ParentSpec
 from app.crud.web.textos import etiqueta_tabla, inicial
 
 BLUEPRINT = "crud"
+# Motivo que la auditoría registra para lo guardado desde la grilla. Es fijo: no
+# está en el catálogo de motivos (ver propuesta_edicion_en_linea.md, decisión 1).
+MOTIVO_EDICION_EN_LINEA = "Edición en línea"
 ACCIONES = ("listar", "crear", "detalle", "editar", "confirmar_eliminar")
 
 
@@ -79,6 +89,10 @@ class VistasEntidad:
         if self.spec.acciones:
             bp.add_url_rule(f"{base}/<int:id>/accion/<accion>", f"{n}_accion",
                             self.accion, methods=["POST"])
+        if self.spec.edicion_en_linea:
+            bp.add_url_rule(f"{base}/<int:id>/celda/<campo>", f"{n}_celda", self.celda,
+                            methods=["GET", "POST"])
+            bp.add_url_rule(f"{base}/<int:id>/fila", f"{n}_fila", self.fila)
 
     # ------------------------------------------------------------------
     # Navegación
@@ -194,12 +208,7 @@ class VistasEntidad:
             filtro_padre=(padre.fk, padre_id) if padre else None,
         ).all()
 
-        fk_labels = [fk.etiquetas(r, self.fields) for r in objetos]
-        registros = []
-        for r, labels in zip(objetos, fk_labels):
-            fila = {c: labels[c] if c in labels else getattr(r, c) for c in s.listado}
-            fila[s.pk] = getattr(r, s.pk)
-            registros.append(fila)
+        registros = [item_fila(s, r, s.listado) for r in objetos]
 
         opciones = fk.opciones_de(self.fields)
         for c in campos_select:
@@ -223,7 +232,7 @@ class VistasEntidad:
             fk_data=opciones,
             # Filtros que se eligen tipeando (campo con lista) en lugar de un select.
             con_lista={c for c in campos_select if fk.usa_lista(self.fields[c], opciones[c])},
-            fk_labels=fk_labels,
+            grilla=contexto_grilla(s, s.listado, {}),
             q=q,
         )
 
@@ -526,6 +535,8 @@ class VistasEntidad:
     def _subentidad(self, hijo: EntitySpec, registro, id):
         """Datos de la pestaña de una subentidad en el detalle del padre."""
         rel = hijo.padre_de_tipo(self.spec.name)
+        # Las columnas del listado de la entidad, sin la del padre (es la misma en todas).
+        columnas = [c for c in hijo.listado if c != rel.fk]
         objetos = (
             hijo.model.query.options(*fk.carga_anticipada(hijo.model, hijo.fields))
             .filter_by(**{rel.fk: id})
@@ -537,7 +548,8 @@ class VistasEntidad:
             "label_singular": hijo.label_singular,
             "label_plural": hijo.label_plural,
             "template_listado": "crud/listado_subentidad.html",
-            "items": [fk.agregar_etiquetas(repository.valores(o), o, hijo.fields) for o in objetos],
+            "items": [item_fila(hijo, o, columnas) for o in objetos],
+            "grilla": contexto_grilla(hijo, columnas, {rel.fk: id}),
             "entidad": hijo.name,
             # Las columnas del listado de la entidad (no todas: la tabla desbordaría).
             "fields": {c: hijo.fields[c] for c in hijo.listado},
@@ -547,6 +559,174 @@ class VistasEntidad:
             "padre_id": id,
             "endpoint_base": f"{BLUEPRINT}.{hijo.name}",
         }
+
+
+    # ------------------------------------------------------------------
+    # EDICIÓN EN LÍNEA (grilla)
+    # ------------------------------------------------------------------
+
+    def _grilla_de_url(self):
+        """Contexto de la fila según desde dónde se llegó: la pestaña del padre o el listado."""
+        padre, padre_id = self._padre_desde_url()
+        if padre is not None:
+            return contexto_grilla(self.spec, [c for c in self.spec.listado if c != padre.fk],
+                                   {padre.fk: padre_id})
+        return contexto_grilla(self.spec, self.spec.listado, {})
+
+    def _campo_en_linea(self, campo):
+        if campo not in self.spec.edicion_en_linea:
+            abort(404)
+        return self.fields[campo]
+
+    def _render_fila(self, registro, status=200, **extra):
+        grilla = self._grilla_de_url()
+        item = item_fila(self.spec, registro, grilla["columnas"])
+        return render_template("crud/partials/_fila.html", grilla=grilla, item=item, **extra), status
+
+    def fila(self, id):
+        return self._render_fila(repository.obtener_o_404(self.spec.model, id))
+
+    def _celda(self, registro, campo, texto=None, error=None):
+        """Variables de crud/partials/_celda_edicion.html."""
+        f = self.fields[campo]
+        grilla = self._grilla_de_url()
+        id_ = getattr(registro, self.spec.pk)
+        control, opciones = control_celda(f)
+        if texto is None:
+            texto = texto_celda(registro, campo, f, control)
+        return {
+            "campo": campo, "cfg": f, "valor": texto, "error": error,
+            "control": control, "opciones": opciones,
+            "id_lista": f"lista-{self.spec.name}-{campo}",
+            "url": url_for(endpoint(self.spec.name, "celda"), id=id_, campo=campo, **grilla["args_fila"]),
+            "url_cancelar": url_for(endpoint(self.spec.name, "fila"), id=id_, **grilla["args_fila"]),
+        }
+
+    def celda(self, id, campo):
+        registro = repository.obtener_o_404(self.spec.model, id)
+        f = self._campo_en_linea(campo)
+        if request.method == "GET":
+            return render_template("crud/partials/_celda_edicion.html", celda=self._celda(registro, campo))
+
+        texto = request.form.get(campo, "")
+        try:
+            datos = self._dato_de_celda(campo, f, texto)
+            self.servicio.actualizar(registro, datos, MOTIVO_EDICION_EN_LINEA)
+        except ErroresValidacion as e:
+            error = self._mensaje_celda(campo, e.errores)
+        except ErrorIntegridad as e:
+            error = self._mensaje_celda(campo, {e.campo or "_general": e.mensaje})
+        else:
+            self._avisar(registro)
+            return self._render_fila(registro, foco=campo)
+        # Lo guardado se descartó (el servicio hace rollback): la fila se arma con lo
+        # que hay en la base y la celda queda abierta con lo que se escribió.
+        registro = repository.obtener_o_404(self.spec.model, id)
+        return self._render_fila(registro, 422, celda=self._celda(registro, campo, texto, error))
+
+    def _dato_de_celda(self, campo, f, texto) -> dict:
+        """
+        {campo: valor} de lo escrito en la celda, por el mismo camino que el
+        formulario (coercion + validar_existencia). Una FK con búsqueda llega como
+        texto («RE504836 — Filtro de aceite», el código o el comienzo).
+        """
+        entrada = {campo: texto}
+        if f.tipo == "fk" and texto.strip() and fk.usa_busqueda(f):
+            try:
+                entrada[campo] = str(fk.BuscadorFK(f, por_prefijo=True).buscar(texto.strip()))
+            except fk.Ambiguo as e:
+                raise ErroresValidacion({campo: f"«{texto.strip()}» coincide con {e.cantidad} opciones. "
+                                                "Elegí una de la lista."})
+            except ValueError:
+                raise ErroresValidacion({campo: f"No encontré «{texto.strip()}». Elegí una opción de la lista."})
+        datos = coercion.datos_de_entrada(self.spec.model, {campo: f}, entrada, parcial=True)
+        fk.validar_existencia(self.fields, datos)
+        # Los campos de los que depende y que no se editan en la grilla se recalculan
+        # (ej: la unidad de la línea, al cambiar el material): el servicio los
+        # completa a partir del valor nuevo.
+        if datos.get(campo) is not None:
+            for padre in f.depende_de:
+                if padre not in self.spec.edicion_en_linea and not self.fields[padre].solo_lectura:
+                    datos[padre] = None
+        return datos
+
+    def _mensaje_celda(self, campo, errores: dict) -> str:
+        """
+        El error se muestra en la celda editada. Si una regla lo marcó en otro campo
+        (ej: falta el motivo), va con la etiqueta de ese campo.
+        """
+        if campo in errores:
+            return errores[campo]
+        partes = []
+        for otro, texto in errores.items():
+            label = self.fields[otro].label if otro in self.fields else None
+            partes.append(texto if not label or texto.startswith(label) else f"{label}: {texto}")
+        return " ".join(partes)
+
+
+# ---------------------------------------------------------------------------
+# Filas y celdas de la grilla (las usan el listado, la pestaña del padre y las
+# rutas de celda: una fila se arma igual en los tres lugares)
+# ---------------------------------------------------------------------------
+
+def contexto_grilla(spec: EntitySpec, columnas, args_fila: dict) -> dict:
+    """
+    Lo que crud/partials/_fila.html necesita además del registro. `args_fila`: el
+    padre desde el que se llegó ({"pedido_id": 3}), para los enlaces y las celdas.
+    """
+    return {
+        "columnas": list(columnas),
+        "campos": spec.fields,
+        "pk": spec.pk,
+        "entidad": spec.name,
+        "endpoint_base": f"{BLUEPRINT}.{spec.name}",
+        "args_fila": args_fila,
+        "editables": set(spec.edicion_en_linea),
+    }
+
+
+def item_fila(spec: EntitySpec, registro, columnas) -> dict:
+    """Valores de una fila: las columnas pedidas, la PK y la etiqueta (y color) de cada FK."""
+    item = {c: getattr(registro, c, None) for c in columnas}
+    item[spec.pk] = getattr(registro, spec.pk)
+    for c in columnas:
+        f = spec.fields.get(c)
+        if f is None or f.tipo != "fk":
+            continue
+        obj = fk.destino(registro, c, f)
+        item[f"{c}_label"] = fk.etiqueta(obj, f) if obj is not None else None
+        if obj is not None and f.es_estado:
+            item[f"{c}_color"] = getattr(obj, "color_badge", None)
+    return item
+
+
+def control_celda(f) -> tuple[str, list]:
+    """
+    (control, opciones) de la celda en edición: "busqueda" (FK con muchos registros:
+    <input list>), "select" (FK con pocos u opciones fijas), "datalist" (texto con
+    sugerencias), "number", "date" o "text".
+    """
+    if f.tipo == "fk":
+        opciones = fk.opciones(f)
+        if fk.usa_busqueda(f):
+            return "busqueda", [o["label"] for o in opciones]
+        return "select", opciones
+    if f.tipo == "select":
+        return "select", list(f.options)
+    if f.tipo == "datalist":
+        return "datalist", fk.sugerencias_de({f.name: f}).get(f.name, [])
+    if f.tipo in ("number", "date"):
+        return f.tipo, []
+    return "text", []
+
+
+def texto_celda(registro, campo, f, control) -> str:
+    """Valor actual como va en el control (en una búsqueda, la etiqueta del registro)."""
+    if control == "busqueda":
+        obj = fk.destino(registro, campo, f)
+        return fk.etiqueta(obj, f) if obj is not None else ""
+    valor = coercion.valor_para_formulario(f, getattr(registro, campo))
+    return "" if valor is None else str(valor)
 
 
 def registrar_web(app, registry: dict[str, EntitySpec]):
