@@ -1,13 +1,19 @@
 {% extends "layout.html" %}
 {% from "crud/partials/_selector.html" import campo_lista %}
 
-{% block title %}{{ label_plural | inicial }}{% endblock %}
+{% block title %}{{ cola.label if cola else label_plural | inicial }}{% endblock %}
 
 {% block content %}
 
 <section class="p-8">
 
-    <!-- Encabezado -->
+    <!-- Encabezado (en una cola de «a revisar», su título y cómo se resuelve; sin alta) -->
+    {% if cola %}
+        {% with titulo=cola.label, boton_url=None %}
+            {% include "crud/partials/_listado_header.html" %}
+        {% endwith %}
+        {% if cola.ayuda %}<p class="cola-ayuda">{{ cola.ayuda }}</p>{% endif %}
+    {% else %}
     {% with 
         titulo="Gestión de " ~ label_plural,
         boton_url=url_for(endpoint_base + '_crear'),
@@ -15,6 +21,7 @@
     %}
         {% include "crud/partials/_listado_header.html" %}
     {% endwith %}
+    {% endif %}
 
     <!-- Filtros: búsqueda de texto + panel plegable de selects combinables (Y) -->
     <form method="GET" class="filtros-container filtros-combinables" id="filtros-form">
@@ -47,7 +54,14 @@
                 Buscar
             </button>
             {% if q or valores %}
-                <a class="btn-limpiar" href="{{ url_for(endpoint_base + '_listar') }}">Limpiar</a>
+                <a class="btn-limpiar" href="{{ url_listado }}{% if todas %}?todas=1{% endif %}">Limpiar</a>
+            {% endif %}
+            {% if cola and cola.por_defecto %}
+                {# Sin la condición por defecto de la cola (ej: también las líneas cerradas). #}
+                <label class="cola-todas">
+                    <input type="checkbox" name="todas" value="1" id="cola-todas" {% if todas %}checked{% endif %}>
+                    {{ cola.label_todas }}
+                </label>
             {% endif %}
             <span class="filtros-total">{{ registros | length }} resultado{{ "" if registros | length == 1 else "s" }}</span>
         </div>
@@ -197,6 +211,10 @@
                 if (teniaValor) enviar();
             });
         });
+
+        // «Incluir las cerradas» (cola de «a revisar»): vuelve a buscar.
+        const todas = document.getElementById("cola-todas");
+        if (todas) todas.addEventListener("change", enviar);
 
         // Cambiar el campo de búsqueda vuelve a buscar solo si hay texto.
         document.getElementById("campo-select").addEventListener("change", function () {

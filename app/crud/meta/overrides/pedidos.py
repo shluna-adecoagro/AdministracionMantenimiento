@@ -39,6 +39,8 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
+from sqlalchemy import and_, select
+
 from app.core.db import db
 from app.crud.core.coercion import ErroresValidacion
 from app.crud.core.interpretes import CodigoEnTexto, FkEntre, FkOTexto
@@ -471,6 +473,9 @@ ACCION_ANULAR = {
 def completar_linea(datos: dict, registro):
     if "nro_oc" in datos:
         datos["nro_oc"] = normalizar_oc(datos["nro_oc"])
+    # Identificar el material saca la marca «sin material del maestro» (fase 13.6).
+    if datos.get("material_id") is not None and "sin_material_maestro" not in datos:
+        datos["sin_material_maestro"] = False
     return datos
 
 
@@ -478,6 +483,8 @@ def al_guardar_linea(linea, operacion: str, cambiados: set):
     errores = {}
     if linea.material_id is None and not (linea.descripcion or "").strip():
         errores["material_id"] = "Elegí el material o escribí la descripción tal como se pidió."
+    if linea.sin_material_maestro and linea.material_id is not None:
+        errores["sin_material_maestro"] = "La línea ya tiene el material identificado."
     if linea.cantidad_cancelada is not None and linea.cantidad_cancelada < 0:
         errores["cantidad_cancelada"] = "La cantidad cancelada no puede ser negativa."
     necesita_motivo = linea.estado == "anulado" or (linea.cantidad_cancelada or 0) > 0
@@ -613,6 +620,80 @@ def _tab_recepciones(linea):
 # ---------------------------------------------------------------------------
 # Entidades
 # ---------------------------------------------------------------------------
+# Colas de «a revisar» (fase 13.6). Nunca entran las líneas anuladas; las
+# cerradas, solo si se pide (son casi todas del histórico).
+# ---------------------------------------------------------------------------
+
+def _linea_no_anulada():
+    return PedidoLinea.estado_visible != "Anulado"
+
+
+def _linea_abierta():
+    return PedidoLinea.estado_visible != "Cerrado"
+
+
+def _de_lineas(condicion):
+    """Destinos cuya línea cumple la condición."""
+    return PedidoLineaDestino.pedido_linea_id.in_(select(PedidoLinea.pedido_linea_id).where(condicion))
+
+
+def _con_texto(columna):
+    return and_(columna.is_not(None), columna != "")
+
+
+COLA_DESTINOS = {
+    "id": "a_revisar",
+    "label": "Destinos a revisar",
+    "condicion": lambda: and_(PedidoLineaDestino.a_revisar == "Sí", _de_lineas(_linea_no_anulada())),
+    "por_defecto": lambda: _de_lineas(_linea_abierta()),
+    "label_todas": "Incluir los de líneas cerradas",
+    "columnas": ["pedido_linea_id", "detalle_texto", "cantidad", "destino", "activo_id", "modelo_id",
+                 "ubicacion_id", "sector_imputado_id", "cuenta_id"],
+    "ayuda": ("Destinos «a identificar», o sin sector imputado o sin cuenta. Completar el activo, el modelo "
+              "o la ubicación define el tipo de destino y sugiere el sector y la cuenta. Para repartir "
+              "entre varios destinos: «Destinos de la línea» (en borrador) o «Redistribuir» (enviada)."),
+    "orden": 10,
+}
+COLA_SIN_MATERIAL = {
+    "id": "sin_material",
+    "label": "Líneas sin material",
+    "condicion": lambda: and_(PedidoLinea.material_id.is_(None), PedidoLinea.sin_material_maestro.is_(False),
+                              _linea_no_anulada()),
+    "por_defecto": _linea_abierta,
+    "label_todas": "Incluir las cerradas",
+    "columnas": ["pedido_id", "nro_linea", "descripcion", "solicitada", "se_cuenta_en", "estado_visible",
+                 "material_id", "sin_material_maestro"],
+    "edicion_en_linea": ["material_id", "descripcion", "sin_material_maestro"],
+    "ayuda": ("Líneas sin el material del maestro identificado. Elegí el material por código o descripción; "
+              "si no está ni va a estar en el maestro (ferretería, insumos), marcá «Sin material del "
+              "maestro» y sale de la cola. En una línea enviada el material se completa, pero no se cambia."),
+    "orden": 20,
+}
+COLA_LINEAS_IMPORTACION = {
+    "id": "importacion",
+    "label": "Líneas a revisar (importación)",
+    "condicion": lambda: and_(_con_texto(PedidoLinea.motivo_revision), _linea_no_anulada()),
+    "por_defecto": _linea_abierta,
+    "label_todas": "Incluir las cerradas",
+    "columnas": ["pedido_id", "nro_linea", "material_id", "descripcion", "solicitada", "estado_visible",
+                 "nro_oc", "observaciones", "motivo_revision"],
+    "edicion_en_linea": ["material_id", "nro_oc", "observaciones", "motivo_revision"],
+    "ayuda": ("Lo que la importación del histórico no pudo interpretar. Corregí lo que haga falta y borrá "
+              "el texto de «A revisar (importación)»: la línea sale de la cola."),
+    "orden": 30,
+}
+COLA_PEDIDOS_IMPORTACION = {
+    "id": "importacion",
+    "label": "Pedidos a revisar (importación)",
+    "condicion": lambda: _con_texto(Pedido.motivo_revision),
+    "columnas": ["numero", "fecha_pedido", "referencia", "resumen", "observaciones", "motivo_revision"],
+    "edicion_en_linea": ["referencia", "observaciones", "motivo_revision"],
+    "ayuda": ("Lo que la importación del histórico no pudo interpretar en la hoja del pedido. Corregí lo que "
+              "haga falta y borrá el texto de «A revisar (importación)»: el pedido sale de la cola."),
+    "orden": 40,
+}
+
+# ---------------------------------------------------------------------------
 
 OVERRIDES = {
     "pedidos": {
@@ -637,6 +718,7 @@ OVERRIDES = {
         "clave_natural": ["numero"],
         "acciones": [ACCION_ENVIAR],
         "eliminable_si": pedido_eliminable,
+        "colas": [COLA_PEDIDOS_IMPORTACION],
     },
     "pedido_lineas": {
         "model": PedidoLinea,
@@ -651,6 +733,7 @@ OVERRIDES = {
             "nro_linea": {"numeracion": "{n}", "numeracion_por": "pedido_id"},
             # El que se guarda (lo marca una persona). El que se ve es «Estado» (calculado).
             "sin_conformidad": {"required": False, "options": NO_SI},
+            "sin_material_maestro": {"required": False, "options": NO_SI},
             "cantidad_cancelada": {"required": False},
             "motivo_operacion_id": {"fk_filtro": motivos_de_anulacion},
             # Anular va por su acción, que pide el motivo: la grilla no lo ofrece.
@@ -716,6 +799,7 @@ OVERRIDES = {
         # Los destinos de cada línea se despliegan debajo de ella (fase 13.4).
         "subgrillas": ["pedido_linea_destinos"],
         "acciones": [ACCION_ANULAR, ACCION_REDISTRIBUIR],
+        "colas": [COLA_SIN_MATERIAL, COLA_LINEAS_IMPORTACION],
         "tabs_extra": [{"id": "recepciones_linea", "label": "Recepciones", "funcion": _tab_recepciones}],
         "completar": completar_linea,
         "al_guardar": al_guardar_linea,
@@ -758,5 +842,6 @@ OVERRIDES = {
         "editable_si": {"cantidad": destino_en_borrador},
         "creable_si": destino_creable,
         "eliminable_si": destino_eliminable,
+        "colas": [COLA_DESTINOS],
     },
 }

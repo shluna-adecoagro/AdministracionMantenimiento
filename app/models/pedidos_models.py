@@ -155,6 +155,11 @@ class PedidoLinea(db.Model, ModelMixin, AuditMixin, OrigenMixin):
     unidad_medida_id = db.Column(db.Integer, db.ForeignKey("unidades_medida.unidad_medida_id"),
                                  nullable=True, info={"label": "Unidad"})
     unidad_medida = db.relationship("UnidadMedida")
+    # No tiene ni va a tener material del maestro (ferretería, insumos que no se
+    # cargan): sale de la cola «Líneas sin material» (fase 13.6). Al identificar
+    # el material se desmarca sola.
+    sin_material_maestro = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false(),
+                                     info={"label": "Sin material del maestro"})
 
     estado = db.Column(db.String(20), nullable=False, default="solicitado", info={"label": "Estado"})
     # Cierre manual del histórico: cerrada sin registro de recepción.

@@ -123,9 +123,24 @@ def create_app(env="development", config_extra=None):
         if items:
             menu.append({"clave": clave, "titulo": titulo, "items": items})
 
+    # Colas de «a revisar» (fase 13.6): una sección del menú, después de
+    # Operaciones, con la cantidad de cada cola. Es una función: las cantidades
+    # se cuentan solo al armar una página con el menú (no en cada celda de la grilla).
+    def colas_del_menu():
+        from app.crud.web.views import menu_colas
+
+        try:
+            return menu_colas(REGISTRY)
+        except Exception:  # el menú nunca rompe la página (ej: una base sin migrar)
+            from app.core.db import db
+
+            db.session.rollback()
+            app.logger.exception("No se pudieron contar las colas de «a revisar»")
+            return []
+
     @app.context_processor
     def inject_sidebar_entities():
-        return {"sidebar_grupos": menu}
+        return {"sidebar_grupos": menu, "colas_del_menu": colas_del_menu}
 
     # Versión de un archivo estático para su URL (?v=<fecha de modificación>): al
     # cambiar el archivo cambia la URL, y el navegador no sigue usando la copia

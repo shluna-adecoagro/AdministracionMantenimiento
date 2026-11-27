@@ -746,7 +746,7 @@ servicio, no solo la pantalla.
 | **13.3 Alta rápida** | Última fila de la grilla con `campos_alta` (material o descripción, cantidad, destino). |
 | **13.4 Destinos y «Redistribuir»** | Subgrilla de destinos bajo cada línea, con la fila de la línea actualizada fuera de banda. Completar el activo, el modelo o la ubicación define el tipo de destino (`completar_destino`). «Redistribuir» en líneas enviadas: todo o nada, sin cambiar el total. |
 | **13.5 Pegar líneas** | Desde un mail o WhatsApp: un renglón por línea («cantidad código o descripción»). Vista previa y confirmación todo o nada (`servicio(confirmar=False)`), con un adaptador «pegado» (`core/pegado.py`) a los datos de alta. Material solo por código exacto; destino «a identificar». |
-| **13.6 Colas de «a revisar»** | Destinos sin sector o cuenta, líneas sin material identificado: listas editables para resolverlas. |
+| **13.6 Colas de «a revisar»** | Destinos sin sector o cuenta, líneas sin material identificado, líneas y pedidos con «a revisar (importación)» y líneas de documentos sin material: listas editables para resolverlas, con su cantidad en el menú. |
 
 Sin control de concurrencia por ahora: los pedidos los carga y edita solo el gestor. Se
 revisa en la fase 14, cuando Compras escriba en la app.
@@ -1005,6 +1005,58 @@ puntual, y eso lo decide el gestor después. Reglas en `diseno_tablas_operativas
 - **Pendiente:** la cola de líneas y destinos «a revisar» (13.6) es donde se completan
   los destinos de lo pegado.
 
+#### Notas del PR 13.6 (colas de «a revisar»)
+
+Decidido con el gestor (27/11), con las recomendaciones de la revisión: sin las líneas
+anuladas y, por defecto, sin las cerradas; marca `sin_material_maestro` para sacar de la
+cola lo que nunca va a tener material; la fila resuelta queda hasta recargar; desde la
+fila, la línea y «Redistribuir»; contador en el menú; entran también las colas de
+importación y las líneas de documentos. La asignación masiva queda para después. Reglas
+en `diseno_tablas_operativas.md` («Colas de «a revisar»»).
+
+- **Framework — spec:** `colas` (`ColaSpec`: `id`, `label`, `condicion`, `columnas`,
+  `edicion_en_linea`, `por_defecto`, `label_todas`, `ayuda`, `orden`). `condicion` y
+  `por_defecto` son funciones sin argumentos que devuelven la condición SQL. Sin
+  `edicion_en_linea`, la cola edita los campos de la grilla de la entidad que muestra.
+  El registry valida los campos editables con las mismas reglas que `edicion_en_linea`
+  (ahora en `_edicion_en_linea`, compartida), que las columnas existan y que
+  `por_defecto` tenga su `label_todas`.
+- **Ruta:** `GET /<entidad>/cola/<id>` (404 si no existe). Es el listado
+  (`_listado(cola)`), con la búsqueda y los filtros de siempre, la condición de la cola
+  y, salvo `?todas=1`, la condición por defecto. Sin «Crear».
+- **Celdas:** las rutas de siempre (`celda`, `fila`) con `?cola=<id>`: la fila se arma
+  con las columnas de la cola y solo se editan sus campos (los demás, 404). Las rutas de
+  celda se registran si la entidad o alguna de sus colas edita (`EntitySpec.tiene_celdas`):
+  así `pedidos` y `documento_lineas`, que no tienen grilla propia, se editan en su cola.
+- **Resuelta:** después de guardar se consulta si el registro sigue en la cola; si no,
+  la fila lleva `fila-resuelta` y «✓ Resuelta» hasta recargar.
+- **Fila de una cola de una subentidad:** enlace a la pestaña del padre («Destinos de la
+  línea de pedido», «Líneas del pedido») y las acciones del padre para esa pestaña que
+  tienen formulario («Redistribuir»), con `?volver=<cola>`. Las acciones aceptan
+  `volver` solo si es una ruta de la app (empieza con `/`, no con `//`); las de la propia
+  entidad, y editar y eliminar, vuelven a la cola con `?cola=<id>`.
+- **Subgrillas en una cola:** la vista del padre es `cola:<id>` (`PREFIJO_VISTA_COLA`),
+  así un destino cambiado bajo una línea de la cola «Líneas sin material» devuelve la
+  fila de la línea con las columnas de la cola.
+- **Menú:** sección «A revisar» después de Operaciones, con la cantidad de cada cola
+  (`menu_colas`, una consulta `count` por cola). Es una función que llama `layout.html`:
+  los parciales de la grilla no cuentan. Si falla (base sin migrar), el menú sale sin
+  colas y se registra el error. El contador no se actualiza al resolver una fila: se ve
+  al recargar.
+- **Columna** `pedido_lineas.sin_material_maestro` (migración `c1d7e3a9b5f2`, No en las
+  existentes). `completar_linea` la desmarca al identificar el material; `al_guardar_linea`
+  rechaza marcarla en una línea con material.
+- **Colas declaradas:** `pedido_linea_destinos.a_revisar`, `pedido_lineas.sin_material`,
+  `pedido_lineas.importacion`, `pedidos.importacion` (`overrides/pedidos.py`) y
+  `documento_lineas.sin_material` (`overrides/documentos.py`).
+- **Probado en el navegador** (Chromium, Playwright): asignar el activo de un destino «a
+  identificar» (sector y cuenta sugeridos, fila resuelta, foco en la celda, sale al
+  recargar), marcar «Sin material del maestro», abrir los destinos de una línea dentro de
+  la cola y el menú con los contadores.
+- Tests: `tests/test_colas_revisar.py`.
+- **Pendiente:** asignación masiva (marcar varias filas y ponerles el mismo valor); una
+  cola de documentos sin revisar (`revisado` = no), si hace falta.
+
 ## Arquitectura objetivo
 
 ```
@@ -1058,7 +1110,7 @@ siempre la última.
 | **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. Ver «Notas de la Fase 8». | ✅ Hecha |
 | **9. Planes preventivos** | Planes por categoría de activo (período por uso y/o por tiempo, plan que incluye a otro), tareas, materiales por modelo; categoría en el modelo y tipo de medidor. Ver «Fase 9: planes preventivos». | ✅ Hecha |
 | **10. Pedidos y documentos de proveedores** | Pedidos con líneas y destinos (imputación), ofertas y presupuestos (cabecera + líneas), adjudicación por cantidad, recepciones (conformidad). Importación del Excel histórico de pedidos. Ver «Fases operativas». | ✅ Hecha |
-| **13. Edición en línea, borrador y envío a Compras** | Listados editables tipo planilla con htmx, generados desde la spec (`edicion_en_linea`, `editable_si`). En pedidos: líneas en borrador y «Enviar a Compras» (`enviada_en`), eliminar en borrador, anular o cancelar con motivo, destinos desplegados y «Redistribuir», alta rápida, pegar líneas. Ver «Fase 13: edición en línea». | En curso (13.1 a 13.5 hechos) |
+| **13. Edición en línea, borrador y envío a Compras** | Listados editables tipo planilla con htmx, generados desde la spec (`edicion_en_linea`, `editable_si`). En pedidos: líneas en borrador y «Enviar a Compras» (`enviada_en`), eliminar en borrador, anular o cancelar con motivo, destinos desplegados y «Redistribuir», alta rápida, pegar líneas y colas de «a revisar». Ver «Fase 13: edición en línea». | ✅ Hecha (13.1 a 13.6) |
 | **14. Circuito con Compras** | Usuarios, roles y auditoría con usuario; despliegue en un servidor. Vista de Compras (para cotizar, para emitir OC, reclamos), comparativo por línea, adjudicación y «Pedir OC». Ver [`propuesta_circuito_compras.md`](propuesta_circuito_compras.md). | En diseño |
 | **11. Solicitudes de trabajo, solicitudes internas y OC** | Solicitudes de trabajo (avisos de los mecánicos para llamar a un contratista) y su vínculo con los presupuestos (`documentos_proveedor.solicitud_trabajo_id`). Importación de los TSV de EAM (cabeceras, líneas, distribuciones) y de las OC; vínculo con los documentos adjudicados; distribución propuesta; detalle para Administración; conciliación por nº de OC. **Líneas de la solicitud de OC creadas en la app con la grilla de la fase 13** (edición en línea y alta rápida; pedido del gestor, 26/11). A revisar al empezar: el diseño dice que la cabecera de la solicitud nace en el ERP y se importa, aunque admite registros con `sistema` = app que después reciben su número del ERP. | Pendiente |
 | **12. Órdenes de trabajo** | Cabecera importada del ERP; la app agrega operaciones, recursos y materiales (previsto y utilizado). Incluye cuándo le toca un plan a cada activo. **Operaciones de la OT, y sus recursos y materiales, cargados con la grilla de la fase 13** (edición en línea, alta rápida y subgrilla como la de destinos; pedido del gestor, 26/11). | Pendiente |

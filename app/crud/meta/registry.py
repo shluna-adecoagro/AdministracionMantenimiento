@@ -29,6 +29,7 @@ from app.crud.core.numeracion import FormatoInvalido, validar_formato
 from app.crud.introspect import columnas_hacia, fk_apunta_a, inferir_entidad
 from app.crud.meta.spec import (
     CeldaAltaSpec,
+    ColaSpec,
     PegadoSpec,
     AUDITORIA_IGNORAR_DEFAULT,
     GENEROS,
@@ -78,6 +79,7 @@ CLAVES_ENTIDAD = frozenset({
     "alta_en_linea_padre",  # entidad padre en cuya pestaña está la fila de alta (por defecto, el principal)
     "subgrillas",         # [hijo, ...] se despliegan debajo de cada fila de la grilla (fase 13.4)
     "pegado_en_linea",    # {"cantidad", "texto", "datos", "aviso", "label"} «Pegar líneas» (fase 13.5)
+    "colas",              # [{"id", "label", "condicion", "columnas"...}] colas de «a revisar» (fase 13.6)
 })
 
 # Tipos de widget que por defecto aparecen en listado y filtros.
@@ -400,55 +402,19 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
             errores.append(f"{pref} clave_natural: '{c}' no es un campo de la entidad.{_sugerir(c, campos)}")
 
     # --- edición en línea -------------------------------------------------
-    edicion_en_linea, columna_en_linea = [], {}
-    for item in ov.get("edicion_en_linea") or ():
-        if isinstance(item, (tuple, list)):
-            if len(item) != 2:
-                errores.append(f"{pref} edicion_en_linea: {item!r} debe ser un campo o (campo, columna)")
-                continue
-            item, columna = item
-            if columna not in listado:
-                errores.append(f"{pref} edicion_en_linea: la columna '{columna}' de '{item}' no está en el listado")
-            elif columna in edicion_en_linea or columna in columna_en_linea.values():
-                errores.append(f"{pref} edicion_en_linea: la columna '{columna}' ya edita otro campo")
-            columna_en_linea[item] = columna
-        elif item in columna_en_linea.values():
-            errores.append(f"{pref} edicion_en_linea: la columna '{item}' ya edita otro campo")
-        edicion_en_linea.append(item)
-    edicion_en_linea = tuple(edicion_en_linea)
     # El padre principal no se edita en la grilla (sería mover el registro a otro
     # padre). Los otros sí (ej: el material de una línea, que también cuelga del
     # material): en la pestaña de cada padre se oculta la columna de ese padre.
     fk_principal = padres[0].fk if padres else None
-    for c in edicion_en_linea:
-        f = campos.get(c)
-        motivo = None
-        if f is None:
-            motivo = f"no es un campo de la entidad.{_sugerir(c, campos)}"
-        elif f.solo_lectura or f.calculado_python:
-            motivo = "es calculado"
-        elif f.tipo == "file":
-            motivo = "es un archivo"
-        elif f.solo_importacion:
-            motivo = "es de solo importación (su dueño es el ERP u otra fuente)"
-        elif f.solo_alta:
-            motivo = "es un campo de alta (no se guarda)"
-        elif f.oculto:
-            motivo = "está oculto"
-        elif c == fk_principal:
-            motivo = "es la entidad padre principal"
-        elif f.tipo not in TIPOS_EDICION_EN_LINEA:
-            motivo = f"tiene tipo '{f.tipo}' (admitidos: {sorted(TIPOS_EDICION_EN_LINEA)})"
-        elif c not in listado and c not in columna_en_linea:
-            motivo = "no está en el listado (la grilla muestra las columnas del listado)"
-        if motivo:
-            errores.append(f"{pref} edicion_en_linea: '{c}' {motivo}")
+    edicion_en_linea, columna_en_linea = _edicion_en_linea(
+        ov.get("edicion_en_linea") or (), listado, campos, fk_principal, f"{pref} edicion_en_linea:", errores)
 
     alta_en_linea, alta_en_linea_padre = _alta_en_linea(ov, campos, listado, padres, pref, errores)
 
     pegado_en_linea = _pegado_en_linea(ov, campos, alta_en_linea, alta_en_linea_padre, padres, pref, errores)
 
     subgrillas = tuple(ov.get("subgrillas") or ())
+    colas = _colas(ov, campos, edicion_en_linea, columna_en_linea, fk_principal, pref, errores)
     if subgrillas and not edicion_en_linea:
         errores.append(f"{pref} subgrillas: la entidad no tiene edicion_en_linea (las subgrillas van en su grilla)")
 
@@ -500,6 +466,7 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
         alta_en_linea_padre=alta_en_linea_padre,
         subgrillas=subgrillas,
         pegado_en_linea=pegado_en_linea,
+        colas=colas,
         editable_si=editable_si,
         eliminable_si=ov.get("eliminable_si"),
         creable_si=ov.get("creable_si"),
@@ -510,6 +477,95 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
 # ---------------------------------------------------------------------------
 # Construcción del registry completo
 # ---------------------------------------------------------------------------
+
+def _edicion_en_linea(items, columnas, campos, fk_principal, pref, errores) -> tuple[tuple, dict]:
+    """
+    (campos, {campo: columna}) de una lista de edición en línea: campo o (campo,
+    columna). La usan la grilla de la entidad y las de sus colas (fase 13.6):
+    cada campo tiene que ser un dato propio (ni calculado, ni archivo, ni de solo
+    importación, ni el padre principal) y estar en las `columnas` de esa grilla.
+    """
+    edicion, columna_en_linea = [], {}
+    for item in items:
+        if isinstance(item, (tuple, list)):
+            if len(item) != 2:
+                errores.append(f"{pref} {item!r} debe ser un campo o (campo, columna)")
+                continue
+            item, columna = item
+            if columna not in columnas:
+                errores.append(f"{pref} la columna '{columna}' de '{item}' no está en el listado")
+            elif columna in edicion or columna in columna_en_linea.values():
+                errores.append(f"{pref} la columna '{columna}' ya edita otro campo")
+            columna_en_linea[item] = columna
+        elif item in columna_en_linea.values():
+            errores.append(f"{pref} la columna '{item}' ya edita otro campo")
+        edicion.append(item)
+    for c in edicion:
+        f = campos.get(c)
+        motivo = None
+        if f is None:
+            motivo = f"no es un campo de la entidad.{_sugerir(c, campos)}"
+        elif f.solo_lectura or f.calculado_python:
+            motivo = "es calculado"
+        elif f.tipo == "file":
+            motivo = "es un archivo"
+        elif f.solo_importacion:
+            motivo = "es de solo importación (su dueño es el ERP u otra fuente)"
+        elif f.solo_alta:
+            motivo = "es un campo de alta (no se guarda)"
+        elif f.oculto:
+            motivo = "está oculto"
+        elif c == fk_principal:
+            motivo = "es la entidad padre principal"
+        elif f.tipo not in TIPOS_EDICION_EN_LINEA:
+            motivo = f"tiene tipo '{f.tipo}' (admitidos: {sorted(TIPOS_EDICION_EN_LINEA)})"
+        elif c not in columnas and c not in columna_en_linea:
+            motivo = "no está en el listado (la grilla muestra las columnas del listado)"
+        if motivo:
+            errores.append(f"{pref} '{c}' {motivo}")
+    return tuple(edicion), columna_en_linea
+
+
+def _colas(ov, campos, edicion_entidad, columna_entidad, fk_principal, pref, errores) -> tuple[ColaSpec, ...]:
+    """Colas de «a revisar» (fase 13.6): ver ColaSpec."""
+    claves = {"id", "label", "condicion", "columnas", "edicion_en_linea", "por_defecto", "label_todas",
+              "ayuda", "orden"}
+    colas, ids = [], set()
+    for cfg in ov.get("colas") or ():
+        if not isinstance(cfg, dict) or not {"id", "label", "condicion", "columnas"} <= set(cfg) <= claves:
+            errores.append(f"{pref} colas: cada cola es un dict con id, label, condicion y columnas "
+                           f"(opcionales: {sorted(claves - {'id', 'label', 'condicion', 'columnas'})})")
+            continue
+        p = f"{pref} colas.{cfg['id']}:"
+        if cfg["id"] in ids:
+            errores.append(f"{p} id repetido")
+        ids.add(cfg["id"])
+        if not str(cfg["id"]).replace("_", "").isalnum():
+            errores.append(f"{p} el id solo lleva letras, números y _ (va en la URL)")
+        for clave in ("condicion", "por_defecto"):
+            if cfg.get(clave) is not None and not callable(cfg[clave]):
+                errores.append(f"{p} {clave} debe ser una función sin argumentos (la condición SQL)")
+        columnas = tuple(cfg["columnas"])
+        for c in columnas:
+            if c not in campos:
+                errores.append(f"{p} columna '{c}' no es un campo de la entidad.{_sugerir(c, campos)}")
+        if "edicion_en_linea" in cfg:
+            items = cfg["edicion_en_linea"] or ()
+        else:  # los de la grilla de la entidad que se ven en la cola
+            items = [(c, columna_entidad[c]) if c in columna_entidad else c for c in edicion_entidad
+                     if columna_entidad.get(c, c) in columnas]
+        edicion, columna_en_linea = _edicion_en_linea(items, columnas, campos, fk_principal,
+                                                      f"{p} edicion_en_linea:", errores)
+        if cfg.get("por_defecto") is not None and not cfg.get("label_todas"):
+            errores.append(f"{p} con por_defecto hace falta label_todas (el texto para ver todo)")
+        colas.append(ColaSpec(
+            id=cfg["id"], label=cfg["label"], condicion=cfg["condicion"], columnas=columnas,
+            edicion_en_linea=edicion, columna_en_linea=columna_en_linea,
+            por_defecto=cfg.get("por_defecto"), label_todas=cfg.get("label_todas", ""),
+            ayuda=cfg.get("ayuda", ""), orden=cfg.get("orden", 999),
+        ))
+    return tuple(colas)
+
 
 def _alta_en_linea(ov, campos, listado, padres, pref, errores):
     """

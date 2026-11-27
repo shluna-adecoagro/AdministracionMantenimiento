@@ -90,6 +90,21 @@
                         </ul>
                     </details>
                 {% endif %}
+                {% if grupo.clave == "operativos" %}
+                    {# Colas de «a revisar» (fase 13.6), con lo pendiente de cada una #}
+                    {% set colas = colas_del_menu() %}
+                    {% if colas %}
+                        <h3 class="sidebar-separado">A revisar</h3>
+                        <ul class="sidebar-colas">
+                            {% for c in colas %}
+                                <li><a href="{{ c.url }}" {% if request.path == c.url %}class="activo"{% endif %}>
+                                    {{ c.label }}
+                                    <span class="contador{% if not c.cantidad %} contador-cero{% endif %}">{{ c.cantidad }}</span>
+                                </a></li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                {% endif %}
             {% endfor %}
         </aside>
 
