@@ -12,6 +12,9 @@
 //     abiertas; cada una es otra grilla, con el mismo teclado.
 //   * acciones de varias filas (form.form-filas, ej: «Redistribuir»): «+ Fila»,
 //     🗑 para sacar una fila y el total en vivo de la columna que se suma.
+//   * «Pegar líneas» (fase 13.5, div.pegado): Ctrl+V de varios renglones en la
+//     fila de alta los lleva al cuadro de texto y pide la vista previa;
+//     «Descartar» vacía el cuadro y cierra la vista previa.
 //
 // Las filas y celdas las arma el servidor desde la spec (crud/partials/_fila.html
 // y _celda_edicion.html). Viene de la demo herramientas/demo_edicion_en_linea/.
@@ -235,6 +238,30 @@
         }
     });
     document.addEventListener("DOMContentLoaded", () => { marcarSubgrillas(); prepararFormulariosDeFilas(); });
+
+    // ------------------------------------------------------------ «Pegar líneas»
+    document.addEventListener("paste", (e) => {
+        const tr = e.target.closest && e.target.closest(".grilla tr.fila-alta");
+        const pegado = tr && tr.closest("section") && tr.closest("section").querySelector("div.pegado");
+        if (!pegado) return;
+        const texto = (e.clipboardData || window.clipboardData).getData("text");
+        // Un solo renglón (un código, una cantidad): se pega en la celda, como siempre.
+        if (!texto || texto.trim().split(/\r?\n/).filter((r) => r.trim()).length < 2) return;
+        e.preventDefault();
+        const form = pegado.querySelector("form.pegado-form");
+        form.querySelector("textarea").value = texto;
+        pegado.querySelector("details").open = true;
+        htmx.process(form);
+        form.requestSubmit();
+    });
+    document.addEventListener("click", (e) => {
+        const boton = e.target.closest && e.target.closest("[data-descartar-pegado]");
+        if (!boton) return;
+        const pegado = boton.closest("div.pegado");
+        pegado.querySelector("textarea").value = "";
+        pegado.querySelectorAll(".pegado-vista").forEach((v) => v.remove());
+        pegado.querySelector("details").open = false;
+    });
 
     // ------------------------------------------------------------ después de cada reemplazo
     document.addEventListener("htmx:afterSettle", () => {

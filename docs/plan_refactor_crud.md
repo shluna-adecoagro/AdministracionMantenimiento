@@ -745,7 +745,7 @@ servicio, no solo la pantalla.
 | **13.2 Borrador y envío** | `pedido_lineas.enviada_en` (migración; el histórico, con la fecha del pedido). `editable_si` en la spec, aplicado por la grilla, el formulario, la API y el servicio. Acción «Enviar a Compras». Eliminar en borrador. «Anular o cancelar» con motivo, sin anular entera una línea con compras. Resumen del pedido con «Borrador» / «N líneas sin enviar». |
 | **13.3 Alta rápida** | Última fila de la grilla con `campos_alta` (material o descripción, cantidad, destino). |
 | **13.4 Destinos y «Redistribuir»** | Subgrilla de destinos bajo cada línea, con la fila de la línea actualizada fuera de banda. Completar el activo, el modelo o la ubicación define el tipo de destino (`completar_destino`). «Redistribuir» en líneas enviadas: todo o nada, sin cambiar el total. |
-| **13.5 Pegar desde Excel** | Vista previa y confirmación todo o nada (`servicio(confirmar=False)`), con un adaptador «pegado» al formato interno común. Lo no identificado queda como descripción o «a identificar». |
+| **13.5 Pegar líneas** | Desde un mail o WhatsApp: un renglón por línea («cantidad código o descripción»). Vista previa y confirmación todo o nada (`servicio(confirmar=False)`), con un adaptador «pegado» (`core/pegado.py`) a los datos de alta. Material solo por código exacto; destino «a identificar». |
 | **13.6 Colas de «a revisar»** | Destinos sin sector o cuenta, líneas sin material identificado: listas editables para resolverlas. |
 
 Sin control de concurrencia por ahora: los pedidos los carga y edita solo el gestor. Se
@@ -962,6 +962,49 @@ Compras» y `pedido_linea_destinos`).
 - **Pendiente:** abrir la subgrilla con el teclado (hoy, con el botón). Revertir una
   anulación sigue fuera del diseño.
 
+#### Notas del PR 13.5 («Pegar líneas»)
+
+Decidido con el gestor (27/11): los pedidos llegan por mail o WhatsApp y hasta ahora
+pasaban por Copilot y la planilla de pedidos; la idea es dejar la planilla. Se pegan
+solo los renglones del pedido (sin títulos), uno por línea, y **el sistema no adivina
+el destino**: los agrupados del mensaje («Tambo 2 / Carros de arena…», «5090 eir84
+ezi77…») pueden ser para repartir entre varios activos, para stock o para un activo
+puntual, y eso lo decide el gestor después. Reglas en `diseno_tablas_operativas.md`
+(«Pegar líneas»). El botón se llama «Pegar líneas» (no «desde Excel»).
+
+- **Framework — spec:** `pegado_en_linea` (`PegadoSpec`: `cantidad`, `texto`, `datos`,
+  `aviso`, `label`). Va en la pestaña de la alta rápida: el registry exige
+  `alta_en_linea` y valida los campos como los de la alta (ni calculados, ni archivos,
+  ni de solo importación, ni el padre).
+- **Adaptador «pegado»** (`core/pegado.py`, sin Flask): `separar` (cantidad al principio,
+  o la primera celda numérica si hay tabuladores; sin el punto final ni espacios de
+  más), `leer` (una `FilaPegada` por renglón no vacío, sin tocar la base) y `procesar`
+  (crea cada fila con `servicio.crear` y `confirmar=False`; en la vista previa, o si
+  alguna fila falla, `rollback`). La vista previa pasa por el mismo camino que la carga
+  (completar, al_guardar, creable_si), así que muestra lo que se cargaría. Hasta 300
+  renglones por vez.
+- **Intérprete `CodigoEnTexto(campo_fk, campo_texto, atributo)`:** el texto tal cual y,
+  si una palabra es exactamente el atributo (el código) de un solo registro, ese
+  registro; palabras de varios registros → ninguno, con aviso. Sin comienzos ni partes.
+- **Ruta:** `POST /<entidad>/pegar?<fk del padre>=<id>` (404 sin el padre o con otro).
+  Sin `confirmar`: la vista previa (200). Con `confirmar`: todo junto y `HX-Redirect` a
+  la pestaña con el mensaje «Se agregaron N …»; con errores, la vista previa (422).
+- **Pantalla:** `crud/partials/_pegado.html`, debajo del botón «Agregar» de la alta
+  rápida: un `<details>` con el cuadro de texto, «Vista previa» y «Descartar»; la tabla
+  marca en rojo los renglones con error (bloquean) y en amarillo los avisos. `grilla.js`:
+  Ctrl+V de dos o más renglones en la fila de alta los lleva al cuadro y pide la vista
+  previa (un renglón se pega en la celda, como siempre).
+- **Líneas de pedido:** material por código exacto (`codigo`), destino «a identificar»
+  por toda la cantidad, aviso si la línea es igual a otra del pedido no anulada (mismo
+  material o descripción y misma cantidad; incluye las del mismo pegado). Nacen en
+  borrador, también en un pedido enviado; origen «app». Auditoría: «Líneas pegadas».
+- **Probado en el navegador** (Chromium, Playwright): renglón sin cantidad (bloquea),
+  vista previa con materiales reconocidos, carga y mensaje, Ctrl+V desde la fila de
+  alta, «Descartar» y el aviso de línea repetida a 420 px.
+- Tests: `tests/test_pegar_lineas.py`.
+- **Pendiente:** la cola de líneas y destinos «a revisar» (13.6) es donde se completan
+  los destinos de lo pegado.
+
 ## Arquitectura objetivo
 
 ```
@@ -1015,7 +1058,7 @@ siempre la última.
 | **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. Ver «Notas de la Fase 8». | ✅ Hecha |
 | **9. Planes preventivos** | Planes por categoría de activo (período por uso y/o por tiempo, plan que incluye a otro), tareas, materiales por modelo; categoría en el modelo y tipo de medidor. Ver «Fase 9: planes preventivos». | ✅ Hecha |
 | **10. Pedidos y documentos de proveedores** | Pedidos con líneas y destinos (imputación), ofertas y presupuestos (cabecera + líneas), adjudicación por cantidad, recepciones (conformidad). Importación del Excel histórico de pedidos. Ver «Fases operativas». | ✅ Hecha |
-| **13. Edición en línea, borrador y envío a Compras** | Listados editables tipo planilla con htmx, generados desde la spec (`edicion_en_linea`, `editable_si`). En pedidos: líneas en borrador y «Enviar a Compras» (`enviada_en`), eliminar en borrador, anular o cancelar con motivo, destinos desplegados y «Redistribuir», alta rápida, pegar desde Excel. Ver «Fase 13: edición en línea». | En curso (13.1 a 13.4 hechos) |
+| **13. Edición en línea, borrador y envío a Compras** | Listados editables tipo planilla con htmx, generados desde la spec (`edicion_en_linea`, `editable_si`). En pedidos: líneas en borrador y «Enviar a Compras» (`enviada_en`), eliminar en borrador, anular o cancelar con motivo, destinos desplegados y «Redistribuir», alta rápida, pegar líneas. Ver «Fase 13: edición en línea». | En curso (13.1 a 13.5 hechos) |
 | **14. Circuito con Compras** | Usuarios, roles y auditoría con usuario; despliegue en un servidor. Vista de Compras (para cotizar, para emitir OC, reclamos), comparativo por línea, adjudicación y «Pedir OC». Ver [`propuesta_circuito_compras.md`](propuesta_circuito_compras.md). | En diseño |
 | **11. Solicitudes de trabajo, solicitudes internas y OC** | Solicitudes de trabajo (avisos de los mecánicos para llamar a un contratista) y su vínculo con los presupuestos (`documentos_proveedor.solicitud_trabajo_id`). Importación de los TSV de EAM (cabeceras, líneas, distribuciones) y de las OC; vínculo con los documentos adjudicados; distribución propuesta; detalle para Administración; conciliación por nº de OC. **Líneas de la solicitud de OC creadas en la app con la grilla de la fase 13** (edición en línea y alta rápida; pedido del gestor, 26/11). A revisar al empezar: el diseño dice que la cabecera de la solicitud nace en el ERP y se importa, aunque admite registros con `sistema` = app que después reciben su número del ERP. | Pendiente |
 | **12. Órdenes de trabajo** | Cabecera importada del ERP; la app agrega operaciones, recursos y materiales (previsto y utilizado). Incluye cuándo le toca un plan a cada activo. **Operaciones de la OT, y sus recursos y materiales, cargados con la grilla de la fase 13** (edición en línea, alta rápida y subgrilla como la de destinos; pedido del gestor, 26/11). | Pendiente |

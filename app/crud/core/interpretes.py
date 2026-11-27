@@ -16,8 +16,17 @@ Tres intérpretes genéricos, que se declaran en el override:
     Campo("cantidad")                      un campo, escrito como en la grilla
     FkOTexto("material_id", "descripcion") un registro si se reconoce; si no, texto libre
     FkEntre({"activo_id": {...}, ...})     uno de varios registros relacionados
+
+Para «Pegar líneas» (fase 13.5), un intérprete que nunca rechaza y devuelve
+avisos en lugar de errores (leer(texto, spec) -> (datos, avisos)):
+
+    CodigoEnTexto("material_id", "descripcion", "codigo")
+                                           el texto tal cual y, si una palabra es el
+                                           código de un solo registro, ese registro
 """
 from __future__ import annotations
+
+import re
 
 from app.crud.core import coercion, fk
 from app.crud.core.coercion import ErroresValidacion
@@ -176,3 +185,54 @@ class FkEntre:
 
         nombres = ", ".join(spec.fields[c].label.lower() for c in self.por_campo)
         raise ErroresValidacion({self.campos[0]: f"No encontré «{texto}» ({nombres}). Elegí una opción de la lista."})
+
+
+class CodigoEnTexto:
+    """
+    El texto tal cual en `campo_texto` y, si una de sus palabras es exactamente el
+    `atributo` (ej: el código) de un solo registro de la FK, ese registro en
+    `campo_fk`. Sin comienzos ni coincidencias parciales: «4 filtros re504836»
+    encuentra el RE504836; «rodamientos uc204», nada (salvo que exista el código
+    UC204). Si hay palabras de varios registros, no elige ninguno y avisa.
+    Ej: el material de una línea pegada desde un mail.
+    """
+
+    SEPARADORES = re.compile(r"[\s,;:()\[\]/]+")
+
+    def __init__(self, campo_fk: str, campo_texto: str, atributo: str):
+        self.campo_fk = campo_fk
+        self.campo_texto = campo_texto
+        self.atributo = atributo
+        self.campos = (campo_fk, campo_texto)
+
+    def indice(self, spec) -> dict[str, set]:
+        """{código normalizado: {ids}}. Se arma una vez por pegado (ver core/pegado.py)."""
+        f = spec.fields[self.campo_fk]
+        modelo = f.get("fk_model")
+        pk = modelo.__mapper__.primary_key[0].name
+        consulta = modelo.query
+        if f.get("fk_filtro") is not None:
+            consulta = consulta.filter(f["fk_filtro"]())
+        indice: dict[str, set] = {}
+        for obj in consulta.all():
+            valor = getattr(obj, self.atributo, None)
+            if valor not in (None, ""):
+                indice.setdefault(fk._norm(valor), set()).add(getattr(obj, pk))
+        return indice
+
+    def leer(self, texto: str, spec, indice: dict | None = None) -> tuple[dict, list[str]]:
+        indice = self.indice(spec) if indice is None else indice
+        datos = {self.campo_texto: texto}
+        encontrados: dict[int, str] = {}
+        for palabra in self.SEPARADORES.split(texto):
+            palabra = palabra.strip(".-")
+            for id_ in indice.get(fk._norm(palabra), set()) if palabra else ():
+                encontrados.setdefault(id_, palabra)
+        if len(encontrados) == 1:
+            datos[self.campo_fk] = next(iter(encontrados))
+            return datos, []
+        if len(encontrados) > 1:
+            label = spec.fields[self.campo_fk].label
+            return datos, [f"{label}: el texto tiene códigos de {len(encontrados)} registros "
+                           f"({', '.join(encontrados.values())}); queda sin identificar"]
+        return datos, []
