@@ -202,7 +202,9 @@ flask --app run exportar sectores sectores.csv             # descarga a CSV
   se guarda nada. Cada cambio queda en la auditoría con el nombre del archivo.
 - El CSV exportado usa `;` y UTF-8 con BOM (se abre bien en Excel) y se puede volver a
   importar.
-- Importar entidades en orden de dependencia: sectores antes que ubicaciones.
+- Importar entidades en orden de dependencia: sectores antes que ubicaciones. El orden
+  completo y el paso a paso están en el instructivo
+  [`docs/carga_masiva.md`](docs/carga_masiva.md).
 
 ### Cambios en el esquema (migraciones)
 
