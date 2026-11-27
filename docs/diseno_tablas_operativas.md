@@ -169,6 +169,7 @@ menú, en la sección «A revisar», con la cantidad pendiente:
 | Líneas sin material | Líneas sin `material_id` y sin `sin_material_maestro` | Identificando el material (en una enviada, solo si estaba vacío) o marcando «Sin material del maestro» |
 | Líneas a revisar (importación) | Líneas con `motivo_revision` | Corrigiendo y borrando el motivo |
 | Pedidos a revisar (importación) | Pedidos con `motivo_revision` | Corrigiendo y borrando el motivo |
+| Documentos sin revisar | Documentos con `revisado` = no. Los del histórico, solo si se pide («Incluir los del histórico»: son muchos) | Identificando el proveedor, la fecha y la moneda, y marcándolo revisado (las líneas y el PDF, en el detalle) |
 | Líneas de documentos sin material | Líneas de documento de tipo material sin `material_id` | Identificando el material |
 
 - **Nunca entran las líneas anuladas.** Las **cerradas** quedan fuera por defecto (son

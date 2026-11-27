@@ -414,7 +414,7 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
     pegado_en_linea = _pegado_en_linea(ov, campos, alta_en_linea, alta_en_linea_padre, padres, pref, errores)
 
     subgrillas = tuple(ov.get("subgrillas") or ())
-    colas = _colas(ov, campos, edicion_en_linea, columna_en_linea, fk_principal, pref, errores)
+    colas = _colas(ov, campos, edicion_en_linea, columna_en_linea, pref, errores)
     if subgrillas and not edicion_en_linea:
         errores.append(f"{pref} subgrillas: la entidad no tiene edicion_en_linea (las subgrillas van en su grilla)")
 
@@ -526,8 +526,12 @@ def _edicion_en_linea(items, columnas, campos, fk_principal, pref, errores) -> t
     return tuple(edicion), columna_en_linea
 
 
-def _colas(ov, campos, edicion_entidad, columna_entidad, fk_principal, pref, errores) -> tuple[ColaSpec, ...]:
-    """Colas de «a revisar» (fase 13.6): ver ColaSpec."""
+def _colas(ov, campos, edicion_entidad, columna_entidad, pref, errores) -> tuple[ColaSpec, ...]:
+    """
+    Colas de «a revisar» (fase 13.6): ver ColaSpec. A diferencia de la grilla de
+    la entidad, una cola puede editar el padre principal: no está en la pestaña de
+    ese padre (ej: identificar el proveedor de un documento sin revisar).
+    """
     claves = {"id", "label", "condicion", "columnas", "edicion_en_linea", "por_defecto", "label_todas",
               "ayuda", "orden"}
     colas, ids = [], set()
@@ -554,7 +558,7 @@ def _colas(ov, campos, edicion_entidad, columna_entidad, fk_principal, pref, err
         else:  # los de la grilla de la entidad que se ven en la cola
             items = [(c, columna_entidad[c]) if c in columna_entidad else c for c in edicion_entidad
                      if columna_entidad.get(c, c) in columnas]
-        edicion, columna_en_linea = _edicion_en_linea(items, columnas, campos, fk_principal,
+        edicion, columna_en_linea = _edicion_en_linea(items, columnas, campos, None,
                                                       f"{p} edicion_en_linea:", errores)
         if cfg.get("por_defecto") is not None and not cfg.get("label_todas"):
             errores.append(f"{p} con por_defecto hace falta label_todas (el texto para ver todo)")
