@@ -902,17 +902,65 @@ en una sola celda; el destino se repite en la fila siguiente.
   «Enviar a Compras» que aparece sin recargar.
 - Tests: `tests/test_alta_rapida.py`.
 
-#### Dudas para revisar al empezar el PR 13.4
+#### Notas del PR 13.4 (destinos y «Redistribuir»)
 
-- **Destinos con recepciones** al redistribuir: ver «A revisar con las recepciones» en
-  `propuesta_edicion_en_linea.md` (propuesta: no se sacan; su cantidad no baja de lo recibido).
-- **Tipo de destino:** completar el activo, el modelo o la ubicación lo define
-  (`completar_destino`, decisión 2 de la propuesta). Que quede coherente con el alta
-  rápida, que ya deduce «activo» o «stock» del texto (`FkEntre`).
-- **Subgrilla genérica:** la de destinos tiene que servir también para las operaciones de
-  la OT y sus recursos y materiales (fase 12), no solo para los pedidos.
-- **Botón «Agregar»** de la fila de alta: en pantallas angostas queda fuera de la vista
-  por el ancho de la tabla (Enter funciona igual). Ver si se acomoda.
+Dudas resueltas con el gestor (26/11): las de la lista que estaba acá, más el sector y
+la cuenta al cambiar el destino, el último destino de una línea y el motivo de la
+auditoría. Las reglas quedaron en `diseno_tablas_operativas.md` («Borrador y envío a
+Compras» y `pedido_linea_destinos`).
+
+- **Tipo de destino** (`completar_destino`): completar el activo o el modelo lo define;
+  la ubicación, solo si estaba «a identificar» (pasa a «stock»): en un activo, un modelo
+  o un gasto general la ubicación es el taller que recibe. Cambiar el tipo limpia el
+  activo o el modelo que ya no corresponde; la ubicación, nunca. En un alta, un tipo
+  explícito distinto de «a identificar» manda.
+- **Sector imputado y cuenta:** si cambia a qué apunta el destino (activo, modelo o
+  ubicación), se vuelven a sugerir; si se cambian en la misma operación (un valor
+  distinto del que tenían), manda lo elegido. Un formulario que reenvía el mismo sector
+  no cuenta como elegido.
+- **Último destino:** no se elimina (`eliminable_si`): para sacarlo se elimina la línea.
+- **Framework — subgrillas:** `EntitySpec.subgrillas` (en el padre: los hijos que se
+  despliegan bajo cada fila; el registry exige que sean subentidades con
+  `edicion_en_linea`). La fila del padre lleva un botón por hijo («Destinos (2)»,
+  contados con una consulta por hijo para toda la tabla). Rutas en el hijo:
+  `GET /<hijo>/subgrilla?<fk>=<id>&vista_padre=<vista>` (la fila `tr.sub-fila`) y
+  `POST /<hijo>/<id>/eliminar_en_linea` (motivo fijo «Eliminado en línea»).
+  `vista_padre` dice cómo está armada la fila del padre en la página (el fk de su
+  pestaña, o `listado`) y viaja en las URL de las celdas y del alta: así lo que cambia
+  un hijo devuelve además la fila del padre fuera de banda (`fila_padre` en
+  `_fila.html` y `_subgrilla.html`). Sin `vista_padre` (la pestaña «Destinos» de la
+  línea) no se manda. Varias subgrillas abiertas a la vez: los ids de la fila de alta y
+  de los botones llevan el id del padre (`contexto_alta(..., sufijo=)`).
+- **La fila de alta** se muestra solo si `creable_si({fk: padre})` lo permite (en una
+  línea enviada, no). Vale también para la pestaña del padre.
+- **Framework — acciones de varias filas:** `AccionSpec.filas` (`FilasAccionSpec`:
+  entidad hija, celdas con su intérprete, `iniciales(registro)` y `total(registro)`). El
+  formulario es una tabla (`_accion_filas.html`) con «+ Fila», 🗑 y el total en vivo de
+  la celda que se suma; las filas se arman por posición (un `id` oculto y un input por
+  celda). La función recibe `[{"id", "fila", <datos>}]` y rechaza con `fila_<n>` o
+  `_general`. Se abre dentro de la subgrilla (`?subgrilla=<hijo>&vista_padre=...`,
+  devuelve la subgrilla y la fila del padre) o como página desde la pestaña del hijo.
+- **«Redistribuir»** (`overrides/pedidos.py`): visible en líneas enviadas, no anuladas
+  ni cerradas. Celdas: cantidad y destino en una sola celda (`DESTINO_EN_TEXTO`: activo,
+  modelo o ubicación; vacío, a identificar). Una fila sin cantidad saca el destino; el
+  total tiene que seguir igual y tiene que quedar uno. Un destino con recepciones no se
+  saca ni baja de lo recibido. Si sigue apuntando a lo mismo conserva tipo, sector y
+  cuenta; si no, el tipo nuevo y la imputación sugerida (la ubicación queda). Si baja de
+  su «comprada (corregida)», o se saca, la corrección se limpia y se avisa. Se actualizan
+  los destinos existentes (no se borran y recrean: las recepciones apuntan a ellos).
+  Usa `servicio(..., reglas_de_edicion=False)`: levanta justo las reglas de la línea
+  enviada y las reemplaza por las suyas. Auditoría: «Redistribución».
+- **Alta rápida:** el destino de la línea acepta también un modelo (y la subgrilla de
+  destinos tiene su propia fila de alta: cantidad y destino).
+- **Botón «Agregar»** de la fila de alta: debajo de la tabla (`_boton_alta.html`), para
+  que se vea en pantallas angostas.
+- **Probado en el navegador** (Chromium, Playwright): abrir y cerrar dos subgrillas,
+  alta de un destino con el teclado, editar la cantidad (la línea se actualiza), cambiar
+  el tipo a gasto general, eliminar (el último no ofrece «Eliminar»), «Redistribuir» con
+  el total en vivo, error por total distinto y guardado, y el botón «Agregar» a 420 px.
+- Tests: `tests/test_destinos_redistribuir.py`.
+- **Pendiente:** abrir la subgrilla con el teclado (hoy, con el botón). Revertir una
+  anulación sigue fuera del diseño.
 
 ## Arquitectura objetivo
 
@@ -967,7 +1015,7 @@ siempre la última.
 | **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. Ver «Notas de la Fase 8». | ✅ Hecha |
 | **9. Planes preventivos** | Planes por categoría de activo (período por uso y/o por tiempo, plan que incluye a otro), tareas, materiales por modelo; categoría en el modelo y tipo de medidor. Ver «Fase 9: planes preventivos». | ✅ Hecha |
 | **10. Pedidos y documentos de proveedores** | Pedidos con líneas y destinos (imputación), ofertas y presupuestos (cabecera + líneas), adjudicación por cantidad, recepciones (conformidad). Importación del Excel histórico de pedidos. Ver «Fases operativas». | ✅ Hecha |
-| **13. Edición en línea, borrador y envío a Compras** | Listados editables tipo planilla con htmx, generados desde la spec (`edicion_en_linea`, `editable_si`). En pedidos: líneas en borrador y «Enviar a Compras» (`enviada_en`), eliminar en borrador, anular o cancelar con motivo, destinos desplegados y «Redistribuir», alta rápida, pegar desde Excel. Ver «Fase 13: edición en línea». | En curso (13.1 a 13.3 hechos) |
+| **13. Edición en línea, borrador y envío a Compras** | Listados editables tipo planilla con htmx, generados desde la spec (`edicion_en_linea`, `editable_si`). En pedidos: líneas en borrador y «Enviar a Compras» (`enviada_en`), eliminar en borrador, anular o cancelar con motivo, destinos desplegados y «Redistribuir», alta rápida, pegar desde Excel. Ver «Fase 13: edición en línea». | En curso (13.1 a 13.4 hechos) |
 | **14. Circuito con Compras** | Usuarios, roles y auditoría con usuario; despliegue en un servidor. Vista de Compras (para cotizar, para emitir OC, reclamos), comparativo por línea, adjudicación y «Pedir OC». Ver [`propuesta_circuito_compras.md`](propuesta_circuito_compras.md). | En diseño |
 | **11. Solicitudes de trabajo, solicitudes internas y OC** | Solicitudes de trabajo (avisos de los mecánicos para llamar a un contratista) y su vínculo con los presupuestos (`documentos_proveedor.solicitud_trabajo_id`). Importación de los TSV de EAM (cabeceras, líneas, distribuciones) y de las OC; vínculo con los documentos adjudicados; distribución propuesta; detalle para Administración; conciliación por nº de OC. **Líneas de la solicitud de OC creadas en la app con la grilla de la fase 13** (edición en línea y alta rápida; pedido del gestor, 26/11). A revisar al empezar: el diseño dice que la cabecera de la solicitud nace en el ERP y se importa, aunque admite registros con `sistema` = app que después reciben su número del ERP. | Pendiente |
 | **12. Órdenes de trabajo** | Cabecera importada del ERP; la app agrega operaciones, recursos y materiales (previsto y utilizado). Incluye cuándo le toca un plan a cada activo. **Operaciones de la OT, y sus recursos y materiales, cargados con la grilla de la fase 13** (edición en línea, alta rápida y subgrilla como la de destinos; pedido del gestor, 26/11). | Pendiente |

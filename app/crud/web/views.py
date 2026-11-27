@@ -24,8 +24,23 @@ termina con una fila de alta:
                                         crea; la fila nueva y una fila de alta
                                         vacía, o la fila de alta con los errores (422)
 
+Si otra entidad la declara en `subgrillas` (fase 13.4, ej: los destinos bajo
+cada línea de pedido), además:
+
+    GET  /<entidad>/subgrilla?<fk del padre>=<id>&vista_padre=<vista>
+                                        la fila desplegada bajo la del padre
+                                        (<tr class="sub-fila">, con su grilla)
+    POST /<entidad>/<id>/eliminar_en_linea?...
+                                        elimina desde la subgrilla; la subgrilla
+                                        de nuevo (o con el error, 422)
+
+`vista_padre` dice cómo está armada la fila del padre en la página (el fk de
+su pestaña, o «listado»): con eso, todo lo que cambia un hijo devuelve además
+la fila del padre fuera de banda (cambian sus columnas calculadas).
+
 Si la spec declara `acciones`: /<entidad>/<id>/accion/<accion> (POST; con
-`campos`, además GET con el formulario de la acción).
+`campos` o `filas`, además GET con el formulario de la acción). Una acción de
+varias filas se abre también dentro de la subgrilla (?subgrilla=<hijo>).
 
 Las reglas de edición según el registro (`editable_si`, `eliminable_si`, fase
 13.2) las aplica el servicio; acá solo se reflejan: celdas congeladas en gris
@@ -49,13 +64,14 @@ el modelo y en el material). El padre "activo" es el que viene en la URL
 from __future__ import annotations
 
 from flask import abort, current_app, flash, redirect, render_template, request, url_for
+from sqlalchemy import func
 
 from app.core.db import db
 
 from app.crud.core import coercion, dependencias, fk, repository
 from app.crud.core.coercion import ErroresValidacion
 from app.crud.core.files import ArchivoInvalido, guardar
-from app.crud.core.interpretes import buscar_por_texto
+from app.crud.core.interpretes import Campo, buscar_por_texto
 from app.crud.core.service import ErrorIntegridad, ServicioCRUD, permitido
 from app.crud.entidades import servicio
 from app.crud.meta.spec import EntitySpec, ParentSpec
@@ -66,6 +82,9 @@ BLUEPRINT = "crud"
 # está en el catálogo de motivos (ver propuesta_edicion_en_linea.md, decisión 1).
 MOTIVO_EDICION_EN_LINEA = "Edición en línea"
 MOTIVO_ALTA_EN_LINEA = "Alta en línea"
+MOTIVO_BAJA_EN_LINEA = "Eliminado en línea"
+# Cómo está armada la fila del padre cuando no está en la pestaña de otro padre.
+VISTA_LISTADO = "listado"
 ACCIONES = ("listar", "crear", "detalle", "editar", "confirmar_eliminar")
 
 
@@ -113,6 +132,10 @@ class VistasEntidad:
         if self.spec.alta_en_linea:
             bp.add_url_rule(f"{base}/alta_en_linea", f"{n}_alta_en_linea", self.alta_en_linea,
                             methods=["POST"])
+        if any(n in otra.subgrillas for otra in self.registry.values()):
+            bp.add_url_rule(f"{base}/subgrilla", f"{n}_subgrilla", self.subgrilla)
+            bp.add_url_rule(f"{base}/<int:id>/eliminar_en_linea", f"{n}_eliminar_en_linea",
+                            self.eliminar_en_linea, methods=["POST"])
 
     # ------------------------------------------------------------------
     # Navegación
@@ -228,7 +251,8 @@ class VistasEntidad:
             filtro_padre=(padre.fk, padre_id) if padre else None,
         ).all()
 
-        registros = [item_fila(s, r, s.listado) for r in objetos]
+        conteos = conteo_hijos(s, objetos)
+        registros = [item_fila(s, r, s.listado, conteos) for r in objetos]
 
         opciones = fk.opciones_de(self.fields)
         for c in campos_select:
@@ -552,7 +576,7 @@ class VistasEntidad:
         a = next((x for x in self.spec.acciones if x.id == accion), None)
         if a is None or (a.visible is not None and not a.visible(registro)):
             return ("Acción no disponible.", 404)
-        if request.method == "GET" and not a.campos:
+        if request.method == "GET" and not a.campos and a.filas is None:
             abort(405)
         # Desde la fila de una grilla se vuelve a la pestaña del padre; desde el
         # detalle, a la pestaña de la acción.
@@ -561,6 +585,8 @@ class VistasEntidad:
             volver = self._url_volver(*self._padre_de(registro))
         else:
             volver = url_for(endpoint(self.spec.name, "detalle"), id=id, seccion=a.seccion, **args)
+        if a.filas is not None:
+            return self._accion_con_filas(registro, a, volver)
         if a.campos:
             return self._accion_con_formulario(registro, a, volver)
         try:
@@ -616,6 +642,125 @@ class VistasEntidad:
             url_cancelar=volver,
         ), (400 if errores else 200)
 
+    def _accion_con_filas(self, registro, a, volver):
+        """
+        Acción de varias filas (fase 13.4, ej: «Redistribuir»): una tabla con una
+        fila por hijo. GET: el formulario; POST: interpreta cada fila con la spec
+        del hijo, ejecuta funcion(registro, filas) y confirma (todo o nada).
+
+        Desde la subgrilla (?subgrilla=<hijo>&vista_padre=...), el formulario se
+        abre en lugar de la subgrilla y, al terminar, vuelve la subgrilla con la
+        fila del padre fuera de banda; desde el detalle, es una página.
+        """
+        cfg = a.filas
+        hijo = self.registry[cfg.entidad]
+        vista = request.args.get("vista_padre")
+        en_subgrilla = (request.args.get("subgrilla") == hijo.name and vista is not None
+                        and hijo.name in self.spec.subgrillas)
+        id_ = getattr(registro, self.spec.pk)
+        iniciales = cfg.iniciales(registro)
+        notas = {f.get("id"): f.get("_nota") for f in iniciales}
+        errores = {}
+        if request.method == "GET":
+            filas = [{"id": f.get("id"), "textos": {c.nombre: f.get(c.nombre, "") for c in cfg.celdas},
+                      "nota": f.get("_nota")} for f in iniciales]
+        else:
+            filas, datos_filas = self._filas_del_formulario(cfg, hijo, notas, errores)
+            if not errores:
+                try:
+                    resultado = a.funcion(registro, datos_filas)
+                    db.session.commit()
+                except ErroresValidacion as e:
+                    db.session.rollback()
+                    errores = dict(e.errores)
+                except ErrorIntegridad as e:
+                    db.session.rollback()
+                    errores = {"_general": e.mensaje}
+                else:
+                    if not en_subgrilla:
+                        self._flash_resultado(resultado)
+                        return redirect(volver)
+                    registro = repository.obtener_o_404(self.spec.model, id_)
+                    sg = contexto_subgrilla(self.spec, registro, hijo, vista, mensajes=mensajes_de(resultado))
+                    return render_template("crud/partials/_subgrilla.html", sg=sg,
+                                           fila_padre=fila_de_vista(self.spec, registro, vista))
+            registro = repository.obtener_o_404(self.spec.model, id_)
+
+        generales = []
+        for clave, texto in errores.items():
+            fila = next((f for f in filas if clave == f"fila_{f.get('n')}"), None)
+            if fila is not None:
+                fila["error"] = texto
+            else:
+                label = hijo.fields[clave].label if clave in hijo.fields else None
+                generales.append(texto if not label or texto.startswith(label) else f"{label}: {texto}")
+        form = {
+            "accion": a,
+            "id": f"form-{a.id}-{id_}",
+            "url": url_for(endpoint(self.spec.name, "accion"), id=id_, accion=a.id, **request.args),
+            "celdas": [self._celda_de_fila(c, hijo) for c in cfg.celdas],
+            "filas": filas,
+            "total": cfg.total(registro) if cfg.total is not None else None,
+            "error": " ".join(generales) or None,
+            "en_subgrilla": en_subgrilla,
+            "url_cancelar": volver,
+        }
+        status = 422 if errores else 200
+        if en_subgrilla:
+            sg = contexto_subgrilla(self.spec, registro, hijo, vista, form=form)
+            form["url_cancelar"] = sg["url"]
+            return render_template("crud/partials/_subgrilla.html", sg=sg), status
+        return render_template(
+            "crud/accion.html",
+            **self._contexto(*self._padre_de(registro)),
+            titulo_pagina=f"{a.label} — {self._titulo_registro(registro)}",
+            accion=a,
+            registro_titulo=self._titulo_registro(registro),
+            form_filas=form,
+            campos={}, valores={}, fk_data={}, con_lista=set(),
+            errores={},  # los muestra el formulario de filas (generales arriba, cada uno en su fila)
+            url_cancelar=volver,
+        ), (400 if errores else 200)
+
+    @staticmethod
+    def _celda_de_fila(c, hijo) -> dict:
+        control = c.interprete.control(hijo)
+        return {"nombre": c.nombre, "label": c.label, "control": control, "sumar": c.sumar,
+                "opciones": c.interprete.opciones(hijo) if control in ("lista", "select") else [],
+                "id_lista": f"lista-filas-{hijo.name}-{c.nombre}"}
+
+    @staticmethod
+    def _filas_del_formulario(cfg, hijo, notas, errores) -> tuple[list[dict], list[dict]]:
+        """
+        (filas para volver a mostrar, filas interpretadas para la función). Las
+        filas vienen alineadas: un input «id» y uno por celda en cada una. Las
+        vacías (sin id ni texto) se ignoran; una celda simple vacía es None.
+        """
+        ids = request.form.getlist("id")
+        textos = {c.nombre: request.form.getlist(c.nombre) for c in cfg.celdas}
+        filas, datos_filas, n = [], [], 0
+        for i, crudo in enumerate(ids):
+            id_ = int(crudo) if crudo.isdigit() else None
+            fila_textos = {c.nombre: (textos[c.nombre][i] if i < len(textos[c.nombre]) else "") for c in cfg.celdas}
+            if id_ is None and not any(t.strip() for t in fila_textos.values()):
+                continue
+            n += 1
+            filas.append({"id": id_, "n": n, "textos": fila_textos, "nota": notas.get(id_) if id_ else "Nuevo"})
+            datos, mensajes = {"id": id_, "fila": n}, []
+            for c in cfg.celdas:
+                texto = fila_textos[c.nombre]
+                if not texto.strip() and isinstance(c.interprete, Campo):
+                    datos[c.nombre] = None
+                    continue
+                try:
+                    datos.update(c.interprete.interpretar(texto, hijo))
+                except ErroresValidacion as e:
+                    mensajes.extend(t if t.startswith(c.label) else f"{c.label}: {t}" for t in e.errores.values())
+            if mensajes:
+                errores[f"fila_{n}"] = " ".join(mensajes)
+            datos_filas.append(datos)
+        return filas, datos_filas
+
     def _errores_de_accion(self, a, errores: dict) -> dict:
         """Los errores de campos del registro (no del formulario) van arriba, con su etiqueta."""
         resultado, generales = {}, []
@@ -633,10 +778,7 @@ class VistasEntidad:
         Lo que devuelve la función de una acción: un texto (ok), una tupla
         (categoría, texto) o una lista de ellos.
         """
-        if not resultado:
-            return
-        for item in resultado if isinstance(resultado, list) else [resultado]:
-            categoria, texto = item if isinstance(item, tuple) else ("ok", item)
+        for categoria, texto in mensajes_de(resultado):
             flash(texto, categoria)
 
     def _avisar(self, registro):
@@ -660,15 +802,16 @@ class VistasEntidad:
             .order_by(getattr(hijo.model, hijo.pk))
             .all()
         )
+        conteos = conteo_hijos(hijo, objetos)
         return {
             "label": self._label_hijo(hijo),
             "label_singular": hijo.label_singular,
             "label_plural": hijo.label_plural,
             "template_listado": "crud/listado_subentidad.html",
-            "items": [item_fila(hijo, o, columnas) for o in objetos],
+            "items": [item_fila(hijo, o, columnas, conteos) for o in objetos],
             "grilla": contexto_grilla(hijo, columnas, {rel.fk: id}),
             "alta": (contexto_alta(hijo, columnas, {rel.fk: id})
-                     if hijo.alta_en_linea and hijo.alta_en_linea_padre == self.spec.name else None),
+                     if hay_alta_en_linea(hijo, rel, id) else None),
             "entidad": hijo.name,
             # Las columnas del listado de la entidad (no todas: la tabla desbordaría).
             "fields": {c: hijo.fields[c] for c in hijo.listado},
@@ -685,12 +828,37 @@ class VistasEntidad:
     # ------------------------------------------------------------------
 
     def _grilla_de_url(self):
-        """Contexto de la fila según desde dónde se llegó: la pestaña del padre o el listado."""
+        """
+        Contexto de la fila según desde dónde se llegó: la pestaña del padre, la
+        subgrilla bajo la fila del padre (?vista_padre=...) o el listado.
+        """
         padre, padre_id = self._padre_desde_url()
         if padre is not None:
-            return contexto_grilla(self.spec, [c for c in self.spec.listado if c != padre.fk],
-                                   {padre.fk: padre_id})
+            args = {padre.fk: padre_id}
+            if self._vista_padre() is not None:
+                args["vista_padre"] = self._vista_padre()
+            return contexto_grilla(self.spec, [c for c in self.spec.listado if c != padre.fk], args)
         return contexto_grilla(self.spec, self.spec.listado, {})
+
+    def _vista_padre(self) -> str | None:
+        """Cómo está armada la fila del padre, si se llegó desde una subgrilla (si no, None)."""
+        padre, _ = self._padre_desde_url()
+        if padre is None or self.spec.name not in self.registry[padre.entidad].subgrillas:
+            return None
+        return request.args.get("vista_padre")
+
+    def _fila_padre(self) -> dict | None:
+        """
+        La fila del padre, para mandarla fuera de banda cuando se cambia un hijo
+        desde la subgrilla (cambian sus columnas calculadas, ej: la solicitada).
+        """
+        vista = self._vista_padre()
+        if vista is None:
+            return None
+        padre, padre_id = self._padre_desde_url()
+        spec_padre = self.registry[padre.entidad]
+        registro = db.session.get(spec_padre.model, padre_id)
+        return fila_de_vista(spec_padre, registro, vista) if registro is not None else None
 
     def _campo_en_linea(self, registro, campo):
         """El campo, si se edita en la grilla y no está congelado en este registro; si no, 404."""
@@ -701,7 +869,10 @@ class VistasEntidad:
     def _render_fila(self, registro, status=200, **extra):
         grilla = self._grilla_de_url()
         item = item_fila(self.spec, registro, grilla["columnas"])
-        return render_template("crud/partials/_fila.html", grilla=grilla, item=item, **extra), status
+        # Un hijo guardado desde la subgrilla: la fila del padre también cambia.
+        fila_padre = self._fila_padre() if status == 200 else None
+        return render_template("crud/partials/_fila.html", grilla=grilla, item=item, fila_padre=fila_padre,
+                               **extra), status
 
     def fila(self, id):
         return self._render_fila(repository.obtener_o_404(self.spec.model, id))
@@ -758,6 +929,12 @@ class VistasEntidad:
         registro_padre = repository.obtener_o_404(spec_padre.model, padre_id)
         columnas = [c for c in self.spec.listado if c != padre.fk]
         args = {padre.fk: padre_id}
+        vista = self._vista_padre()
+        # En una subgrilla puede haber varias abiertas: los ids llevan el padre.
+        sufijo = ""
+        if vista is not None:
+            args["vista_padre"] = vista
+            sufijo = f"-{padre_id}"
 
         textos = {c.nombre: request.form.get(c.nombre, "") for c in self.spec.alta_en_linea}
         datos, errores = {padre.fk: padre_id}, {}
@@ -775,24 +952,65 @@ class VistasEntidad:
             except ErrorIntegridad as e:
                 errores = {e.campo or "_general": e.mensaje}
         if errores:
-            alta = contexto_alta(self.spec, columnas, args, textos, errores)
+            alta = contexto_alta(self.spec, columnas, args, textos, errores, sufijo=sufijo)
             return render_template("crud/partials/_fila_alta.html", alta=alta), 422
 
         self._avisar(nuevo)
         grilla = contexto_grilla(self.spec, columnas, args)
         repetidos = {c.nombre: textos[c.nombre] for c in self.spec.alta_en_linea if c.repetir}
-        alta = contexto_alta(self.spec, columnas, args, repetidos, foco=True)
+        alta = contexto_alta(self.spec, columnas, args, repetidos, foco=True, sufijo=sufijo)
         # Las acciones de la pestaña pueden cambiar (ej: «Enviar a Compras» aparece
         # con la primera línea en borrador): se reemplazan fuera de banda.
-        botones = {
-            "id": f"botones-{self.spec.name}",
-            "acciones": acciones_visibles(spec_padre, registro_padre, lambda a: a.seccion == self.spec.name,
-                                          {"seccion": self.spec.name}),
-            "boton_url": url_for(endpoint(self.spec.name, "crear"), **args),
-            "boton_texto": "Crear " + self.spec.label_singular,
-        }
+        if vista is None:
+            botones = {
+                "id": f"botones-{self.spec.name}",
+                "acciones": acciones_visibles(spec_padre, registro_padre, lambda a: a.seccion == self.spec.name,
+                                              {"seccion": self.spec.name}),
+                "boton_url": url_for(endpoint(self.spec.name, "crear"), **{padre.fk: padre_id}),
+                "boton_texto": "Crear " + self.spec.label_singular,
+            }
+        else:
+            botones = botones_subgrilla(spec_padre, registro_padre, self.spec, vista)
         return render_template("crud/partials/_alta_creada.html", grilla=grilla,
-                               item=item_fila(self.spec, nuevo, columnas), alta=alta, botones=botones)
+                               item=item_fila(self.spec, nuevo, columnas), alta=alta, botones=botones,
+                               fila_padre=self._fila_padre())
+
+    # ------------------------------------------------------------------
+    # SUBGRILLA (fase 13.4): los hijos desplegados bajo la fila del padre
+    # ------------------------------------------------------------------
+
+    def _padre_de_subgrilla(self):
+        """(relación, registro del padre, vista) de la URL de una subgrilla; 404 si no corresponde."""
+        padre, padre_id = self._padre_desde_url()
+        vista = self._vista_padre()
+        if padre is None or vista is None:
+            abort(404)
+        registro = repository.obtener_o_404(self.registry[padre.entidad].model, padre_id)
+        return padre, registro, vista
+
+    def subgrilla(self):
+        padre, registro_padre, vista = self._padre_de_subgrilla()
+        sg = contexto_subgrilla(self.registry[padre.entidad], registro_padre, self.spec, vista)
+        return render_template("crud/partials/_subgrilla.html", sg=sg)
+
+    def eliminar_en_linea(self, id):
+        """Eliminar un hijo desde la subgrilla (sin salir de la página del padre)."""
+        padre, registro_padre, vista = self._padre_de_subgrilla()
+        registro = repository.obtener_o_404(self.spec.model, id)
+        if getattr(registro, padre.fk) != getattr(registro_padre, self.registry[padre.entidad].pk):
+            abort(404)
+        spec_padre = self.registry[padre.entidad]
+        try:
+            self.servicio.eliminar(registro, MOTIVO_BAJA_EN_LINEA)
+        except ErrorIntegridad as e:
+            sg = contexto_subgrilla(spec_padre, registro_padre, self.spec, vista, error=e.mensaje)
+            return render_template("crud/partials/_subgrilla.html", sg=sg), 422
+        db.session.refresh(registro_padre)
+        sg = contexto_subgrilla(spec_padre, registro_padre, self.spec, vista,
+                                mensajes=[("ok", f"Se eliminó {'la' if self.spec.genero == 'f' else 'el'} "
+                                                 f"{self.spec.label_singular}.")])
+        return render_template("crud/partials/_subgrilla.html", sg=sg,
+                               fila_padre=fila_de_vista(spec_padre, registro_padre, vista))
 
     def _dato_de_celda(self, campo, f, texto) -> dict:
         """
@@ -841,21 +1059,126 @@ def contexto_grilla(spec: EntitySpec, columnas, args_fila: dict) -> dict:
     Lo que crud/partials/_fila.html necesita además del registro. `args_fila`: el
     padre desde el que se llegó ({"pedido_id": 3}), para los enlaces y las celdas.
     """
+    from app.crud.entidades import REGISTRY
+
+    fks_padre = {p.fk for p in spec.padres}
+    subgrillas = []
+    for nombre in spec.subgrillas:
+        hijo = REGISTRY[nombre]
+        rel = hijo.padre_de_tipo(spec.name)
+        subgrillas.append({"entidad": nombre, "fk": rel.fk, "label": rel.label or inicial(hijo.label_plural),
+                           "endpoint": endpoint(nombre, "subgrilla")})
     return {
         "columnas": list(columnas),
         "campos": spec.fields,
         "pk": spec.pk,
         "entidad": spec.name,
+        "label_singular": spec.label_singular,
+        "genero": spec.genero,
         "endpoint_base": f"{BLUEPRINT}.{spec.name}",
         "args_fila": args_fila,
         # {columna: campo que se edita en ella} (casi siempre, el mismo).
         "editables": {spec.columna_en_linea.get(c, c): c for c in spec.edicion_en_linea},
         "con_eliminar": spec.eliminable_si is not None,
+        # Subgrillas (fase 13.4): los hijos que se despliegan bajo cada fila, y
+        # cómo está armada esta fila (para devolverla fuera de banda).
+        "subgrillas": subgrillas,
+        "vista": next((k for k in args_fila if k in fks_padre), VISTA_LISTADO),
+        # La fila es de una subgrilla: «Eliminar» sin salir de la página.
+        "en_subgrilla": "vista_padre" in args_fila,
     }
 
 
+def conteo_hijos(spec: EntitySpec, registros) -> dict:
+    """{hijo: {id del registro: cantidad}} de las subgrillas, en una consulta por hijo."""
+    from app.crud.entidades import REGISTRY
+
+    ids = [getattr(r, spec.pk) for r in registros]
+    resultado = {}
+    for nombre in spec.subgrillas:
+        hijo = REGISTRY[nombre]
+        columna = getattr(hijo.model, hijo.padre_de_tipo(spec.name).fk)
+        filas = (db.session.query(columna, func.count()).filter(columna.in_(ids)).group_by(columna).all()
+                 if ids else [])
+        resultado[nombre] = dict(filas)
+    return resultado
+
+
+def hay_alta_en_linea(hijo: EntitySpec, rel: ParentSpec, padre_id) -> bool:
+    """Si la pestaña (o la subgrilla) del padre termina con la fila de alta: si se puede crear ahí."""
+    if not hijo.alta_en_linea or hijo.alta_en_linea_padre != rel.entidad:
+        return False
+    return hijo.creable_si is None or permitido(hijo.creable_si({rel.fk: padre_id})) is None
+
+
+def fila_de_vista(spec: EntitySpec, registro, vista: str) -> dict:
+    """La fila de un registro armada como en la página (`vista`: el fk de la pestaña, o «listado»)."""
+    p = next((p for p in spec.padres if p.fk == vista), None)
+    if p is not None:
+        columnas = [c for c in spec.listado if c != p.fk]
+        args = {p.fk: getattr(registro, p.fk)}
+    else:
+        columnas, args = list(spec.listado), {}
+    return {"grilla": contexto_grilla(spec, columnas, args), "item": item_fila(spec, registro, columnas)}
+
+
+def botones_subgrilla(spec_padre: EntitySpec, registro_padre, hijo: EntitySpec, vista: str) -> dict:
+    """Las acciones del padre para esta subgrilla (las de la pestaña del hijo, ej: «Redistribuir»)."""
+    padre_id = getattr(registro_padre, spec_padre.pk)
+    return {
+        "id": f"botones-{hijo.name}-{padre_id}",
+        "acciones": acciones_visibles(spec_padre, registro_padre, lambda a: a.seccion == hijo.name,
+                                      {"subgrilla": hijo.name, "vista_padre": vista}),
+        "subgrilla": f"sub-{hijo.name}-{padre_id}",
+    }
+
+
+def contexto_subgrilla(spec_padre: EntitySpec, registro_padre, hijo: EntitySpec, vista: str,
+                       error: str | None = None, mensajes=None, form: dict | None = None) -> dict:
+    """
+    Lo que crud/partials/_subgrilla.html necesita: la fila desplegada bajo la del
+    padre, con la grilla de sus hijos (y su fila de alta, si se puede crear ahí),
+    las acciones del padre para ellos y, opcional, el formulario de una acción de
+    varias filas abierto en su lugar.
+    """
+    rel = hijo.padre_de_tipo(spec_padre.name)
+    padre_id = getattr(registro_padre, spec_padre.pk)
+    columnas = [c for c in hijo.listado if c != rel.fk]
+    args = {rel.fk: padre_id, "vista_padre": vista}
+    objetos = (
+        hijo.model.query.options(*fk.carga_anticipada(hijo.model, hijo.fields))
+        .filter_by(**{rel.fk: padre_id})
+        .order_by(getattr(hijo.model, hijo.pk))
+        .all()
+    )
+    conteos = conteo_hijos(hijo, objetos)
+    columnas_padre = fila_de_vista(spec_padre, registro_padre, vista)["grilla"]["columnas"]
+    return {
+        "id": f"sub-{hijo.name}-{padre_id}",
+        "label": rel.label or inicial(hijo.label_plural),
+        "url": url_for(endpoint(hijo.name, "subgrilla"), **args),
+        "colspan": len(columnas_padre) + 1,
+        "grilla": contexto_grilla(hijo, columnas, args),
+        "registros": [item_fila(hijo, o, columnas, conteos) for o in objetos],
+        "alta": (contexto_alta(hijo, columnas, args, sufijo=f"-{padre_id}")
+                 if hay_alta_en_linea(hijo, rel, padre_id) else None),
+        "botones": botones_subgrilla(spec_padre, registro_padre, hijo, vista),
+        "error": error,
+        "mensajes": list(mensajes or []),
+        "form": form,
+    }
+
+
+def mensajes_de(resultado) -> list[tuple[str, str]]:
+    """Lo que devuelve una acción (un texto, una tupla (categoría, texto) o una lista) como [(categoría, texto)]."""
+    if not resultado:
+        return []
+    return [item if isinstance(item, tuple) else ("ok", item)
+            for item in (resultado if isinstance(resultado, list) else [resultado])]
+
+
 def contexto_alta(spec: EntitySpec, columnas, args_fila: dict, textos: dict | None = None,
-                  errores: dict | None = None, foco: bool = False) -> dict:
+                  errores: dict | None = None, foco: bool = False, sufijo: str = "") -> dict:
     """
     Lo que crud/partials/_fila_alta.html necesita: una celda por cada columna de la
     grilla (las de alta con su colspan), con lo escrito y su error.
@@ -864,6 +1187,8 @@ def contexto_alta(spec: EntitySpec, columnas, args_fila: dict, textos: dict | No
     errores  {campo: mensaje} del intérprete o del servicio: cada uno va en la
              celda que produce ese campo; los que no son de ninguna, junto al botón.
     foco     True: el foco va a la primera celda con error o, si no hay, a la primera.
+    sufijo   para los ids de la fila y del form (en una subgrilla, el id del padre:
+             puede haber varias abiertas).
     """
     textos, errores = textos or {}, dict(errores or {})
     por_campo = {}
@@ -901,8 +1226,8 @@ def contexto_alta(spec: EntitySpec, columnas, args_fila: dict, textos: dict | No
     primera = next(x["nombre"] for x in layout if x)
     return {
         "entidad": spec.name,
-        "id": f"alta-{spec.name}",
-        "form_id": f"form-alta-{spec.name}",
+        "id": f"alta-{spec.name}{sufijo}",
+        "form_id": f"form-alta-{spec.name}{sufijo}",
         "url": url_for(endpoint(spec.name, "alta_en_linea"), **args_fila),
         "layout": layout,
         "error": " ".join(mensajes.get("_general", [])) or None,
@@ -910,11 +1235,12 @@ def contexto_alta(spec: EntitySpec, columnas, args_fila: dict, textos: dict | No
     }
 
 
-def item_fila(spec: EntitySpec, registro, columnas) -> dict:
+def item_fila(spec: EntitySpec, registro, columnas, conteos: dict | None = None) -> dict:
     """
     Valores de una fila: las columnas pedidas, la PK y la etiqueta (y color) de
     cada FK. Además, lo que depende del registro: los campos congelados (con el
-    porqué), si se puede eliminar y las acciones de la fila.
+    porqué), si se puede eliminar, las acciones de la fila y cuántos hijos tiene
+    cada subgrilla (`conteos`, de conteo_hijos; si no viene, se cuenta acá).
     """
     item = {c: getattr(registro, c, None) for c in columnas}
     item[spec.pk] = getattr(registro, spec.pk)
@@ -927,6 +1253,9 @@ def item_fila(spec: EntitySpec, registro, columnas) -> dict:
     item["_eliminable"] = spec.eliminable_si is None or permitido(spec.eliminable_si(registro)) is None
     item["_acciones"] = [a for a in spec.acciones
                          if a.en_fila and (a.visible is None or a.visible(registro))]
+    if spec.subgrillas:
+        conteos = conteos if conteos is not None else conteo_hijos(spec, [registro])
+        item["_subgrillas"] = {h: conteos.get(h, {}).get(item[spec.pk], 0) for h in spec.subgrillas}
     for c in columnas:
         f = spec.fields.get(c)
         if f is None or f.tipo != "fk":
@@ -971,7 +1300,8 @@ def acciones_visibles(spec: EntitySpec, registro, condicion, args) -> list[dict]
     """Botones de las acciones de un registro que cumplen `condicion` (y su `visible`)."""
     id_ = getattr(registro, spec.pk)
     return [
-        {"label": a.label, "confirmar": a.confirmar, "con_formulario": bool(a.campos),
+        {"label": a.label, "confirmar": a.confirmar, "con_formulario": bool(a.campos) or a.filas is not None,
+         "con_filas": a.filas is not None,
          "url": url_for(endpoint(spec.name, "accion"), id=id_, accion=a.id, **args)}
         for a in spec.acciones
         if condicion(a) and (a.visible is None or a.visible(registro))

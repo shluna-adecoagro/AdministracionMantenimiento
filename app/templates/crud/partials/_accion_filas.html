@@ -1,0 +1,81 @@
+{#
+  Formulario de una acción de varias filas (AccionSpec.filas, fase 13.4; ej:
+  «Redistribuir» los destinos de una línea enviada). Una fila por hijo; «+ Fila»
+  agrega una vacía y 🗑 la quita (o se deja la cantidad vacía). La celda que se
+  suma muestra el total en vivo (grilla.js). Va dentro de la subgrilla (con
+  htmx) o en la página de la acción (crud/accion.html).
+
+  Variable: form (VistasEntidad._accion_con_filas): accion, id, url, celdas
+  [{nombre, label, control, opciones, id_lista, sumar}], filas [{id, textos,
+  nota, error}], total, error, en_subgrilla, url_cancelar.
+
+  Los inputs de cada fila van en el mismo orden (un «id» y uno por celda): el
+  servidor las arma por posición.
+#}
+{% set f = form %}
+{% macro fila(f, item) -%}
+    <tr class="fila-accion{% if item and item.error %} con-error{% endif %}">
+        {% for c in f.celdas %}
+            {% set v = item.textos[c.nombre] if item else "" %}
+            <td>
+                {% if loop.first %}<input type="hidden" name="id" value="{{ item.id if item and item.id else '' }}">{% endif %}
+                {% if c.control == "select" %}
+                    <select name="{{ c.nombre }}" aria-label="{{ c.label }}">
+                        <option value=""></option>
+                        {% for o in c.opciones %}
+                            <option value="{{ o.value }}" {% if o.value | string == v | string %}selected{% endif %}>{{ o.label }}</option>
+                        {% endfor %}
+                    </select>
+                {% else %}
+                    <input name="{{ c.nombre }}" value="{{ v }}" autocomplete="off" aria-label="{{ c.label }}"
+                           {% if c.control == "lista" %}list="{{ c.id_lista }}"{% endif %}
+                           {% if c.control == "number" %}inputmode="decimal" class="num"{% endif %}
+                           {% if c.sumar %}data-sumar{% endif %}>
+                {% endif %}
+            </td>
+        {% endfor %}
+        <td class="nota">
+            {{ (item.nota if item else "Nuevo") or "" }}
+            {% if item and item.error %}<div class="error-celda" role="alert">{{ item.error }}</div>{% endif %}
+        </td>
+        <td><button type="button" class="btn-icono btn-quitar-fila" title="Sacar esta fila" aria-label="Sacar esta fila">🗑</button></td>
+    </tr>
+{%- endmacro %}
+<form class="form-filas" method="POST" action="{{ f.url }}" id="{{ f.id }}"
+      {% if f.en_subgrilla %}hx-post="{{ f.url }}" hx-target="closest tr.sub-fila" hx-swap="outerHTML"{% endif %}
+      {% if f.total is not none %}data-total="{{ '%g' | format(f.total) }}"{% endif %}>
+    {% if f.en_subgrilla %}<p><strong>{{ f.accion.label }}</strong></p>{% endif %}
+    {% if f.accion.ayuda and f.en_subgrilla %}<p class="accion-ayuda">{{ f.accion.ayuda }}</p>{% endif %}
+    {% if f.error %}<p class="sub-mensaje sub-mensaje--error" role="alert">{{ f.error }}</p>{% endif %}
+    <table class="tabla-listado tabla-filas">
+        <thead>
+            <tr>
+                {% for c in f.celdas %}<th>{{ c.label }}</th>{% endfor %}
+                <th></th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in f.filas %}{{ fila(f, item) }}{% endfor %}
+        </tbody>
+        <template>{{ fila(f, none) }}</template>
+    </table>
+    {% for c in f.celdas if c.control == "lista" %}
+        <datalist id="{{ c.id_lista }}">
+            {% for texto in c.opciones %}<option value="{{ texto }}"></option>{% endfor %}
+        </datalist>
+    {% endfor %}
+    <div class="fila-form">
+        <button type="button" class="btn-secondary btn-agregar-fila">+ Fila</button>
+        {% if f.celdas | selectattr("sumar") | list %}
+            <span class="total-filas">Total: <b class="suma"></b>{% if f.total is not none %} de {{ '%g' | format(f.total) }}{% endif %}</span>
+        {% endif %}
+        <button type="submit" class="btn-primary">Guardar</button>
+        {% if f.en_subgrilla %}
+            <button type="button" class="btn-secondary" hx-get="{{ f.url_cancelar }}"
+                    hx-target="closest tr.sub-fila" hx-swap="outerHTML">Cancelar</button>
+        {% else %}
+            <a href="{{ f.url_cancelar }}" class="btn-secondary">Cancelar</a>
+        {% endif %}
+    </div>
+</form>

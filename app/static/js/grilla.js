@@ -7,6 +7,11 @@
 //   * fila de alta (tr.fila-alta, alta rápida): inputs comunes de un form; Enter
 //     agrega la línea. Flecha abajo desde la última fila lleva a la de alta y
 //     flecha arriba desde la de alta, a la última fila.
+//   * subgrillas (fase 13.4): el botón de la fila («Destinos (2)») despliega o
+//     pliega los hijos en una fila debajo (tr.sub-fila). Puede haber varias
+//     abiertas; cada una es otra grilla, con el mismo teclado.
+//   * acciones de varias filas (form.form-filas, ej: «Redistribuir»): «+ Fila»,
+//     🗑 para sacar una fila y el total en vivo de la columna que se suma.
 //
 // Las filas y celdas las arma el servidor desde la spec (crud/partials/_fila.html
 // y _celda_edicion.html). Viene de la demo herramientas/demo_edicion_en_linea/.
@@ -167,8 +172,74 @@
     document.addEventListener("htmx:responseError", () => { abriendo = false; alAbrir = null; primeraTecla = null; });
     document.addEventListener("htmx:sendError", () => { abriendo = false; alAbrir = null; primeraTecla = null; });
 
+    // ------------------------------------------------------------ subgrillas
+    // El botón dice si su subgrilla está abierta (la fila del padre puede volver
+    // del servidor, fuera de banda, con la subgrilla todavía abierta debajo).
+    function marcarSubgrillas() {
+        document.querySelectorAll(".btn-subgrilla").forEach((b) => {
+            const abierta = !!document.getElementById(b.dataset.subgrilla);
+            b.setAttribute("aria-expanded", abierta ? "true" : "false");
+            const flecha = b.querySelector(".flecha");
+            if (flecha) flecha.textContent = abierta ? "▾" : "▸";
+        });
+    }
+
+    document.addEventListener("click", (e) => {
+        const boton = e.target.closest(".btn-subgrilla");
+        if (!boton) return;
+        const abierta = document.getElementById(boton.dataset.subgrilla);
+        if (abierta) { abierta.remove(); marcarSubgrillas(); return; }
+        const tr = boton.closest("tr");
+        htmx.ajax("GET", boton.dataset.url, { target: tr, swap: "afterend" }).then(marcarSubgrillas);
+    });
+
+    // ------------------------------------------------------------ acciones de varias filas
+    const numero = (texto) => {
+        const n = parseFloat(String(texto || "").trim().replace(",", "."));
+        return isNaN(n) ? 0 : n;
+    };
+
+    function sumarFilas(form) {
+        const suma = form.querySelector(".suma");
+        if (!suma) return;
+        let total = 0;
+        form.querySelectorAll("tbody input[data-sumar]").forEach((i) => { total += numero(i.value); });
+        total = Math.round(total * 1e6) / 1e6;
+        suma.textContent = String(total).replace(".", ",");
+        const esperado = form.dataset.total;
+        suma.classList.toggle("total-distinto", esperado !== undefined && Math.abs(total - numero(esperado)) > 1e-9);
+    }
+
+    function prepararFormulariosDeFilas() {
+        document.querySelectorAll("form.form-filas").forEach(sumarFilas);
+    }
+
+    document.addEventListener("click", (e) => {
+        const form = e.target.closest && e.target.closest("form.form-filas");
+        if (!form) return;
+        if (e.target.closest(".btn-agregar-fila")) {
+            const molde = form.querySelector("template");
+            const tbody = form.querySelector("tbody");
+            tbody.appendChild(molde.content.cloneNode(true));
+            const nueva = tbody.lastElementChild;
+            const primero = nueva && nueva.querySelector("input:not([type=hidden]), select");
+            if (primero) primero.focus();
+        } else if (e.target.closest(".btn-quitar-fila")) {
+            e.target.closest("tr").remove();
+            sumarFilas(form);
+        }
+    });
+    document.addEventListener("input", (e) => {
+        if (e.target.matches && e.target.matches("form.form-filas input[data-sumar]")) {
+            sumarFilas(e.target.closest("form"));
+        }
+    });
+    document.addEventListener("DOMContentLoaded", () => { marcarSubgrillas(); prepararFormulariosDeFilas(); });
+
     // ------------------------------------------------------------ después de cada reemplazo
     document.addEventListener("htmx:afterSettle", () => {
+        marcarSubgrillas();
+        prepararFormulariosDeFilas();
         // Alta rápida: la fila de alta nueva (o con errores) dice qué celda recibe el foco.
         const deAlta = document.querySelector(".grilla tr.fila-alta [data-foco-alta]");
         if (deAlta) {

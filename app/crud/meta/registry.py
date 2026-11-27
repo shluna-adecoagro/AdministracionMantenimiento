@@ -33,6 +33,8 @@ from app.crud.meta.spec import (
     GENEROS,
     GRUPOS,
     AccionSpec,
+    CeldaFilaSpec,
+    FilasAccionSpec,
     SELECTORES,
     TIPOS_CAMPO,
     EntitySpec,
@@ -73,6 +75,7 @@ CLAVES_ENTIDAD = frozenset({
     "creable_si",         # función(datos): si se puede crear con esos datos
     "alta_en_linea",      # [{"nombre", "columnas", "interprete"...}] fila de alta de la grilla (fase 13.3)
     "alta_en_linea_padre",  # entidad padre en cuya pestaña está la fila de alta (por defecto, el principal)
+    "subgrillas",         # [hijo, ...] se despliegan debajo de cada fila de la grilla (fase 13.4)
 })
 
 # Tipos de widget que por defecto aparecen en listado y filtros.
@@ -363,7 +366,8 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
 
     # --- acciones y al_guardar --------------------------------------------
     acciones: list[AccionSpec] = []
-    claves_accion = {"id", "label", "funcion", "seccion", "confirmar", "visible", "campos", "en_fila", "ayuda"}
+    claves_accion = {"id", "label", "funcion", "seccion", "confirmar", "visible", "campos", "en_fila", "ayuda",
+                     "filas"}
     for a in ov.get("acciones", ()):
         if (not isinstance(a, dict) or not {"id", "label", "funcion"} <= set(a) <= claves_accion
                 or not callable(a["funcion"])):
@@ -373,6 +377,10 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
         a = dict(a)
         a["campos"] = {c: _campo_suelto(c, cfg, f"{pref} acciones.{a['id']}.campos", errores)
                        for c, cfg in (a.get("campos") or {}).items()}
+        if a.get("filas") is not None:
+            a["filas"] = _filas_accion(a["filas"], f"{pref} acciones.{a['id']}.filas", errores)
+            if a["campos"]:
+                errores.append(f"{pref} acciones.{a['id']}: 'campos' y 'filas' no van juntos")
         acciones.append(AccionSpec(**a))
     al_guardar = ov.get("al_guardar")
     if al_guardar is not None and not callable(al_guardar):
@@ -436,6 +444,10 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
 
     alta_en_linea, alta_en_linea_padre = _alta_en_linea(ov, campos, listado, padres, pref, errores)
 
+    subgrillas = tuple(ov.get("subgrillas") or ())
+    if subgrillas and not edicion_en_linea:
+        errores.append(f"{pref} subgrillas: la entidad no tiene edicion_en_linea (las subgrillas van en su grilla)")
+
     # --- reglas de edición según el registro (fase 13.2) --------------------
     editable_si = dict(ov.get("editable_si") or {})
     for c, regla in editable_si.items():
@@ -482,6 +494,7 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
         columna_en_linea=columna_en_linea,
         alta_en_linea=alta_en_linea,
         alta_en_linea_padre=alta_en_linea_padre,
+        subgrillas=subgrillas,
         editable_si=editable_si,
         eliminable_si=ov.get("eliminable_si"),
         creable_si=ov.get("creable_si"),
@@ -573,6 +586,62 @@ def _alta_en_linea(ov, campos, listado, padres, pref, errores):
     return tuple(celdas), nombre_padre
 
 
+def _filas_accion(cfg, pref, errores) -> FilasAccionSpec | None:
+    """El formulario de una acción de varias filas (fase 13.4). Lo que cruza entidades se valida después."""
+    from app.crud.core.interpretes import Campo
+
+    claves = {"entidad", "celdas", "iniciales", "total"}
+    if (not isinstance(cfg, dict) or not {"entidad", "celdas", "iniciales"} <= set(cfg) <= claves
+            or not callable(cfg["iniciales"]) or (cfg.get("total") is not None and not callable(cfg["total"]))):
+        errores.append(f"{pref}: es {{'entidad', 'celdas', 'iniciales'}} (opcional: 'total'), con funciones")
+        return None
+    celdas = []
+    for item in cfg["celdas"]:
+        if not isinstance(item, dict) or "nombre" not in item or not set(item) <= {"nombre", "label", "interprete",
+                                                                                    "sumar"}:
+            errores.append(f"{pref}.celdas: cada celda es {{'nombre', 'label', 'interprete', 'sumar'}}, no {item!r}")
+            continue
+        interprete = item.get("interprete") or Campo(item["nombre"])
+        if not all(hasattr(interprete, a) for a in ("campos", "control", "opciones", "interpretar")):
+            errores.append(f"{pref}.celdas.{item['nombre']}: el intérprete no es válido (ver core/interpretes.py)")
+            continue
+        celdas.append(CeldaFilaSpec(nombre=item["nombre"], label=item.get("label") or item["nombre"],
+                                    interprete=interprete, sumar=bool(item.get("sumar"))))
+    if not celdas:
+        errores.append(f"{pref}.celdas: hace falta al menos una celda")
+    if len({c.nombre for c in celdas}) != len(celdas) or any(c.nombre in ("id", "fila") for c in celdas):
+        errores.append(f"{pref}.celdas: nombres repetidos (o 'id' / 'fila', que son de la fila)")
+    if sum(c.sumar for c in celdas) > 1:
+        errores.append(f"{pref}.celdas: solo una celda se suma")
+    return FilasAccionSpec(entidad=cfg["entidad"], celdas=tuple(celdas), iniciales=cfg["iniciales"],
+                           total=cfg.get("total"))
+
+
+def _validar_entre_entidades(specs: dict[str, EntitySpec], errores: list[str]) -> None:
+    """Subgrillas y acciones de varias filas: apuntan a un hijo de la entidad."""
+    for nombre, spec in specs.items():
+        for hijo in spec.subgrillas:
+            h = specs.get(hijo)
+            if h is None or h.padre_de_tipo(nombre) is None:
+                errores.append(f"[{nombre}] subgrillas: '{hijo}' no es una subentidad de '{nombre}'."
+                               f"{_sugerir(hijo, specs)}")
+            elif not h.edicion_en_linea:
+                errores.append(f"[{nombre}] subgrillas: '{hijo}' no tiene edicion_en_linea")
+        for a in spec.acciones:
+            if a.filas is None:
+                continue
+            h = specs.get(a.filas.entidad)
+            pref = f"[{nombre}] acciones.{a.id}.filas"
+            if h is None or h.padre_de_tipo(nombre) is None:
+                errores.append(f"{pref}: '{a.filas.entidad}' no es una subentidad de '{nombre}'")
+                continue
+            for c in a.filas.celdas:
+                for campo in c.interprete.campos:
+                    f = h.fields.get(campo)
+                    if f is None or f.solo_lectura or f.calculado_python or f.solo_importacion:
+                        errores.append(f"{pref}.celdas.{c.nombre}: '{campo}' no es un dato de '{h.name}'")
+
+
 def construir_registry(overrides: dict[str, dict]) -> dict[str, EntitySpec]:
     """Construye y valida todas las entidades. Lanza MetamodeloError si algo falla."""
     errores: list[str] = []
@@ -597,6 +666,7 @@ def construir_registry(overrides: dict[str, dict]) -> dict[str, EntitySpec]:
                 )
                 continue
             hijos[p.entidad].append(nombre)
+    _validar_entre_entidades(specs, errores)
 
     if errores:
         raise MetamodeloError(errores)

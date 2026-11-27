@@ -20,10 +20,19 @@ Reglas (se verifican al guardar, en la web, la API y la importación):
     seguimiento solo se edita en líneas enviadas, sin compras.
   * Alta rápida (fase 13.3): la última fila de la pestaña «Líneas» crea una línea
     con el material (o la descripción, si no se reconoce), la cantidad y el
-    destino (un activo, una ubicación o, vacío, «a identificar»).
+    destino (un activo, un modelo, una ubicación o, vacío, «a identificar»).
   * Destino: un activo, un modelo, el stock de un taller (ubicación), gasto
     general o «a identificar». El sector imputado y la cuenta, si llegan vacíos,
     se completan con la sugerencia; si no hay de dónde, quedan «a revisar».
+  * Tipo de destino (fase 13.4): completar el activo o el modelo lo define;
+    completar la ubicación, solo si estaba «a identificar» (pasa a «stock»): en
+    los demás, la ubicación es el taller que recibe. Cambiar el tipo limpia el
+    activo o el modelo que ya no corresponde (la ubicación, nunca). Si cambia a
+    qué apunta el destino, el sector imputado y la cuenta se vuelven a sugerir
+    (salvo que se cambien en la misma operación).
+  * Destinos en la pestaña «Líneas» del pedido (fase 13.4): subgrilla bajo cada
+    línea. En borrador se agregan y se sacan (menos el último); en una línea
+    enviada, «Redistribuir» cambia todos juntos sin cambiar el total.
 """
 from __future__ import annotations
 
@@ -54,6 +63,15 @@ NO_SI = [{"value": False, "label": "No"}, {"value": True, "label": "Sí"}]
 
 # Qué dato pide cada tipo de destino.
 DATO_DEL_DESTINO = {"activo": "activo_id", "modelo": "modelo_id", "stock": "ubicacion_id"}
+
+# El destino escrito en una sola celda (alta rápida de líneas y de destinos, y
+# «Redistribuir»): un activo, un modelo o una ubicación (stock); vacío, «a identificar».
+DESTINO_EN_TEXTO = FkEntre(
+    {"activo_id": {"destino": "activo"}, "modelo_id": {"destino": "modelo"},
+     "ubicacion_id": {"destino": "stock"}},
+    vacio={"destino": "a_identificar"},
+)
+MOTIVO_REDISTRIBUCION = "Redistribución"
 
 
 def motivos_de_anulacion():
@@ -157,9 +175,12 @@ def destino_en_borrador(d):
 
 
 def destino_eliminable(d):
-    if d.pedido_linea.enviada_en is None:
-        return True
-    return f"{ENVIADA}: no se sacan destinos sueltos"
+    linea = d.pedido_linea
+    if linea.enviada_en is not None:
+        return f"{ENVIADA}: no se sacan destinos sueltos (usá «Redistribuir»)"
+    if len(linea.destinos) <= 1:
+        return "es el único destino de la línea: para sacarlo, eliminá la línea"
+    return True
 
 
 def destino_creable(datos):
@@ -227,6 +248,173 @@ def anular_o_cancelar(linea, datos):
 
 def _anulable(linea):
     return linea.enviada_en is not None and linea.estado != "anulado" and not linea.sin_conformidad
+
+
+# ---------------------------------------------------------------------------
+# Redistribuir (fase 13.4): todos los destinos de una línea enviada juntos
+# ---------------------------------------------------------------------------
+
+def _clave_destino(d) -> tuple:
+    """A qué apunta un destino, como lo escribe la celda «Destino» (DESTINO_EN_TEXTO)."""
+    if d.destino == "activo":
+        return ("activo_id", d.activo_id)
+    if d.destino == "modelo":
+        return ("modelo_id", d.modelo_id)
+    if d.ubicacion_id is not None:
+        return ("ubicacion_id", d.ubicacion_id)
+    return (None, None)
+
+
+def _clave_fila(fila: dict) -> tuple:
+    for campo in _APUNTA:
+        if fila.get(campo) is not None:
+            return (campo, fila[campo])
+    return (None, None)
+
+
+def _texto_destino(d) -> str:
+    """El texto de la celda «Destino» para un destino existente."""
+    from app.crud.entidades import REGISTRY
+
+    campo, id_ = _clave_destino(d)
+    if campo is None:
+        return ""
+    return DESTINO_EN_TEXTO.texto_de(REGISTRY["pedido_linea_destinos"], campo, id_) or ""
+
+
+def _nota_destino(d) -> str:
+    etiqueta = next((o["label"] for o in DESTINOS if o["value"] == d.destino), d.destino)
+    partes = [etiqueta]
+    if d.destino in ("activo", "modelo") and d.ubicacion is not None:
+        partes.append(f"recibe {d.ubicacion.nombre_ubicacion}")
+    if d.sector_imputado is not None:
+        partes.append(f"imputado a {d.sector_imputado.nombre_sector}")
+    if (d.recibida or 0) > _EPS:
+        partes.append(f"recibido {d.recibida:g} (no baja de eso)")
+    if d.comprada_corregida is not None:
+        partes.append(f"comprada corregida {d.comprada_corregida:g}")
+    return " · ".join(partes)
+
+
+def filas_de_redistribuir(linea) -> list[dict]:
+    """Las filas iniciales del formulario: un destino por fila, con lo que no se ve en las celdas."""
+    return [{"id": d.pedido_linea_destino_id, "cantidad": f"{d.cantidad:g}", "destino": _texto_destino(d),
+             "_nota": _nota_destino(d)}
+            for d in sorted(linea.destinos, key=lambda d: d.pedido_linea_destino_id)]
+
+
+def _redistribuible(linea):
+    return linea.enviada_en is not None and linea.estado != "anulado" and not linea.sin_conformidad
+
+
+def redistribuir(linea, filas: list[dict]):
+    """
+    Reemplaza el reparto de una línea enviada por `filas` (todo o nada, sin
+    cambiar el total). Cada fila: {"id" (el destino, o None si es nuevo),
+    "fila" (su número), "cantidad", y el destino: activo, modelo o ubicación}.
+    Una fila sin cantidad (o en 0) saca ese destino.
+
+      * Un destino con recepciones no se saca ni baja de lo recibido.
+      * Un destino que sigue apuntando a lo mismo conserva su tipo, su sector y
+        su cuenta; si cambia, se vuelven a sugerir (completar_destino).
+      * Si un destino baja de su «comprada (corregida)», o se saca, la corrección
+        se limpia y lo comprado vuelve a repartirse en proporción (con aviso).
+    """
+    from app.crud.entidades import servicio
+
+    previos = {d.pedido_linea_destino_id: d for d in linea.destinos}
+    errores, quedan = {}, []
+    for f in filas:
+        clave = f"fila_{f['fila']}"
+        previo = previos.get(f.get("id")) if f.get("id") is not None else None
+        if f.get("id") is not None and previo is None:
+            errores[clave] = "El destino no es de esta línea (recargá la página)."
+            continue
+        cantidad = f.get("cantidad")
+        if cantidad is None or abs(cantidad) <= _EPS:
+            continue  # sin cantidad: se saca (o era una fila vacía)
+        if cantidad < 0:
+            errores[clave] = "La cantidad no puede ser negativa."
+            continue
+        if previo is not None and cantidad < (previo.recibida or 0) - _EPS:
+            errores[clave] = f"Ya se recibieron {previo.recibida:g}: la cantidad no puede bajar de eso."
+            continue
+        quedan.append((previo, f))
+
+    siguen = {id(p) for p, _ in quedan if p is not None}
+    sacados = [d for d in previos.values() if id(d) not in siguen]
+    for d in sacados:
+        if (d.recibida or 0) > _EPS:
+            n = next((f["fila"] for f in filas if f.get("id") == d.pedido_linea_destino_id), None)
+            texto = (f"Ya se recibieron {d.recibida:g}: este destino no se saca "
+                     "(su cantidad no puede bajar de lo recibido).")
+            if n is not None:
+                errores.setdefault(f"fila_{n}", texto)
+            else:
+                errores.setdefault("_general", f"«{_texto_destino(d) or 'A identificar'}»: {texto}")
+    if errores:
+        raise ErroresValidacion(errores)
+    if not quedan:
+        raise ErroresValidacion({"_general": "Tiene que quedar al menos un destino."})
+    total, solicitada = sum(f["cantidad"] for _, f in quedan), linea.solicitada or 0
+    if abs(total - solicitada) > _EPS:
+        raise ErroresValidacion({"_general": (
+            f"El total tiene que seguir siendo {solicitada:g} (quedó {total:g}). Para pedir menos, "
+            "cancelá una parte; para pedir más, agregá una línea nueva.")})
+
+    # Las reglas de la línea enviada (cantidades congeladas, sin destinos sueltos)
+    # son justamente las que «Redistribuir» levanta: las de arriba las reemplazan.
+    s = servicio("pedido_linea_destinos", confirmar=False, reglas_de_edicion=False)
+    corregidos = 0
+    for previo, f in quedan:
+        datos = {"cantidad": f["cantidad"]}
+        if previo is None or _clave_fila(f) != _clave_destino(previo):
+            # Apunta a otro: el tipo nuevo limpia el activo o el modelo que no
+            # corresponde (completar_destino); la ubicación (taller que recibe) queda.
+            datos["destino"] = f.get("destino") or "a_identificar"
+            datos.update({c: f[c] for c in _APUNTA if f.get(c) is not None})
+        if previo is None:
+            s.crear({"pedido_linea_id": linea.pedido_linea_id, **datos}, MOTIVO_REDISTRIBUCION)
+            continue
+        if previo.comprada_corregida is not None and f["cantidad"] < previo.comprada_corregida - _EPS:
+            datos["comprada_corregida"] = None
+            corregidos += 1
+        s.actualizar(previo, datos, MOTIVO_REDISTRIBUCION)
+    for d in sacados:
+        if d.comprada_corregida is not None:
+            corregidos += 1
+        s.eliminar(d, MOTIVO_REDISTRIBUCION)
+    db.session.flush()
+    db.session.refresh(linea)
+
+    mensajes = [("ok", f"Línea {linea.nro_linea}: destinos redistribuidos.")]
+    if corregidos:
+        mensajes.append(("aviso", (
+            f"Se limpi{'ó' if corregidos == 1 else 'aron'} {corregidos} «comprada (corregida)» (el destino "
+            f"bajó de ese valor o se sacó): lo comprado vuelve a repartirse en proporción a las cantidades.")))
+    return mensajes
+
+
+ACCION_REDISTRIBUIR = {
+    "id": "redistribuir",
+    "label": "Redistribuir",
+    "funcion": redistribuir,
+    "seccion": "pedido_linea_destinos",
+    "visible": _redistribuible,
+    "ayuda": ("Cambiá cuánto va a cada activo, modelo o taller, todos los destinos juntos. El total tiene que "
+              "seguir igual; una fila sin cantidad saca ese destino. Un destino con recepciones no baja de lo "
+              "recibido."),
+    "filas": {
+        "entidad": "pedido_linea_destinos",
+        "celdas": [
+            {"nombre": "cantidad", "label": "Cantidad", "sumar": True},
+            {"nombre": "destino", "label": "Destino: activo, modelo o ubicación (vacío: a identificar)",
+             "interprete": DESTINO_EN_TEXTO},
+        ],
+        "iniciales": filas_de_redistribuir,
+        "total": lambda linea: linea.solicitada or 0,
+    },
+}
 
 
 ACCION_ENVIAR = {
@@ -321,22 +509,61 @@ def _verificar_cancelacion(linea, cambiados):
 # Destino
 # ---------------------------------------------------------------------------
 
+_APUNTA = ("activo_id", "modelo_id", "ubicacion_id")
+
+
+def _tipo_de_destino(datos: dict, registro, cambia) -> str | None:
+    """
+    El tipo que corresponde (decidido 26/11): el elegido, si se cambió (o, en un
+    alta, si no es «a identificar»); si no, el que define el dato completado: el
+    activo o el modelo, siempre; la ubicación, solo si estaba «a identificar».
+    """
+    actual = _valor(datos, registro, "destino")
+    if cambia("destino") and (registro is not None or actual not in (None, "a_identificar")):
+        return actual
+    if cambia("activo_id") and datos["activo_id"] is not None:
+        return "activo"
+    if cambia("modelo_id") and datos["modelo_id"] is not None:
+        return "modelo"
+    if cambia("ubicacion_id") and datos["ubicacion_id"] is not None and actual in (None, "a_identificar"):
+        return "stock"
+    return actual
+
+
 def completar_destino(datos: dict, registro):
-    """Completa el sector imputado y la cuenta vacíos con la sugerencia."""
+    """
+    Tipo de destino según el dato completado (y limpia el activo o el modelo que
+    ya no corresponde) y sector imputado y cuenta sugeridos: si están vacíos o
+    si cambió a qué apunta el destino (salvo que se cambien en la misma operación).
+    """
+    def cambia(campo):
+        return campo in datos and (registro is None or datos[campo] != getattr(registro, campo))
+
+    tipo = _tipo_de_destino(datos, registro, cambia)
+    if tipo is not None and tipo != _valor(datos, registro, "destino"):
+        datos["destino"] = tipo
+    # Cambiar el tipo limpia lo que ya no corresponde. La ubicación queda: en un
+    # activo, un modelo o un gasto general es el taller que recibe.
+    for otro_tipo, campo in (("activo", "activo_id"), ("modelo", "modelo_id")):
+        if tipo != otro_tipo and _valor(datos, registro, campo) is not None:
+            datos[campo] = None
+
     def obj(model, campo):
         v = _valor(datos, registro, campo)
         return db.session.get(model, v) if v is not None else None
 
     activo, modelo, ubicacion = obj(Activo, "activo_id"), obj(Modelo, "modelo_id"), obj(Ubicacion, "ubicacion_id")
     linea = obj(PedidoLinea, "pedido_linea_id")
-    if _valor(datos, registro, "sector_imputado_id") is None:
-        sugerido = sector_sugerido(activo, ubicacion, linea)
-        if sugerido is not None:
-            datos["sector_imputado_id"] = sugerido
-    if _valor(datos, registro, "cuenta_id") is None:
-        sugerida = cuenta_sugerida(activo, modelo, linea)
-        if sugerida is not None:
-            datos["cuenta_id"] = sugerida
+    # Si cambió a qué apunta, la imputación anterior era la de otro destino.
+    apunta_a_otro = registro is not None and any(cambia(c) for c in _APUNTA)
+    for campo, sugerencia in (("sector_imputado_id", lambda: sector_sugerido(activo, ubicacion, linea)),
+                              ("cuenta_id", lambda: cuenta_sugerida(activo, modelo, linea))):
+        if apunta_a_otro and not cambia(campo):
+            datos[campo] = sugerencia()
+        elif _valor(datos, registro, campo) is None:
+            sugerido = sugerencia()
+            if sugerido is not None:
+                datos[campo] = sugerido
     return datos
 
 
@@ -443,20 +670,20 @@ OVERRIDES = {
         },
         "eliminable_si": linea_eliminable,
         # Alta rápida (fase 13.3): última fila de la pestaña «Líneas» del pedido.
-        # El destino es un activo o una ubicación (stock); vacío, «a identificar».
-        # Modelo y gasto general se eligen en el destino (subgrilla, PR 13.4).
+        # El destino es un activo, un modelo o una ubicación (stock); vacío, «a
+        # identificar». Gasto general se elige en el destino (subgrilla).
         "alta_en_linea": [
             {"nombre": "material", "label": "Material (código o descripción) o texto tal como se pidió",
              "columnas": ["material_id", "descripcion"],
              "interprete": FkOTexto("material_id", "descripcion")},
             {"nombre": "cantidad", "label": "Cantidad", "columnas": ["solicitada"]},
-            {"nombre": "destino", "label": "Destino: activo o ubicación (vacío: a identificar)",
+            {"nombre": "destino", "label": "Destino: activo, modelo o ubicación (vacío: a identificar)",
              "columnas": ["adjudicada", "recibida", "pendiente_comprar", "pendiente_recibir", "se_cuenta_en"],
-             "interprete": FkEntre({"activo_id": {"destino": "activo"}, "ubicacion_id": {"destino": "stock"}},
-                                   vacio={"destino": "a_identificar"}),
-             "repetir": True},
+             "interprete": DESTINO_EN_TEXTO, "repetir": True},
         ],
-        "acciones": [ACCION_ANULAR],
+        # Los destinos de cada línea se despliegan debajo de ella (fase 13.4).
+        "subgrillas": ["pedido_linea_destinos"],
+        "acciones": [ACCION_ANULAR, ACCION_REDISTRIBUIR],
         "tabs_extra": [{"id": "recepciones_linea", "label": "Recepciones", "funcion": _tab_recepciones}],
         "completar": completar_linea,
         "al_guardar": al_guardar_linea,
@@ -482,8 +709,20 @@ OVERRIDES = {
                     "sector_imputado_id", "cuenta_id", "comprada", "recibida", "pendiente_recibir", "a_revisar"],
         "completar": completar_destino,
         "al_guardar": al_guardar_destino,
+        # Grilla (fase 13.4): en la subgrilla de cada línea y en la pestaña
+        # «Destinos» de la línea. Completar el activo, el modelo o la ubicación
+        # define el tipo (completar_destino).
+        "edicion_en_linea": ["cantidad", "destino", "activo_id", "modelo_id", "ubicacion_id",
+                             "sector_imputado_id", "cuenta_id"],
+        # Alta rápida: en borrador (en una línea enviada no se agregan destinos
+        # sueltos: la fila no se muestra, por creable_si).
+        "alta_en_linea": [
+            {"nombre": "cantidad", "label": "Cantidad", "columnas": ["cantidad"]},
+            {"nombre": "destino", "label": "Destino: activo, modelo o ubicación (vacío: a identificar)",
+             "columnas": ["destino", "activo_id", "modelo_id", "ubicacion_id"], "interprete": DESTINO_EN_TEXTO},
+        ],
         # Línea enviada: cantidades congeladas y sin destinos sueltos (la
-        # imputación sigue editable). «Redistribuir» llega en el PR 13.4.
+        # imputación sigue editable); se cambian todas juntas con «Redistribuir».
         "editable_si": {"cantidad": destino_en_borrador},
         "creable_si": destino_creable,
         "eliminable_si": destino_eliminable,

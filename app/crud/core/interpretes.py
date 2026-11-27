@@ -140,6 +140,11 @@ class FkEntre:
     def opciones(self, spec) -> list:
         return [o["texto"] for o in self._sugerencias(spec)]
 
+    def texto_de(self, spec, campo: str, id_) -> str | None:
+        """El texto de la sugerencia de un registro (lo que la celda muestra para él)."""
+        return next((o["texto"] for o in self._sugerencias(spec)
+                     if o["campo"] == campo and o["value"] == id_), None)
+
     def _resultado(self, campo, id_) -> dict:
         return {campo: id_, **self.por_campo[campo]}
 
