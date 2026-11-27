@@ -15,6 +15,15 @@ Reglas (se verifican al guardar, en la web, la API y la importación):
       - una línea de oferta sin material identificado no se adjudica a una
         línea de pedido que pide un genérico (no hay de dónde convertir);
       - lo adjudicado de una línea de oferta no supera lo ofertado.
+  * Adjudicaciones en la grilla (fase 13.8, subgrilla bajo cada línea de oferta):
+      - se editan la ofertada y la adjudicada; las líneas no cambian (se elimina
+        la adjudicación y se crea otra);
+      - la ofertada no supera la cantidad de la línea de oferta, y la adjudicada
+        no supera la ofertada (si está cargada);
+      - lo adjudicado no baja de lo recibido en la línea de pedido (ni al
+        eliminar);
+      - un material distinto del pedido se acepta, con un aviso (equivalentes);
+      - alta rápida: la línea de pedido como «nº de pedido / línea».
   * Líneas (fase 13.7, grilla en la pestaña «Líneas» del documento):
       - la unidad es la del material (se completa sola);
       - el precio neto se calcula del de lista y el descuento si queda vacío, o
@@ -37,7 +46,7 @@ from sqlalchemy import or_
 
 from app.core.db import db
 from app.crud.core.coercion import ErroresValidacion
-from app.crud.core.interpretes import FkOTexto
+from app.crud.core.interpretes import FkOTexto, buscar_por_texto
 from app.crud.meta.overrides.pedidos import normalizar_oc
 from app.models.documentos_models import (
     MONEDAS,
@@ -48,7 +57,7 @@ from app.models.documentos_models import (
     DocumentoProveedor,
 )
 from app.models.materiales_models import Material
-from app.models.pedidos_models import PedidoLinea
+from app.models.pedidos_models import Pedido, PedidoLinea
 from app.models.recursos_models import Proveedor
 
 NO_SI = [{"value": False, "label": "No"}, {"value": True, "label": "Sí"}]
@@ -88,6 +97,15 @@ def sin_genericos():
 
 def lineas_de_ofertas():
     return DocumentoLinea.documento.has(DocumentoProveedor.tipo == "oferta")
+
+
+def es_linea_de_oferta(lo) -> bool:
+    return lo.documento is not None and lo.documento.tipo == "oferta"
+
+
+def lineas_de_pedido_adjudicables():
+    """Líneas de pedido enviadas a Compras y no anuladas (como en «Vincular con pedidos»)."""
+    return (PedidoLinea.enviada_en.isnot(None)) & (PedidoLinea.estado != "anulado")
 
 
 def _valor(datos, registro, campo):
@@ -223,11 +241,77 @@ def factor_material(ofertado, linea_pedido) -> float | None:
     return None  # presentación de otro genérico (o un material sin relación)
 
 
+class LineaDePedidoEnTexto:
+    """
+    Intérprete de la alta rápida de adjudicaciones (fase 13.8): la línea de pedido
+    escrita como «nº de pedido / línea» (o con guion: «1104-3»), o elegida de la
+    lista («1104 / 3 — código — descripción»). Solo líneas enviadas y no anuladas.
+    """
+
+    campo = "pedido_linea_id"
+    campos = (campo,)
+    _PATRON = re.compile(r"^(.+?)\s*[/-]\s*(\d+)$")
+
+    def control(self, spec) -> str:
+        return "lista"
+
+    def opciones(self, spec) -> list:
+        return [lp.nombre for lp in PedidoLinea.query.filter(lineas_de_pedido_adjudicables())
+                .order_by(PedidoLinea.pedido_linea_id)]
+
+    def interpretar(self, texto: str, spec) -> dict:
+        texto = texto.strip()
+        if not texto:
+            return {}
+        m = self._PATRON.match(texto)
+        if m is None:
+            return {self.campo: buscar_por_texto(spec.fields[self.campo], self.campo, texto)}
+        numero, nro = m.group(1).strip(), int(m.group(2))
+        lp = (PedidoLinea.query.join(Pedido, Pedido.pedido_id == PedidoLinea.pedido_id)
+              .filter(Pedido.numero == numero, PedidoLinea.nro_linea == nro).first())
+        if lp is None:
+            raise ErroresValidacion({self.campo: f"No encontré la línea {nro} del pedido {numero}."})
+        if lp.estado == "anulado":
+            raise ErroresValidacion({self.campo: f"La línea {nro} del pedido {numero} está anulada."})
+        if lp.enviada_en is None:
+            raise ErroresValidacion({self.campo: (
+                f"La línea {nro} del pedido {numero} está en borrador: todavía no se envió a Compras.")})
+        return {self.campo: lp.pedido_linea_id}
+
+
+def completar_adjudicacion(datos: dict, registro):
+    # Lo adjudicado antes del cambio (en la unidad del pedido), para no bajar de
+    # lo recibido (al_guardar_adjudicacion): después del guardado ya no se sabe.
+    if registro is not None:
+        registro._adjudicada_antes = registro.adjudicada_en_pedido or 0.0
+    return datos
+
+
+def _recibida_sin_cubrir(lp, quitar: float = 0.0) -> float | None:
+    """Lo recibido en la línea de pedido si lo adjudicado (menos `quitar`) queda por debajo; si no, None."""
+    recibida = lp.recibida or 0.0
+    if recibida > _EPS and (lp.adjudicada or 0.0) - quitar < recibida - _EPS:
+        return recibida
+    return None
+
+
+def _material_distinto(lo, lp) -> str | None:
+    """Aviso si la oferta es de otro material que el pedido (ni el mismo, ni una presentación de su genérico)."""
+    if lo.material is None or lp.material is None or lo.material_id == lp.material_id:
+        return None
+    if lp.material.es_generico and lo.material.material_generico_id == lp.material_id:
+        return None
+    return (f"La oferta es de «{lo.material.etiqueta}» y la línea de pedido pide «{lp.material.etiqueta}». "
+            "Se acepta como equivalente: revisá que sea lo que se pidió.")
+
+
 def al_guardar_adjudicacion(a, operacion: str, cambiados: set):
     errores = {}
     lo, lp = a.documento_linea, a.pedido_linea
     if lp.estado == "anulado":
         errores["pedido_linea_id"] = "La línea de pedido está anulada."
+    elif lp.enviada_en is None and getattr(a, "reglas_de_edicion", True):
+        errores["pedido_linea_id"] = "La línea de pedido está en borrador: todavía no se envió a Compras."
     elif factor(lo, lp) is None:
         if lo.material is None:
             errores["documento_linea_id"] = (
@@ -239,6 +323,16 @@ def al_guardar_adjudicacion(a, operacion: str, cambiados: set):
                 "no se puede convertir la cantidad.")
     if a.cantidad_adjudicada is None or a.cantidad_adjudicada < 0:
         errores["cantidad_adjudicada"] = "La cantidad adjudicada no puede ser negativa."
+    if a.cantidad_ofertada is not None:
+        if a.cantidad_ofertada < 0:
+            errores["cantidad_ofertada"] = "La cantidad ofertada no puede ser negativa."
+        elif a.cantidad_ofertada > lo.cantidad + _EPS:
+            errores["cantidad_ofertada"] = (
+                f"La ofertada no puede superar la cantidad de la línea {lo.nro_linea} de la oferta "
+                f"({lo.cantidad:g}).")
+        elif (a.cantidad_adjudicada or 0) > a.cantidad_ofertada + _EPS:
+            errores["cantidad_adjudicada"] = (
+                f"La adjudicada no puede superar la ofertada para esta línea de pedido ({a.cantidad_ofertada:g}).")
     if errores:
         raise ErroresValidacion(errores)
     db.session.refresh(lo)
@@ -246,7 +340,29 @@ def al_guardar_adjudicacion(a, operacion: str, cambiados: set):
         raise ErroresValidacion({"cantidad_adjudicada": (
             f"Se adjudica más de lo ofertado en la línea {lo.nro_linea} ({lo.adjudicada:g} de {lo.cantidad:g})."
         )})
+    reglas = getattr(a, "reglas_de_edicion", True)
+    antes = getattr(a, "_adjudicada_antes", None)
+    if reglas and antes is not None and (a.adjudicada_en_pedido or 0.0) < antes - _EPS:
+        db.session.refresh(lp)
+        recibida = _recibida_sin_cubrir(lp)
+        if recibida is not None:
+            raise ErroresValidacion({"cantidad_adjudicada": (
+                f"La línea de pedido ya recibió {recibida:g} {lp.se_cuenta_en or ''}".rstrip()
+                + ": lo adjudicado no puede quedar por debajo.")})
+    if operacion == "INSERT" or "documento_linea_id" in cambiados or "pedido_linea_id" in cambiados:
+        return _material_distinto(lo, lp)
     return None
+
+
+LINEAS_FIJAS = "no se cambia: eliminá la adjudicación y creá otra"
+
+
+def adjudicacion_eliminable(a):
+    cantidad = a.adjudicada_en_pedido or 0.0
+    if cantidad > _EPS and _recibida_sin_cubrir(a.pedido_linea, quitar=cantidad) is not None:
+        return ("la línea de pedido tiene recepciones y lo adjudicado quedaría por debajo de lo recibido: "
+                "bajá la cantidad, sin pasar de lo recibido")
+    return True
 
 
 def vincular_con_pedidos(doc) -> str:
@@ -425,6 +541,10 @@ OVERRIDES = {
             {"nombre": "precio_unitario", "label": "Precio neto", "columnas": ["precio_unitario"]},
         ],
         # Cola de «a revisar» (fase 13.6): líneas de material sin el material identificado.
+        # Las adjudicaciones de cada línea de oferta se despliegan debajo de ella
+        # (fase 13.8); en presupuestos, remitos y facturas no hay.
+        "subgrillas": ["adjudicaciones"],
+        "subgrillas_si": {"adjudicaciones": es_linea_de_oferta},
         "colas": [{
             "id": "sin_material",
             "label": "Líneas de documentos sin material",
@@ -452,8 +572,23 @@ OVERRIDES = {
             "cantidad_adjudicada": {"required": False},
         },
         "listado": ["documento_linea_id", "pedido_linea_id", "cantidad_ofertada", "cantidad_adjudicada",
-                    "adjudicada_en_pedido"],
+                    "adjudicada_en_pedido", "pendiente_comprar_pedido"],
         "clave_natural": ["documento_linea_id", "pedido_linea_id"],
+        "completar": completar_adjudicacion,
         "al_guardar": al_guardar_adjudicacion,
+        # Grilla (fase 13.8): en la subgrilla de cada línea de oferta y en las
+        # pestañas de la línea de oferta y de la línea de pedido.
+        "edicion_en_linea": ["cantidad_ofertada", "cantidad_adjudicada"],
+        "editable_si": {"documento_linea_id": lambda a: LINEAS_FIJAS, "pedido_linea_id": lambda a: LINEAS_FIJAS},
+        "eliminable_si": adjudicacion_eliminable,
+        # Alta rápida bajo la línea de oferta: la línea de pedido («1104 / 3») y la
+        # cantidad (vacía: 0, cotizado). «Vincular con pedidos» sigue siendo la
+        # forma principal de crearlas.
+        "alta_en_linea": [
+            {"nombre": "pedido_linea", "label": "Línea de pedido (nº de pedido / línea)",
+             "columnas": ["pedido_linea_id"], "interprete": LineaDePedidoEnTexto()},
+            {"nombre": "cantidad_adjudicada", "label": "Cantidad adjudicada (vacía: 0, cotizado)",
+             "columnas": ["cantidad_adjudicada"]},
+        ],
     },
 }

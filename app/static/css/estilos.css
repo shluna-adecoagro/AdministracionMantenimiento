@@ -1130,3 +1130,8 @@ td.tabla-acciones form.form-en-linea button { padding: 0.45rem 0.9rem; font-size
 .grilla tr.fila-resuelta > td { background: #f0fdf4; }
 .grilla tr.fila-resuelta > td.calc { background: #ecfdf5; }
 .badge-resuelta { background: #15803d; margin-right: 0.3rem; }
+/* Aviso de al_guardar en la fila de la grilla (fase 13.8): queda hasta recargar. */
+.aviso-fila { margin: 0 0 0.3rem; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem;
+              white-space: normal; min-width: 18rem; max-width: 26rem; }
+.aviso-fila--aviso { background: #fffbeb; color: #92400e; }
+.aviso-fila--ok { background: #ecfdf5; color: #065f46; }

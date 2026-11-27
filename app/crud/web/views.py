@@ -945,6 +945,9 @@ class VistasEntidad:
     def _render_fila(self, registro, status=200, **extra):
         grilla = self._grilla_de_url()
         item = item_de_grilla(self.spec, registro, grilla, resuelta=True)
+        # Los avisos de al_guardar (fase 13.8) se ven en la fila, hasta recargar:
+        # un flash se vería recién en la página siguiente.
+        item["_avisos"] = list(getattr(registro, "avisos_guardado", []))
         # Un hijo guardado desde la subgrilla: la fila del padre también cambia.
         fila_padre = self._fila_padre() if status == 200 else None
         return render_template("crud/partials/_fila.html", grilla=grilla, item=item, fila_padre=fila_padre,
@@ -985,7 +988,6 @@ class VistasEntidad:
         except ErrorIntegridad as e:
             error = self._mensaje_celda(campo, {e.campo or "_general": e.mensaje})
         else:
-            self._avisar(registro)
             return self._render_fila(registro, foco=self._grilla_de_url()["columna_de"].get(campo, campo))
         # Lo guardado se descartó (el servicio hace rollback): la fila se arma con lo
         # que hay en la base y la celda queda abierta con lo que se escribió.
@@ -1031,8 +1033,9 @@ class VistasEntidad:
             alta = contexto_alta(self.spec, columnas, args, textos, errores, sufijo=sufijo)
             return render_template("crud/partials/_fila_alta.html", alta=alta), 422
 
-        self._avisar(nuevo)
         grilla = contexto_grilla(self.spec, columnas, args)
+        item = item_fila(self.spec, nuevo, columnas)
+        item["_avisos"] = list(getattr(nuevo, "avisos_guardado", []))  # en la fila, como en _render_fila
         repetidos = {c.nombre: textos[c.nombre] for c in self.spec.alta_en_linea if c.repetir}
         alta = contexto_alta(self.spec, columnas, args, repetidos, foco=True, sufijo=sufijo)
         # Las acciones de la pestaña pueden cambiar (ej: «Enviar a Compras» aparece
@@ -1048,7 +1051,7 @@ class VistasEntidad:
         else:
             botones = botones_subgrilla(spec_padre, registro_padre, self.spec, vista)
         return render_template("crud/partials/_alta_creada.html", grilla=grilla,
-                               item=item_fila(self.spec, nuevo, columnas), alta=alta, botones=botones,
+                               item=item, alta=alta, botones=botones,
                                fila_padre=self._fila_padre())
 
     def pegar(self):
@@ -1086,7 +1089,10 @@ class VistasEntidad:
         vista = self._vista_padre()
         if padre is None or vista is None:
             abort(404)
-        registro = repository.obtener_o_404(self.registry[padre.entidad].model, padre_id)
+        spec_padre = self.registry[padre.entidad]
+        registro = repository.obtener_o_404(spec_padre.model, padre_id)
+        if self.spec.name not in spec_padre.subgrillas_de(registro):
+            abort(404)
         return padre, registro, vista
 
     def subgrilla(self):
@@ -1386,7 +1392,7 @@ def item_fila(spec: EntitySpec, registro, columnas, conteos: dict | None = None)
                          if a.en_fila and (a.visible is None or a.visible(registro))]
     if spec.subgrillas:
         conteos = conteos if conteos is not None else conteo_hijos(spec, [registro])
-        item["_subgrillas"] = {h: conteos.get(h, {}).get(item[spec.pk], 0) for h in spec.subgrillas}
+        item["_subgrillas"] = {h: conteos.get(h, {}).get(item[spec.pk], 0) for h in spec.subgrillas_de(registro)}
     for c in columnas:
         f = spec.fields.get(c)
         if f is None or f.tipo != "fk":

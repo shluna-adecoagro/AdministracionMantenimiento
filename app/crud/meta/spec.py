@@ -380,6 +380,10 @@ class EntitySpec:
     # hijo tiene que tener edicion_en_linea. Al cambiar un hijo, la fila de esta
     # entidad se actualiza fuera de banda (cambian sus columnas calculadas).
     subgrillas: tuple[str, ...] = ()
+    # Subgrillas que se muestran solo en algunas filas (fase 13.8): {hijo:
+    # función(registro de la fila) -> bool}. Ej: las adjudicaciones, solo bajo
+    # las líneas de ofertas. Sin función, la subgrilla va en todas las filas.
+    subgrillas_si: dict = field(default_factory=dict)
     # «Pegar líneas» (fase 13.5): altas desde texto pegado, una por renglón, en la
     # pestaña del padre de la alta rápida (requiere alta_en_linea). Ver PegadoSpec.
     pegado_en_linea: PegadoSpec | None = None
@@ -414,6 +418,11 @@ class EntitySpec:
     def padre_de_tipo(self, entidad: str) -> ParentSpec | None:
         """Relación con un padre concreto (ej: "materiales" → fk "material_id")."""
         return next((p for p in self.padres if p.entidad == entidad), None)
+
+    def subgrillas_de(self, registro) -> tuple[str, ...]:
+        """Las subgrillas que van bajo la fila de este registro (subgrillas_si)."""
+        return tuple(h for h in self.subgrillas
+                     if h not in self.subgrillas_si or self.subgrillas_si[h](registro))
 
     def cola(self, id: str) -> ColaSpec | None:
         return next((c for c in self.colas if c.id == id), None)
