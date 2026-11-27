@@ -78,6 +78,7 @@ CLAVES_ENTIDAD = frozenset({
     "alta_en_linea",      # [{"nombre", "columnas", "interprete"...}] fila de alta de la grilla (fase 13.3)
     "alta_en_linea_padre",  # entidad padre en cuya pestaña está la fila de alta (por defecto, el principal)
     "subgrillas",         # [hijo, ...] se despliegan debajo de cada fila de la grilla (fase 13.4)
+    "subgrillas_si",      # {hijo: función(registro)}: la subgrilla, solo en esas filas (fase 13.8)
     "pegado_en_linea",    # {"cantidad", "texto", "datos", "aviso", "label"} «Pegar líneas» (fase 13.5)
     "colas",              # [{"id", "label", "condicion", "columnas"...}] colas de «a revisar» (fase 13.6)
 })
@@ -417,6 +418,12 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
     colas = _colas(ov, campos, edicion_en_linea, columna_en_linea, pref, errores)
     if subgrillas and not edicion_en_linea:
         errores.append(f"{pref} subgrillas: la entidad no tiene edicion_en_linea (las subgrillas van en su grilla)")
+    subgrillas_si = dict(ov.get("subgrillas_si") or {})
+    for hijo, regla in subgrillas_si.items():
+        if hijo not in subgrillas:
+            errores.append(f"{pref} subgrillas_si: '{hijo}' no está en subgrillas")
+        elif not callable(regla):
+            errores.append(f"{pref} subgrillas_si: la regla de '{hijo}' no es una función")
 
     # --- reglas de edición según el registro (fase 13.2) --------------------
     editable_si = dict(ov.get("editable_si") or {})
@@ -465,6 +472,7 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
         alta_en_linea=alta_en_linea,
         alta_en_linea_padre=alta_en_linea_padre,
         subgrillas=subgrillas,
+        subgrillas_si=subgrillas_si,
         pegado_en_linea=pegado_en_linea,
         colas=colas,
         editable_si=editable_si,

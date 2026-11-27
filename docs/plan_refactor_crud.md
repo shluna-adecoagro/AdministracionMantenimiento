@@ -748,7 +748,7 @@ servicio, no solo la pantalla.
 | **13.5 Pegar líneas** | Desde un mail o WhatsApp: un renglón por línea («cantidad código o descripción»). Vista previa y confirmación todo o nada (`servicio(confirmar=False)`), con un adaptador «pegado» (`core/pegado.py`) a los datos de alta. Material solo por código exacto; destino «a identificar». |
 | **13.6 Colas de «a revisar»** | Destinos sin sector o cuenta, líneas sin material identificado, líneas y pedidos con «a revisar (importación)», documentos sin revisar y líneas de documentos sin material: listas editables para resolverlas, con su cantidad en el menú. |
 | **13.7 Grilla en las líneas de documentos** | Líneas de ofertas, presupuestos, remitos y facturas editables en la grilla, con alta rápida; precio neto calculado; reglas para documentos revisados y líneas adjudicadas o recibidas. |
-| **13.8 Subgrilla de adjudicaciones** | Pendiente: las adjudicaciones de cada línea de oferta desplegadas debajo de ella (como los destinos), con edición de lo adjudicado, eliminar y alta rápida. Ver «Pendiente: PR 13.8». |
+| **13.8 Subgrilla de adjudicaciones** | Las adjudicaciones de cada línea de oferta desplegadas debajo de ella (como los destinos): ofertada y adjudicada editables, eliminar y alta rápida («nº de pedido / línea»); controles de lo ofertado y de lo recibido; aviso por material distinto. |
 
 Sin control de concurrencia por ahora: los pedidos los carga y edita solo el gestor. Se
 revisa en la fase 14, cuando Compras escriba en la app.
@@ -1099,16 +1099,52 @@ edición»).
 - **Pendiente:** el total de líneas y la diferencia de la cabecera no se actualizan al
   editar una celda (se ven al recargar), como en los pedidos.
 
-#### Pendiente: PR 13.8 (subgrilla de adjudicaciones)
+#### Notas del PR 13.8 (subgrilla de adjudicaciones)
 
-Decidido con el gestor (27/11): las adjudicaciones de cada línea de oferta desplegadas
-debajo de ella, como los destinos bajo la línea de pedido. A revisar al empezar:
+Decidido con el gestor (27/11), con las recomendaciones de la revisión: la subgrilla solo
+en las líneas de ofertas (los presupuestos de trabajo, en la fase 11); se editan la
+ofertada y la adjudicada, no las líneas; la columna «Pendiente de comprar (pedido)»; alta
+rápida con «nº de pedido / línea»; un material distinto del pedido se acepta **con
+aviso** (equivalentes); lo adjudicado no baja de lo recibido; el documento revisado no
+congela las adjudicaciones; sin regla por el nº de OC de la oferta; en la pestaña de la
+línea de pedido, la misma grilla sin alta. Reglas en `diseno_tablas_operativas.md`
+(`adjudicaciones`, «Reglas de carga y edición»).
 
-- Qué se edita (cantidad adjudicada y ofertada) y cómo se reconoce la línea de pedido en
-  la alta rápida (por ejemplo, «nº de pedido – línea»). «Vincular con pedidos» sigue
-  siendo la forma principal de crearlas.
-- Que la fila de la línea de oferta (adjudicada) se actualice al cambiar una
-  adjudicación, y los controles de lo ofertado.
+- **Framework — `subgrillas_si`:** `{hijo: función(registro de la fila)}`; sin función,
+  la subgrilla va en todas las filas. `EntitySpec.subgrillas_de(registro)`; el botón sale
+  solo en esas filas y la ruta `subgrilla` da 404 en las demás. El registry valida que el
+  hijo esté en `subgrillas` y que la regla sea una función.
+- **Framework — avisos en la fila:** lo que devuelve `al_guardar` al guardar una celda o
+  un alta rápida se muestra en la celda de acciones de la fila (`item._avisos`,
+  `.aviso-fila`), hasta recargar. Antes se mandaba con `flash` y aparecía recién en la
+  página siguiente. El formulario sigue con `flash`.
+- **Modelo:** `Adjudicacion.pendiente_comprar_pedido` (columna calculada, sin migración):
+  lo que le falta comprar a la línea de pedido, en su unidad.
+- **Spec** (`overrides/documentos.py`): `documento_lineas.subgrillas = ["adjudicaciones"]`
+  con `subgrillas_si` = línea de una oferta. En adjudicaciones, `edicion_en_linea`
+  (ofertada y adjudicada), `editable_si` de las dos líneas («eliminá la adjudicación y
+  creá otra»), `eliminable_si` y `alta_en_linea`.
+- **Intérprete `LineaDePedidoEnTexto`:** «1104/3», «1104 / 3» o «1104-3» (se separa por
+  la última barra o guion, así que «1104-A/3» también vale) o la etiqueta de la lista
+  («1104 / 3 — código — descripción»). Sugiere solo líneas enviadas y no anuladas; si la
+  línea no existe, está anulada o en borrador, lo dice en la celda.
+- **Reglas** (`al_guardar_adjudicacion`): línea de pedido en borrador, rechazada (salvo en
+  el importador del histórico); ofertada ≤ cantidad de la línea de oferta; adjudicada ≤
+  ofertada, si está; adjudicada no baja de lo recibido en la línea de pedido (solo si
+  baja: subir siempre se puede, aunque se haya recibido de más). Lo de antes se guarda en
+  `completar_adjudicacion`, porque después del guardado ya no se sabe. Eliminar: no, si
+  lo adjudicado de la línea de pedido quedaría por debajo de lo recibido. Aviso de
+  material distinto (ni el mismo, ni una presentación del genérico pedido) al crear o al
+  cambiar una de las líneas, no al editar cantidades.
+- **Sin `fk_filtro` en la línea de pedido:** el mensaje genérico («no es una opción
+  válida») tapaba los específicos («está anulada», «está en borrador»).
+- **Probado en el navegador** (Chromium, Playwright): abrir la subgrilla, alta solo con
+  el teclado («1/1», Tab, cantidad, Enter) con el aviso de material distinto, la columna
+  «Adjudicada» de la línea actualizada, y el error de adjudicar más de lo ofertado.
+- Tests: `tests/test_adjudicaciones_grilla.py`.
+- **Pendiente:** el total adjudicado de la cabecera no se actualiza al editar (se ve al
+  recargar), como en la 13.7; «Vincular» y «Adjudicar lo vinculado» por línea, si hacen
+  falta; adjudicar presupuestos de trabajo (fase 11).
 
 ## Arquitectura objetivo
 
@@ -1163,7 +1199,7 @@ siempre la última.
 | **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. Ver «Notas de la Fase 8». | ✅ Hecha |
 | **9. Planes preventivos** | Planes por categoría de activo (período por uso y/o por tiempo, plan que incluye a otro), tareas, materiales por modelo; categoría en el modelo y tipo de medidor. Ver «Fase 9: planes preventivos». | ✅ Hecha |
 | **10. Pedidos y documentos de proveedores** | Pedidos con líneas y destinos (imputación), ofertas y presupuestos (cabecera + líneas), adjudicación por cantidad, recepciones (conformidad). Importación del Excel histórico de pedidos. Ver «Fases operativas». | ✅ Hecha |
-| **13. Edición en línea, borrador y envío a Compras** | Listados editables tipo planilla con htmx, generados desde la spec (`edicion_en_linea`, `editable_si`). En pedidos: líneas en borrador y «Enviar a Compras» (`enviada_en`), eliminar en borrador, anular o cancelar con motivo, destinos desplegados y «Redistribuir», alta rápida, pegar líneas y colas de «a revisar». En documentos: grilla en las líneas y subgrilla de adjudicaciones. Ver «Fase 13: edición en línea». | En curso (13.1 a 13.7 hechos; 13.8 pendiente) |
+| **13. Edición en línea, borrador y envío a Compras** | Listados editables tipo planilla con htmx, generados desde la spec (`edicion_en_linea`, `editable_si`). En pedidos: líneas en borrador y «Enviar a Compras» (`enviada_en`), eliminar en borrador, anular o cancelar con motivo, destinos desplegados y «Redistribuir», alta rápida, pegar líneas y colas de «a revisar». En documentos: grilla en las líneas y subgrilla de adjudicaciones. Ver «Fase 13: edición en línea». | ✅ Hecha (13.1 a 13.8; lo que quedó pendiente, en las notas de cada PR) |
 | **14. Circuito con Compras** | Usuarios, roles y auditoría con usuario; despliegue en un servidor. Vista de Compras (para cotizar, para emitir OC, reclamos), comparativo por línea, adjudicación y «Pedir OC». Ver [`propuesta_circuito_compras.md`](propuesta_circuito_compras.md). | En diseño |
 | **11. Solicitudes de trabajo, solicitudes internas y OC** | Solicitudes de trabajo (avisos de los mecánicos para llamar a un contratista) y su vínculo con los presupuestos (`documentos_proveedor.solicitud_trabajo_id`). Importación de los TSV de EAM (cabeceras, líneas, distribuciones) y de las OC; vínculo con los documentos adjudicados; distribución propuesta; detalle para Administración; conciliación por nº de OC. **Líneas de la solicitud de OC creadas en la app con la grilla de la fase 13** (edición en línea y alta rápida; pedido del gestor, 26/11). A revisar al empezar: el diseño dice que la cabecera de la solicitud nace en el ERP y se importa, aunque admite registros con `sistema` = app que después reciben su número del ERP. | Pendiente |
 | **12. Órdenes de trabajo** | Cabecera importada del ERP; la app agrega operaciones, recursos y materiales (previsto y utilizado). Incluye cuándo le toca un plan a cada activo. **Operaciones de la OT, y sus recursos y materiales, cargados con la grilla de la fase 13** (edición en línea, alta rápida y subgrilla como la de destinos; pedido del gestor, 26/11). | Pendiente |

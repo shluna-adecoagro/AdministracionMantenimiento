@@ -160,6 +160,16 @@ PedidoLinea.pendiente_recibir = column_property(
     info={"label": "Pendiente de recibir"},
 )
 
+# En la adjudicación (fase 13.8): lo que le falta comprar a su línea de pedido,
+# en la unidad del pedido, para decidir cuánto adjudicar desde la oferta.
+Adjudicacion.pendiente_comprar_pedido = column_property(
+    select(PedidoLinea.pendiente_comprar.expression)
+    .where(PedidoLinea.pedido_linea_id == Adjudicacion.pedido_linea_id)
+    .correlate_except(PedidoLinea)
+    .scalar_subquery(),
+    info={"label": "Pendiente de comprar (pedido)"},
+)
+
 # ¿Tiene OC? La propia, o la de una oferta adjudicada (con cantidad).
 _dl = DocumentoLinea.__table__.alias("oc_dl")
 _doc = DocumentoProveedor.__table__.alias("oc_doc")

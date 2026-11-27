@@ -11,8 +11,13 @@
   fuera de banda después de esta cuando se guardó un hijo desde la subgrilla).
 
   Subgrillas (grilla.subgrillas): un botón por hijo («Destinos (2)») que
-  despliega sus registros en una fila debajo (grilla.js). En una fila de una
+  despliega sus registros en una fila debajo (grilla.js). Solo los de
+  item._subgrillas (subgrillas_si: ej, las adjudicaciones, solo en ofertas). En una fila de una
   subgrilla (grilla.en_subgrilla), «Eliminar» se hace sin salir de la página.
+
+  Avisos (fase 13.8, item._avisos): lo que devolvió al_guardar al guardar una
+  celda o un alta rápida (ej: material distinto del pedido), en la fila hasta
+  recargar.
 
   Colas de «a revisar» (fase 13.6, grilla.cola): una fila que dejó de cumplir
   la condición después de editarla (item._resuelta) queda marcada hasta
@@ -63,7 +68,10 @@
         {% if item._resuelta %}
             <span class="badge badge-resuelta" title="Ya no está en la cola: sale al recargar">✓ Resuelta</span>
         {% endif %}
-        {% for sg in g.subgrillas %}
+        {% for categoria, texto in item._avisos or [] %}
+            <p class="aviso-fila aviso-fila--{{ categoria }}" role="status">{{ texto }}</p>
+        {% endfor %}
+        {% for sg in g.subgrillas if sg.entidad in item._subgrillas %}
             <button type="button" class="btn-secondary btn-subgrilla" aria-expanded="false"
                     data-subgrilla="sub-{{ sg.entidad }}-{{ id_fila }}"
                     data-url="{{ url_for(sg.endpoint, vista_padre=g.vista, **{sg.fk: id_fila}) }}">
