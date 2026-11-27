@@ -300,6 +300,8 @@ class ColaSpec:
     edicion_en_linea  campos que se editan en la grilla, como en la spec
                       (campo o (campo, columna)). Por defecto, los de la
                       edicion_en_linea de la entidad que están en `columnas`.
+                      Puede incluir el padre principal (la cola no está en su
+                      pestaña): ej: el proveedor de un documento sin revisar.
     columna_en_linea  {campo: columna} (lo arma el registry).
     por_defecto       función sin argumentos -> condición que se agrega salvo
                       que se pida ver todo (?todas=1): ej: sin las líneas

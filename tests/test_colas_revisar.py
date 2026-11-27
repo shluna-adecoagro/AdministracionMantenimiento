@@ -292,6 +292,49 @@ def test_cola_de_lineas_de_documentos_sin_material(client, db, material):
 
 
 # ---------------------------------------------------------------------------
+# Documentos sin revisar
+# ---------------------------------------------------------------------------
+
+COLA_DOCUMENTOS = "/documentos_proveedor/cola/sin_revisar"
+
+
+def test_cola_de_documentos_sin_revisar(client, db):
+    from app.models.recursos_models import Proveedor
+
+    fecha = datetime(2026, 11, 26).date()
+    leido = _guardar(db, DocumentoProveedor(tipo="oferta", fecha=fecha, moneda="ARS", origen="pdf",
+                                            proveedor_texto="Lubricantes Lange", motivo_revision="CUIT ilegible"))
+    historico = _guardar(db, DocumentoProveedor(tipo="oferta", fecha=fecha, moneda="USD", origen="historico"))
+    _guardar(db, DocumentoProveedor(tipo="oferta", fecha=fecha, moneda="ARS", revisado=True,
+                                    proveedor_id=_guardar(db, Proveedor(razon_social="Otro SA")).recurso_id))
+    assert _ids_en_cola(client, COLA_DOCUMENTOS) == {leido.documento_id}
+    assert _ids_en_cola(client, COLA_DOCUMENTOS + "?todas=1") == {leido.documento_id, historico.documento_id}
+
+    # Sin proveedor no se marca revisado: la celda queda abierta con el error.
+    url = f"/documentos_proveedor/{leido.documento_id}/celda/revisado?cola=sin_revisar"
+    r = client.post(url, data={"revisado": "True"})
+    assert r.status_code == 422 and "proveedor" in _texto(r)
+
+    # El proveedor (padre principal) se identifica en la cola; después, revisado.
+    lange = _guardar(db, Proveedor(razon_social="Lubricantes Lange S.A.", cuit="30-71234567-8"))
+    r = client.post(f"/documentos_proveedor/{leido.documento_id}/celda/proveedor_id?cola=sin_revisar",
+                    data={"proveedor_id": str(lange.recurso_id)})
+    assert r.status_code == 200, _texto(r)
+    assert "fila-resuelta" not in _texto(r)
+    r = client.post(url, data={"revisado": "True"})
+    assert r.status_code == 200, _texto(r)
+    assert "fila-resuelta" in _texto(r)
+    assert _ids_en_cola(client, COLA_DOCUMENTOS) == set()
+
+
+def test_la_grilla_del_listado_sigue_sin_editar_el_padre_principal():
+    ov = cargar_overrides()
+    ov["documentos_proveedor"] = {**ov["documentos_proveedor"], "edicion_en_linea": ["proveedor_id"]}
+    with pytest.raises(MetamodeloError, match="'proveedor_id' es la entidad padre principal"):
+        construir_registry(ov)
+
+
+# ---------------------------------------------------------------------------
 # Menú y pantalla
 # ---------------------------------------------------------------------------
 

@@ -25,6 +25,8 @@ from __future__ import annotations
 import math
 import re
 
+from sqlalchemy import or_
+
 from app.core.db import db
 from app.crud.core.coercion import ErroresValidacion
 from app.crud.meta.overrides.pedidos import normalizar_oc
@@ -276,6 +278,23 @@ OVERRIDES = {
         "completar": completar_documento,
         "al_guardar": al_guardar_documento,
         "acciones": ACCIONES_DOCUMENTO,
+        # Cola de «a revisar» (fase 13.6): lo que propuso la lectura con Copilot
+        # (o la carga) y todavía no confirmó una persona. Las ofertas
+        # reconstruidas del histórico, solo si se pide (son muchas).
+        "colas": [{
+            "id": "sin_revisar",
+            "label": "Documentos sin revisar",
+            "condicion": lambda: DocumentoProveedor.revisado.is_(False),
+            "por_defecto": lambda: or_(DocumentoProveedor.origen.is_(None), DocumentoProveedor.origen != "historico"),
+            "label_todas": "Incluir los del histórico",
+            "columnas": ["tipo", "numero", "fecha", "proveedor_id", "proveedor_texto", "proveedor_cuit", "moneda",
+                         "total_sin_iva", "diferencia", "motivo_revision", "revisado"],
+            "edicion_en_linea": ["numero", "fecha", "proveedor_id", "moneda", "motivo_revision", "revisado"],
+            "ayuda": ("La lectura propone, una persona confirma. Revisá el documento (el PDF y sus líneas, en el "
+                      "detalle) y marcalo revisado: hacen falta el proveedor identificado, la fecha y la moneda. "
+                      "«Diferencia con el total sin IVA» distinta de cero indica líneas mal cargadas."),
+            "orden": 45,
+        }],
     },
     "documento_lineas": {
         "model": DocumentoLinea,

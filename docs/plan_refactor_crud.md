@@ -746,7 +746,8 @@ servicio, no solo la pantalla.
 | **13.3 Alta rápida** | Última fila de la grilla con `campos_alta` (material o descripción, cantidad, destino). |
 | **13.4 Destinos y «Redistribuir»** | Subgrilla de destinos bajo cada línea, con la fila de la línea actualizada fuera de banda. Completar el activo, el modelo o la ubicación define el tipo de destino (`completar_destino`). «Redistribuir» en líneas enviadas: todo o nada, sin cambiar el total. |
 | **13.5 Pegar líneas** | Desde un mail o WhatsApp: un renglón por línea («cantidad código o descripción»). Vista previa y confirmación todo o nada (`servicio(confirmar=False)`), con un adaptador «pegado» (`core/pegado.py`) a los datos de alta. Material solo por código exacto; destino «a identificar». |
-| **13.6 Colas de «a revisar»** | Destinos sin sector o cuenta, líneas sin material identificado, líneas y pedidos con «a revisar (importación)» y líneas de documentos sin material: listas editables para resolverlas, con su cantidad en el menú. |
+| **13.6 Colas de «a revisar»** | Destinos sin sector o cuenta, líneas sin material identificado, líneas y pedidos con «a revisar (importación)», documentos sin revisar y líneas de documentos sin material: listas editables para resolverlas, con su cantidad en el menú. |
+| **13.7 Grilla en las líneas de documentos** | Pendiente (pedido del gestor, 27/11): cargar y editar las líneas de ofertas, presupuestos, remitos y facturas como las de un pedido (edición en línea, alta rápida y, si sirve, pegar líneas). Ver «Pendiente: PR 13.7». |
 
 Sin control de concurrencia por ahora: los pedidos los carga y edita solo el gestor. Se
 revisa en la fase 14, cuando Compras escriba en la app.
@@ -1047,15 +1048,38 @@ en `diseno_tablas_operativas.md` («Colas de «a revisar»»).
   existentes). `completar_linea` la desmarca al identificar el material; `al_guardar_linea`
   rechaza marcarla en una línea con material.
 - **Colas declaradas:** `pedido_linea_destinos.a_revisar`, `pedido_lineas.sin_material`,
-  `pedido_lineas.importacion`, `pedidos.importacion` (`overrides/pedidos.py`) y
-  `documento_lineas.sin_material` (`overrides/documentos.py`).
+  `pedido_lineas.importacion`, `pedidos.importacion` (`overrides/pedidos.py`),
+  `documentos_proveedor.sin_revisar` y `documento_lineas.sin_material`
+  (`overrides/documentos.py`).
+- **Documentos sin revisar** (pedido del gestor, 27/11): `revisado` = no; los del
+  histórico (`origen` = histórico, las ofertas reconstruidas), solo con «Incluir los del
+  histórico». Se editan número, fecha, proveedor, moneda, el motivo de revisión y
+  «Revisado» (que sigue pidiendo proveedor, fecha y moneda). **Una cola puede editar el
+  padre principal** (el proveedor): la regla que lo impide en la grilla existe porque
+  ahí se está en la pestaña de ese padre, y la cola no lo está. En la grilla de la
+  entidad sigue prohibido.
 - **Probado en el navegador** (Chromium, Playwright): asignar el activo de un destino «a
   identificar» (sector y cuenta sugeridos, fila resuelta, foco en la celda, sale al
   recargar), marcar «Sin material del maestro», abrir los destinos de una línea dentro de
   la cola y el menú con los contadores.
 - Tests: `tests/test_colas_revisar.py`.
-- **Pendiente:** asignación masiva (marcar varias filas y ponerles el mismo valor); una
-  cola de documentos sin revisar (`revisado` = no), si hace falta.
+- **Pendiente:** asignación masiva (marcar varias filas y ponerles el mismo valor).
+
+#### Pendiente: PR 13.7 (grilla en las líneas de documentos)
+
+Pedido del gestor (27/11): cargar y editar las líneas de documentos de proveedores con la
+grilla, como las de un pedido. Se ve en otra sesión; a revisar al empezar:
+
+- Qué columnas se editan (material, código y descripción del proveedor, cantidad, unidad,
+  precio de lista, descuento, precio neto) y qué pasa con un documento **revisado**
+  (¿se congela, como una línea enviada?) o con líneas ya **adjudicadas**.
+- Alta rápida: qué celdas (material o código del proveedor, cantidad, precio) y si el
+  material se reconoce por el código del proveedor (`material_proveedor`, todavía no
+  existe) o solo por el del maestro.
+- «Pegar líneas» desde una planilla o un PDF copiado: si conviene, o si alcanza con la
+  lectura con Copilot.
+- Subgrilla de adjudicaciones bajo cada línea de oferta (como los destinos bajo la línea
+  de pedido).
 
 ## Arquitectura objetivo
 
@@ -1110,7 +1134,7 @@ siempre la última.
 | **8. Limpieza** | Borrar los metamodelos viejos y `framework.py`, los `.txt` duplicados y el código sin uso listado en las notas. Ver «Notas de la Fase 8». | ✅ Hecha |
 | **9. Planes preventivos** | Planes por categoría de activo (período por uso y/o por tiempo, plan que incluye a otro), tareas, materiales por modelo; categoría en el modelo y tipo de medidor. Ver «Fase 9: planes preventivos». | ✅ Hecha |
 | **10. Pedidos y documentos de proveedores** | Pedidos con líneas y destinos (imputación), ofertas y presupuestos (cabecera + líneas), adjudicación por cantidad, recepciones (conformidad). Importación del Excel histórico de pedidos. Ver «Fases operativas». | ✅ Hecha |
-| **13. Edición en línea, borrador y envío a Compras** | Listados editables tipo planilla con htmx, generados desde la spec (`edicion_en_linea`, `editable_si`). En pedidos: líneas en borrador y «Enviar a Compras» (`enviada_en`), eliminar en borrador, anular o cancelar con motivo, destinos desplegados y «Redistribuir», alta rápida, pegar líneas y colas de «a revisar». Ver «Fase 13: edición en línea». | ✅ Hecha (13.1 a 13.6) |
+| **13. Edición en línea, borrador y envío a Compras** | Listados editables tipo planilla con htmx, generados desde la spec (`edicion_en_linea`, `editable_si`). En pedidos: líneas en borrador y «Enviar a Compras» (`enviada_en`), eliminar en borrador, anular o cancelar con motivo, destinos desplegados y «Redistribuir», alta rápida, pegar líneas y colas de «a revisar». Ver «Fase 13: edición en línea». | En curso (13.1 a 13.6 hechos; 13.7 pendiente) |
 | **14. Circuito con Compras** | Usuarios, roles y auditoría con usuario; despliegue en un servidor. Vista de Compras (para cotizar, para emitir OC, reclamos), comparativo por línea, adjudicación y «Pedir OC». Ver [`propuesta_circuito_compras.md`](propuesta_circuito_compras.md). | En diseño |
 | **11. Solicitudes de trabajo, solicitudes internas y OC** | Solicitudes de trabajo (avisos de los mecánicos para llamar a un contratista) y su vínculo con los presupuestos (`documentos_proveedor.solicitud_trabajo_id`). Importación de los TSV de EAM (cabeceras, líneas, distribuciones) y de las OC; vínculo con los documentos adjudicados; distribución propuesta; detalle para Administración; conciliación por nº de OC. **Líneas de la solicitud de OC creadas en la app con la grilla de la fase 13** (edición en línea y alta rápida; pedido del gestor, 26/11). A revisar al empezar: el diseño dice que la cabecera de la solicitud nace en el ERP y se importa, aunque admite registros con `sistema` = app que después reciben su número del ERP. | Pendiente |
 | **12. Órdenes de trabajo** | Cabecera importada del ERP; la app agrega operaciones, recursos y materiales (previsto y utilizado). Incluye cuándo le toca un plan a cada activo. **Operaciones de la OT, y sus recursos y materiales, cargados con la grilla de la fase 13** (edición en línea, alta rápida y subgrilla como la de destinos; pedido del gestor, 26/11). | Pendiente |
