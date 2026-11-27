@@ -15,6 +15,14 @@ Reglas (se verifican al guardar, en la web, la API y la importación):
       - una línea de oferta sin material identificado no se adjudica a una
         línea de pedido que pide un genérico (no hay de dónde convertir);
       - lo adjudicado de una línea de oferta no supera lo ofertado.
+  * Líneas (fase 13.7, grilla en la pestaña «Líneas» del documento):
+      - la unidad es la del material (se completa sola);
+      - el precio neto se calcula del de lista y el descuento si queda vacío, o
+        si cambian el de lista o el descuento y el neto no se cambia a la vez;
+      - en un documento revisado lo leído queda fijo (el material sigue
+        editable, para identificarlo) y no se agregan ni se eliminan líneas;
+      - con algo adjudicado, el material no cambia y la cantidad no baja de lo
+        adjudicado; con algo adjudicado o recibido, la línea no se elimina.
   * Acciones del documento: «Vincular con pedidos» (crea las adjudicaciones en
     0 con las líneas de pedido abiertas del mismo material, o del genérico de la
     presentación) y «Adjudicar lo vinculado» (pone lo que falta comprar, sin
@@ -29,6 +37,7 @@ from sqlalchemy import or_
 
 from app.core.db import db
 from app.crud.core.coercion import ErroresValidacion
+from app.crud.core.interpretes import FkOTexto
 from app.crud.meta.overrides.pedidos import normalizar_oc
 from app.models.documentos_models import (
     MONEDAS,
@@ -110,6 +119,84 @@ def al_guardar_documento(doc, operacion: str, cambiados: set):
         if faltan:
             raise ErroresValidacion({"revisado": "Para marcarlo revisado falta " + ", ".join(faltan) + "."})
     return None
+
+
+# ---------------------------------------------------------------------------
+# Líneas (fase 13.7)
+# ---------------------------------------------------------------------------
+
+_EPS = 1e-9
+REVISADO = "el documento está revisado (desmarcá «Revisado» para corregir lo leído)"
+# Lo que sale de la lectura del documento: queda fijo cuando está revisado.
+CAMPOS_LEIDOS = ("tipo_linea", "codigo_proveedor", "descripcion_proveedor", "cantidad", "udm_texto",
+                 "precio_lista", "descuento_pct", "precio_unitario")
+
+
+def _cambia(datos, registro, campo) -> bool:
+    return campo in datos and (registro is None or datos[campo] != getattr(registro, campo))
+
+
+def completar_linea_documento(datos: dict, registro):
+    # La unidad es la del material.
+    if datos.get("material_id") is not None:
+        m = db.session.get(Material, datos["material_id"])
+        if m is not None:
+            datos["unidad_medida_id"] = m.unidad_medida_id
+    # Precio neto = lista × (1 − descuento): si queda vacío, o si cambian el de
+    # lista o el descuento y el neto no se cambia en la misma operación.
+    lista = _valor(datos, registro, "precio_lista")
+    neto_escrito = datos.get("precio_unitario") is not None and _cambia(datos, registro, "precio_unitario")
+    if lista is not None and not neto_escrito:
+        vacio = _valor(datos, registro, "precio_unitario") is None
+        cambia_base = registro is not None and (_cambia(datos, registro, "precio_lista")
+                                                or _cambia(datos, registro, "descuento_pct"))
+        if vacio or cambia_base:
+            descuento = _valor(datos, registro, "descuento_pct") or 0
+            datos["precio_unitario"] = round(lista * (1 - descuento / 100), 6)
+    if _valor(datos, registro, "precio_unitario") is None:
+        raise ErroresValidacion({"precio_unitario": (
+            "Falta el precio neto (o el precio de lista, para calcularlo con el descuento).")})
+    return datos
+
+
+def al_guardar_linea_documento(lo, operacion: str, cambiados: set):
+    if getattr(lo, "reglas_de_edicion", True) and "cantidad" in cambiados and operacion != "INSERT":
+        adjudicada = lo.adjudicada or 0
+        if adjudicada > lo.cantidad + _EPS:
+            raise ErroresValidacion({"cantidad": (
+                f"La cantidad no puede ser menor que lo adjudicado ({adjudicada:g}). "
+                "Bajá primero las adjudicaciones.")})
+    return None
+
+
+def no_revisado(lo):
+    return REVISADO if lo.documento is not None and lo.documento.revisado else True
+
+
+def material_linea_editable(lo):
+    if (lo.adjudicada or 0) > _EPS:
+        return "ya tiene cantidades adjudicadas (cambiaría la conversión a la unidad del pedido)"
+    return True
+
+
+def linea_documento_eliminable(lo):
+    from app.models.recepciones_models import Recepcion
+
+    if lo.documento is not None and lo.documento.revisado:
+        return REVISADO
+    if (lo.adjudicada or 0) > _EPS:
+        return "tiene cantidades adjudicadas: bajalas a 0 o eliminá las adjudicaciones"
+    if Recepcion.query.filter_by(documento_linea_id=lo.documento_linea_id).first() is not None:
+        return "tiene recepciones"
+    return True
+
+
+def linea_documento_creable(datos):
+    doc = db.session.get(DocumentoProveedor, datos["documento_id"]) if datos.get("documento_id") else None
+    if doc is not None and doc.revisado:
+        return ("El documento está revisado: no se le agregan líneas. Desmarcá «Revisado» para corregir "
+                "lo leído.")
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -309,12 +396,34 @@ OVERRIDES = {
             "nro_linea": {"numeracion": "{n}", "numeracion_por": "documento_id"},
             "tipo_linea": {"tipo": "select", "options": TIPOS_LINEA, "required": False},
             "material_id": {"fk_filtro": sin_genericos},
+            # Si queda vacío, se calcula del precio de lista y el descuento.
+            "precio_unitario": {"required": False},
         },
         "excluir": ["nombre"],
-        "listado": ["documento_id", "nro_linea", "tipo_linea", "material_id", "descripcion_proveedor", "cantidad",
-                    "se_cuenta_en", "precio_unitario", "subtotal", "adjudicada", "a_revisar"],
+        "listado": ["documento_id", "nro_linea", "tipo_linea", "material_id", "codigo_proveedor",
+                    "descripcion_proveedor", "cantidad", "udm_texto", "se_cuenta_en", "precio_lista",
+                    "descuento_pct", "precio_unitario", "subtotal", "adjudicada", "a_revisar"],
         "filtros": ["material_id", "codigo_proveedor", "descripcion_proveedor", "tipo_linea"],
         "clave_natural": ["documento_id", "nro_linea"],
+        "completar": completar_linea_documento,
+        "al_guardar": al_guardar_linea_documento,
+        # Grilla de la pestaña «Líneas» del documento (fase 13.7).
+        "edicion_en_linea": ["tipo_linea", "material_id", "codigo_proveedor", "descripcion_proveedor", "cantidad",
+                             "udm_texto", "precio_lista", "descuento_pct", "precio_unitario"],
+        # Documento revisado: lo leído queda fijo (el material sigue editable, para
+        # identificarlo). Con algo adjudicado, el material no cambia.
+        "editable_si": {**{c: no_revisado for c in CAMPOS_LEIDOS}, "material_id": material_linea_editable},
+        "eliminable_si": linea_documento_eliminable,
+        "creable_si": linea_documento_creable,
+        # Alta rápida: material del maestro (código, etiqueta o comienzo; si no es
+        # ninguno, el texto va a la descripción del proveedor), cantidad y precio neto.
+        "alta_en_linea": [
+            {"nombre": "material", "label": "Material (código o descripción) o texto tal como figura",
+             "columnas": ["material_id", "codigo_proveedor", "descripcion_proveedor"],
+             "interprete": FkOTexto("material_id", "descripcion_proveedor")},
+            {"nombre": "cantidad", "label": "Cantidad", "columnas": ["cantidad"]},
+            {"nombre": "precio_unitario", "label": "Precio neto", "columnas": ["precio_unitario"]},
+        ],
         # Cola de «a revisar» (fase 13.6): líneas de material sin el material identificado.
         "colas": [{
             "id": "sin_material",
