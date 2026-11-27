@@ -47,6 +47,14 @@ cada línea de pedido), además:
 su pestaña, o «listado»): con eso, todo lo que cambia un hijo devuelve además
 la fila del padre fuera de banda (cambian sus columnas calculadas).
 
+Si declara `colas` (fase 13.6, colas de «a revisar»):
+
+    GET  /<entidad>/cola/<cola>         la grilla de los registros que cumplen la
+                                        condición de la cola (?todas=1: sin su
+                                        condición por defecto), con los filtros
+                                        del listado. Las celdas se guardan por las
+                                        rutas de siempre, con ?cola=<cola>.
+
 Si la spec declara `acciones`: /<entidad>/<id>/accion/<accion> (POST; con
 `campos` o `filas`, además GET con el formulario de la acción). Una acción de
 varias filas se abre también dentro de la subgrilla (?subgrilla=<hijo>).
@@ -95,6 +103,8 @@ MOTIVO_BAJA_EN_LINEA = "Eliminado en línea"
 MOTIVO_PEGADO = "Líneas pegadas"
 # Cómo está armada la fila del padre cuando no está en la pestaña de otro padre.
 VISTA_LISTADO = "listado"
+# La fila del padre está en una cola de «a revisar» (fase 13.6): «cola:<id>».
+PREFIJO_VISTA_COLA = "cola:"
 ACCIONES = ("listar", "crear", "detalle", "editar", "confirmar_eliminar")
 
 
@@ -135,7 +145,9 @@ class VistasEntidad:
         if self.spec.acciones:
             bp.add_url_rule(f"{base}/<int:id>/accion/<accion>", f"{n}_accion",
                             self.accion, methods=["GET", "POST"])
-        if self.spec.edicion_en_linea:
+        if self.spec.colas:
+            bp.add_url_rule(f"{base}/cola/<cola>", f"{n}_cola", self.cola)
+        if self.spec.tiene_celdas:
             bp.add_url_rule(f"{base}/<int:id>/celda/<campo>", f"{n}_celda", self.celda,
                             methods=["GET", "POST"])
             bp.add_url_rule(f"{base}/<int:id>/fila", f"{n}_fila", self.fila)
@@ -187,6 +199,15 @@ class VistasEntidad:
         if padre and padre_id:
             return url_for(endpoint(padre.entidad, "detalle"), id=padre_id, seccion=self.spec.name)
         return url_for(endpoint(self.spec.name, "listar"))
+
+    def _cola_de_url(self):
+        """La cola desde la que se llegó (?cola=<id>), o None."""
+        return self.spec.cola(request.args.get("cola", ""))
+
+    def _url_cola(self) -> str | None:
+        """Volver a la cola desde la que se llegó (fase 13.6), o None."""
+        c = self._cola_de_url()
+        return url_for(endpoint(self.spec.name, "cola"), cola=c.id) if c is not None else None
 
     def _url_detalle(self, id, padre, padre_id):
         args = {padre.fk: padre_id} if padre and padre_id and request.args.get(padre.fk) else {}
@@ -242,6 +263,20 @@ class VistasEntidad:
         return resultado
 
     def listar(self):
+        return self._listado()
+
+    def cola(self, cola):
+        c = self.spec.cola(cola)
+        if c is None:
+            abort(404)
+        return self._listado(c)
+
+    def _listado(self, cola=None):
+        """
+        El listado de la entidad o, con `cola` (fase 13.6), el de una cola de «a
+        revisar»: sus columnas y campos editables, solo los registros que cumplen
+        su condición y, salvo ?todas=1, también la condición por defecto.
+        """
         s = self.spec
         campo = request.args.get("campo") or "todos"
         q = request.args.get("q", "")
@@ -257,14 +292,22 @@ class VistasEntidad:
                 valores.update(self._filtros_de_url_valor(campo, valor_fk))
             campo = "todos"
 
-        objetos = repository.consulta_listado(
+        consulta = repository.consulta_listado(
             s.model, self.fields, list(s.filtros),
             q=q, campo=campo, valores=valores,
             filtro_padre=(padre.fk, padre_id) if padre else None,
-        ).all()
+        )
+        todas = cola is not None and cola.por_defecto is not None and request.args.get("todas") == "1"
+        if cola is not None:
+            consulta = consulta.filter(cola.condicion())
+            if cola.por_defecto is not None and not todas:
+                consulta = consulta.filter(cola.por_defecto())
+        objetos = consulta.all()
 
+        columnas = list(cola.columnas) if cola is not None else list(s.listado)
+        grilla = contexto_grilla(s, columnas, {"cola": cola.id} if cola is not None else {}, cola=cola)
         conteos = conteo_hijos(s, objetos)
-        registros = [item_fila(s, r, s.listado, conteos) for r in objetos]
+        registros = [item_de_grilla(s, r, grilla, conteos) for r in objetos]
 
         opciones = fk.opciones_de(self.fields)
         for c in campos_select:
@@ -273,12 +316,17 @@ class VistasEntidad:
                     {"value": _valor_url(o["value"]), "label": o["label"], "deps": None, "grupo": None}
                     for o in self.fields[c].options])
 
+        url_listado = (url_for(endpoint(s.name, "cola"), cola=cola.id) if cola is not None
+                       else url_for(endpoint(s.name, "listar")))
         return render_template(
             "crud/listado_entidad.html",
             **self._contexto(),
             nombre_entidad=inicial(s.label_plural),
             registros=registros,
-            columns=list(s.listado),
+            columns=columnas,
+            cola=cola,
+            todas=todas,
+            url_listado=url_listado,
             # La búsqueda de texto elige entre los campos que no tienen select.
             filtros={"campos": [c for c in s.filtros if c not in campos_select]},
             campos_select=campos_select,
@@ -288,7 +336,7 @@ class VistasEntidad:
             fk_data=opciones,
             # Filtros que se eligen tipeando (campo con lista) en lugar de un select.
             con_lista={c for c in campos_select if fk.usa_lista(self.fields[c], opciones[c])},
-            grilla=contexto_grilla(s, s.listado, {}),
+            grilla=grilla,
             q=q,
         )
 
@@ -455,10 +503,12 @@ class VistasEntidad:
             return self._render_form("UPDATE", self._valores_formulario(registro), (padre, padre_id), url_cancelar,
                                      congelados=congelados)
 
+        url_cancelar = self._url_cola() or url_cancelar
+
         def operacion(datos):
             self.servicio.actualizar(registro, datos, self._motivo())
             self._avisar(registro)
-            return redirect(self._url_volver(*self._padre_de(registro)))
+            return redirect(self._url_cola() or self._url_volver(*self._padre_de(registro)))
 
         return self._guardar(operacion, "UPDATE", self._valores_formulario(registro), (padre, padre_id), url_cancelar,
                              congelados=congelados)
@@ -494,7 +544,7 @@ class VistasEntidad:
         if request.method == "POST":
             try:
                 self.servicio.eliminar(registro, self._motivo())
-                return redirect(self._url_volver(padre, padre_id))
+                return redirect(self._url_cola() or self._url_volver(padre, padre_id))
             except ErrorIntegridad as e:
                 error = e.mensaje
                 registro = repository.obtener_o_404(self.spec.model, id)
@@ -592,8 +642,14 @@ class VistasEntidad:
             abort(405)
         # Desde la fila de una grilla se vuelve a la pestaña del padre; desde el
         # detalle, a la pestaña de la acción.
-        args = {k: v for k, v in request.args.items() if k not in ("seccion", "desde")}
-        if request.args.get("desde") == "fila":
+        args = {k: v for k, v in request.args.items() if k not in ("seccion", "desde", "volver", "cola")}
+        if _ruta_local(request.args.get("volver")):
+            # Desde la fila de una cola de otra entidad (ej: «Redistribuir» la
+            # línea desde la cola de destinos): se vuelve a esa cola.
+            volver = request.args["volver"]
+        elif self._url_cola() is not None:
+            volver = self._url_cola()
+        elif request.args.get("desde") == "fila":
             volver = self._url_volver(*self._padre_de(registro))
         else:
             volver = url_for(endpoint(self.spec.name, "detalle"), id=id, seccion=a.seccion, **args)
@@ -846,6 +902,9 @@ class VistasEntidad:
         Contexto de la fila según desde dónde se llegó: la pestaña del padre, la
         subgrilla bajo la fila del padre (?vista_padre=...) o el listado.
         """
+        cola = self._cola_de_url()
+        if cola is not None:
+            return contexto_grilla(self.spec, cola.columnas, {"cola": cola.id}, cola=cola)
         padre, padre_id = self._padre_desde_url()
         if padre is not None:
             args = {padre.fk: padre_id}
@@ -875,14 +934,17 @@ class VistasEntidad:
         return fila_de_vista(spec_padre, registro, vista) if registro is not None else None
 
     def _campo_en_linea(self, registro, campo):
-        """El campo, si se edita en la grilla y no está congelado en este registro; si no, 404."""
-        if campo not in self.spec.edicion_en_linea or campo in self.servicio.congelados(registro):
+        """
+        El campo, si se edita en esta grilla (la de la entidad o la de la cola de
+        la URL) y no está congelado en este registro; si no, 404.
+        """
+        if campo not in self._grilla_de_url()["editables"].values() or campo in self.servicio.congelados(registro):
             abort(404)
         return self.fields[campo]
 
     def _render_fila(self, registro, status=200, **extra):
         grilla = self._grilla_de_url()
-        item = item_fila(self.spec, registro, grilla["columnas"])
+        item = item_de_grilla(self.spec, registro, grilla, resuelta=True)
         # Un hijo guardado desde la subgrilla: la fila del padre también cambia.
         fila_padre = self._fila_padre() if status == 200 else None
         return render_template("crud/partials/_fila.html", grilla=grilla, item=item, fila_padre=fila_padre,
@@ -900,7 +962,7 @@ class VistasEntidad:
         if texto is None:
             texto = texto_celda(registro, campo, f, control)
         return {
-            "campo": campo, "columna": self.spec.columna_en_linea.get(campo, campo),
+            "campo": campo, "columna": grilla["columna_de"].get(campo, campo),
             "cfg": f, "valor": texto, "error": error,
             "control": control, "opciones": opciones,
             "id_lista": f"lista-{self.spec.name}-{campo}",
@@ -924,7 +986,7 @@ class VistasEntidad:
             error = self._mensaje_celda(campo, {e.campo or "_general": e.mensaje})
         else:
             self._avisar(registro)
-            return self._render_fila(registro, foco=self.spec.columna_en_linea.get(campo, campo))
+            return self._render_fila(registro, foco=self._grilla_de_url()["columna_de"].get(campo, campo))
         # Lo guardado se descartó (el servicio hace rollback): la fila se arma con lo
         # que hay en la base y la celda queda abierta con lo que se escribió.
         registro = repository.obtener_o_404(self.spec.model, id)
@@ -1069,8 +1131,9 @@ class VistasEntidad:
         # (ej: la unidad de la línea, al cambiar el material): el servicio los
         # completa a partir del valor nuevo.
         if datos.get(campo) is not None:
+            editables = self._grilla_de_url()["editables"].values()
             for padre in f.depende_de:
-                if padre not in self.spec.edicion_en_linea and not self.fields[padre].solo_lectura:
+                if padre not in editables and not self.fields[padre].solo_lectura:
                     datos[padre] = None
         return datos
 
@@ -1093,14 +1156,18 @@ class VistasEntidad:
 # rutas de celda: una fila se arma igual en los tres lugares)
 # ---------------------------------------------------------------------------
 
-def contexto_grilla(spec: EntitySpec, columnas, args_fila: dict) -> dict:
+def contexto_grilla(spec: EntitySpec, columnas, args_fila: dict, cola=None) -> dict:
     """
     Lo que crud/partials/_fila.html necesita además del registro. `args_fila`: el
-    padre desde el que se llegó ({"pedido_id": 3}), para los enlaces y las celdas.
+    padre desde el que se llegó ({"pedido_id": 3}), o la cola ({"cola": "a_revisar"}),
+    para los enlaces y las celdas. Con `cola` (fase 13.6), los campos editables
+    son los de la cola.
     """
     from app.crud.entidades import REGISTRY
 
     fks_padre = {p.fk for p in spec.padres}
+    edicion = cola.edicion_en_linea if cola is not None else spec.edicion_en_linea
+    columna_de = cola.columna_en_linea if cola is not None else spec.columna_en_linea
     subgrillas = []
     for nombre in spec.subgrillas:
         hijo = REGISTRY[nombre]
@@ -1116,13 +1183,16 @@ def contexto_grilla(spec: EntitySpec, columnas, args_fila: dict) -> dict:
         "genero": spec.genero,
         "endpoint_base": f"{BLUEPRINT}.{spec.name}",
         "args_fila": args_fila,
-        # {columna: campo que se edita en ella} (casi siempre, el mismo).
-        "editables": {spec.columna_en_linea.get(c, c): c for c in spec.edicion_en_linea},
+        # {columna: campo que se edita en ella} (casi siempre, el mismo) y al revés.
+        "editables": {columna_de.get(c, c): c for c in edicion},
+        "columna_de": columna_de,
         "con_eliminar": spec.eliminable_si is not None,
         # Subgrillas (fase 13.4): los hijos que se despliegan bajo cada fila, y
         # cómo está armada esta fila (para devolverla fuera de banda).
         "subgrillas": subgrillas,
-        "vista": next((k for k in args_fila if k in fks_padre), VISTA_LISTADO),
+        "vista": (f"{PREFIJO_VISTA_COLA}{cola.id}" if cola is not None
+                  else next((k for k in args_fila if k in fks_padre), VISTA_LISTADO)),
+        "cola": cola.id if cola is not None else None,
         # La fila es de una subgrilla: «Eliminar» sin salir de la página.
         "en_subgrilla": "vista_padre" in args_fila,
     }
@@ -1166,7 +1236,14 @@ def contexto_pegado(spec: EntitySpec, padre_fk: str, padre_id, texto: str = "",
 
 
 def fila_de_vista(spec: EntitySpec, registro, vista: str) -> dict:
-    """La fila de un registro armada como en la página (`vista`: el fk de la pestaña, o «listado»)."""
+    """
+    La fila de un registro armada como en la página (`vista`: el fk de la pestaña,
+    «listado» o «cola:<id>»).
+    """
+    cola = spec.cola(vista[len(PREFIJO_VISTA_COLA):]) if vista.startswith(PREFIJO_VISTA_COLA) else None
+    if cola is not None:
+        grilla = contexto_grilla(spec, cola.columnas, {"cola": cola.id}, cola=cola)
+        return {"grilla": grilla, "item": item_de_grilla(spec, registro, grilla, resuelta=True)}
     p = next((p for p in spec.padres if p.fk == vista), None)
     if p is not None:
         columnas = [c for c in spec.listado if c != p.fk]
@@ -1319,6 +1396,65 @@ def item_fila(spec: EntitySpec, registro, columnas, conteos: dict | None = None)
         if obj is not None and f.es_estado:
             item[f"{c}_color"] = getattr(obj, "color_badge", None)
     return item
+
+
+def item_de_grilla(spec: EntitySpec, registro, grilla: dict, conteos: dict | None = None,
+                   resuelta: bool = False) -> dict:
+    """
+    item_fila con las columnas de la grilla y, en una cola de «a revisar» (fase
+    13.6), lo de la cola: el enlace a la pestaña del padre y sus acciones para
+    esta entidad (ej: «Redistribuir» la línea de un destino), que vuelven a la
+    cola. Con `resuelta`, además, si el registro dejó de cumplir la condición
+    (después de editarlo: la fila queda, marcada, hasta recargar).
+    """
+    item = item_fila(spec, registro, grilla["columnas"], conteos)
+    cola = spec.cola(grilla.get("cola") or "")
+    item["_resuelta"] = False
+    item["_padre"] = None
+    item["_acciones_padre"] = []
+    if cola is None:
+        return item
+    if resuelta:
+        pk = getattr(spec.model, spec.pk)
+        item["_resuelta"] = not db.session.query(
+            spec.model.query.filter(pk == item[spec.pk], cola.condicion()).exists()).scalar()
+    rel = spec.padre
+    padre_id = getattr(registro, rel.fk) if rel is not None else None
+    if padre_id is not None:
+        from app.crud.entidades import REGISTRY
+
+        spec_padre = REGISTRY[rel.entidad]
+        de = "del" if spec_padre.genero == "m" else "de la"
+        item["_padre"] = {
+            "label": f"{rel.label or inicial(spec.label_plural)} {de} {spec_padre.label_singular}",
+            "url": url_for(endpoint(rel.entidad, "detalle"), id=padre_id, seccion=spec.name),
+        }
+        registro_padre = db.session.get(spec_padre.model, padre_id)
+        volver = url_for(endpoint(spec.name, "cola"), cola=cola.id)
+        item["_acciones_padre"] = acciones_visibles(
+            spec_padre, registro_padre, lambda a: a.seccion == spec.name and (bool(a.campos) or a.filas is not None),
+            {"volver": volver})
+    return item
+
+
+def _ruta_local(url) -> bool:
+    """Una URL de esta app (/pedidos/...), no de otro sitio: lo único que se acepta en ?volver=."""
+    return bool(url) and url.startswith("/") and not url.startswith("//") and "\\" not in url
+
+
+def cantidad_en_cola(spec: EntitySpec, cola) -> int:
+    """Cuántos registros hay en la cola, con su condición por defecto (lo que muestra el menú)."""
+    consulta = db.session.query(func.count()).select_from(spec.model).filter(cola.condicion())
+    if cola.por_defecto is not None:
+        consulta = consulta.filter(cola.por_defecto())
+    return consulta.scalar() or 0
+
+
+def menu_colas(registry: dict) -> list[dict]:
+    """Las colas de «a revisar» del menú, en su orden: label, url y cantidad (fase 13.6)."""
+    colas = sorted(((s, c) for s in registry.values() for c in s.colas), key=lambda par: par[1].orden)
+    return [{"label": c.label, "url": url_for(endpoint(s.name, "cola"), cola=c.id),
+             "cantidad": cantidad_en_cola(s, c)} for s, c in colas]
 
 
 def control_celda(f) -> tuple[str, list]:

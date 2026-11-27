@@ -285,6 +285,47 @@ class PegadoSpec:
 
 
 @dataclass(frozen=True)
+class ColaSpec:
+    """
+    Cola de «a revisar» (fase 13.6): una lista editable con nombre de los
+    registros de una entidad que cumplen una condición (ej: los destinos de
+    pedido sin sector imputado o sin cuenta), para resolverlos en la grilla. Se
+    ve en /<entidad>/cola/<id> y en el menú, en «A revisar», con la cantidad.
+
+    id                identifica la cola en la URL (único en la entidad).
+    label             título de la pantalla y del menú («Destinos a revisar»).
+    condicion         función sin argumentos -> condición SQLAlchemy sobre el
+                      modelo: qué registros están en la cola.
+    columnas          columnas de la grilla (campos de la entidad).
+    edicion_en_linea  campos que se editan en la grilla, como en la spec
+                      (campo o (campo, columna)). Por defecto, los de la
+                      edicion_en_linea de la entidad que están en `columnas`.
+    columna_en_linea  {campo: columna} (lo arma el registry).
+    por_defecto       función sin argumentos -> condición que se agrega salvo
+                      que se pida ver todo (?todas=1): ej: sin las líneas
+                      cerradas. El menú cuenta con ella.
+    label_todas       texto del control que la quita («Incluir las cerradas»).
+    ayuda             texto arriba de la grilla: cómo se resuelve.
+    orden             posición en el menú.
+
+    Una fila que deja de cumplir la condición al editarla queda en la grilla,
+    marcada como resuelta, hasta recargar (para que no salten las filas
+    mientras se edita con el teclado).
+    """
+
+    id: str
+    label: str
+    condicion: object
+    columnas: tuple[str, ...]
+    edicion_en_linea: tuple[str, ...] = ()
+    columna_en_linea: dict = field(default_factory=dict)
+    por_defecto: object = None
+    label_todas: str = ""
+    ayuda: str = ""
+    orden: int = 999
+
+
+@dataclass(frozen=True)
 class EntitySpec:
     name: str
     model: type
@@ -340,6 +381,9 @@ class EntitySpec:
     # «Pegar líneas» (fase 13.5): altas desde texto pegado, una por renglón, en la
     # pestaña del padre de la alta rápida (requiere alta_en_linea). Ver PegadoSpec.
     pegado_en_linea: PegadoSpec | None = None
+    # Colas de «a revisar» (fase 13.6): listas editables de los registros que
+    # cumplen una condición. Ver ColaSpec.
+    colas: tuple[ColaSpec, ...] = ()
 
     # Reglas de edición según el registro (fase 13.2). Las aplica el servicio, así
     # que valen en la grilla, el formulario, la API y la importación CSV:
@@ -368,6 +412,14 @@ class EntitySpec:
     def padre_de_tipo(self, entidad: str) -> ParentSpec | None:
         """Relación con un padre concreto (ej: "materiales" → fk "material_id")."""
         return next((p for p in self.padres if p.entidad == entidad), None)
+
+    def cola(self, id: str) -> ColaSpec | None:
+        return next((c for c in self.colas if c.id == id), None)
+
+    @property
+    def tiene_celdas(self) -> bool:
+        """Si alguna grilla de la entidad edita celdas (la suya o la de una cola)."""
+        return bool(self.edicion_en_linea) or any(c.edicion_en_linea for c in self.colas)
 
     @property
     def tabla(self) -> str:

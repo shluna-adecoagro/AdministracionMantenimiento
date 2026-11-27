@@ -36,6 +36,9 @@ Dónde va cada dato:
                                                 (ej: copiar el BOM del modelo al activo)
       acciones: [{id, label, funcion, ...}]     botones del detalle (ej: «Traer ítems
                                                 del modelo»)
+      colas: [{id, label, condicion, columnas, ...}] colas de «a revisar»: listas
+                                                editables con entrada en el menú
+                                                (fase 13.6, ver ColaSpec)
       auditoria / auditoria_ignorar             historial de cambios
 
 Lo mínimo es {"model": MiModelo}; todo lo demás tiene un valor por defecto.

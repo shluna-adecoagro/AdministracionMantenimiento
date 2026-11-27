@@ -14,6 +14,11 @@
   despliega sus registros en una fila debajo (grilla.js). En una fila de una
   subgrilla (grilla.en_subgrilla), «Eliminar» se hace sin salir de la página.
 
+  Colas de «a revisar» (fase 13.6, grilla.cola): una fila que dejó de cumplir
+  la condición después de editarla (item._resuelta) queda marcada hasta
+  recargar; las acciones suman el enlace a la pestaña del padre (item._padre) y
+  sus acciones para esta entidad (item._acciones_padre, ej: «Redistribuir»).
+
   grilla.editables es {columna: campo que se edita en ella}. Una celda congelada
   en este registro (item._congelados, por editable_si) se ve en gris, con el
   porqué como título.
@@ -34,7 +39,7 @@
 {%- endmacro %}
 {% set g = grilla %}
 {% set id_fila = item[g.pk] %}
-<tr id="fila-{{ g.entidad }}-{{ id_fila }}" class="fila"{% if foco %} data-foco="{{ foco }}"{% endif %}{% if oob %} hx-swap-oob="true"{% endif %}>
+<tr id="fila-{{ g.entidad }}-{{ id_fila }}" class="fila{% if item._resuelta %} fila-resuelta{% endif %}"{% if foco %} data-foco="{{ foco }}"{% endif %}{% if oob %} hx-swap-oob="true"{% endif %}>
     {% for col in g.columnas %}
         {% set cfg = g.campos[col] %}
         {% set campo_edicion = g.editables.get(col) %}
@@ -55,6 +60,9 @@
         {% endif %}
     {% endfor %}
     <td class="tabla-acciones">
+        {% if item._resuelta %}
+            <span class="badge badge-resuelta" title="Ya no está en la cola: sale al recargar">✓ Resuelta</span>
+        {% endif %}
         {% for sg in g.subgrillas %}
             <button type="button" class="btn-secondary btn-subgrilla" aria-expanded="false"
                     data-subgrilla="sub-{{ sg.entidad }}-{{ id_fila }}"
@@ -85,6 +93,12 @@
                     <button type="submit" class="btn-secondary">{{ a.label }}</button>
                 </form>
             {% endif %}
+        {% endfor %}
+        {% if item._padre %}
+            <a href="{{ item._padre.url }}" class="btn-secondary">{{ item._padre.label }}</a>
+        {% endif %}
+        {% for a in item._acciones_padre %}
+            <a href="{{ a.url }}" class="btn-secondary">{{ a.label }}</a>
         {% endfor %}
         {% if g.con_eliminar and item._eliminable %}
             <a href="{{ url_for(g.endpoint_base ~ '_confirmar_eliminar', id=id_fila, **g.args_fila) }}"

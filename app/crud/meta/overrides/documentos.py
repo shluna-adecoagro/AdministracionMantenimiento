@@ -296,6 +296,19 @@ OVERRIDES = {
                     "se_cuenta_en", "precio_unitario", "subtotal", "adjudicada", "a_revisar"],
         "filtros": ["material_id", "codigo_proveedor", "descripcion_proveedor", "tipo_linea"],
         "clave_natural": ["documento_id", "nro_linea"],
+        # Cola de «a revisar» (fase 13.6): líneas de material sin el material identificado.
+        "colas": [{
+            "id": "sin_material",
+            "label": "Líneas de documentos sin material",
+            "condicion": lambda: DocumentoLinea.a_revisar == "Sí",
+            "columnas": ["documento_id", "nro_linea", "codigo_proveedor", "descripcion_proveedor", "cantidad",
+                         "udm_texto", "precio_unitario", "material_id", "motivo_revision"],
+            "edicion_en_linea": ["material_id", "motivo_revision"],
+            "ayuda": ("Líneas de material de ofertas, presupuestos, remitos y facturas sin el material del "
+                      "maestro. Sin él no se vinculan con los pedidos. Elegí el material (nunca un genérico: "
+                      "la presentación que se ofertó)."),
+            "orden": 50,
+        }],
     },
     "adjudicaciones": {
         "model": Adjudicacion,
