@@ -24,6 +24,15 @@ termina con una fila de alta:
                                         crea; la fila nueva y una fila de alta
                                         vacía, o la fila de alta con los errores (422)
 
+Si declara `pegado_en_linea` (fase 13.5, «Pegar líneas»), la misma pestaña
+ofrece pegar un texto con un renglón por alta:
+
+    POST /<entidad>/pegar?<fk del padre>=<id>
+                                        sin `confirmar`: la vista previa (nada se
+                                        guarda); con `confirmar`: crea todo junto
+                                        y vuelve a la pestaña, o la vista previa
+                                        con los errores (422)
+
 Si otra entidad la declara en `subgrillas` (fase 13.4, ej: los destinos bajo
 cada línea de pedido), además:
 
@@ -68,7 +77,7 @@ from sqlalchemy import func
 
 from app.core.db import db
 
-from app.crud.core import coercion, dependencias, fk, repository
+from app.crud.core import coercion, dependencias, fk, pegado, repository
 from app.crud.core.coercion import ErroresValidacion
 from app.crud.core.files import ArchivoInvalido, guardar
 from app.crud.core.interpretes import Campo, buscar_por_texto
@@ -83,6 +92,7 @@ BLUEPRINT = "crud"
 MOTIVO_EDICION_EN_LINEA = "Edición en línea"
 MOTIVO_ALTA_EN_LINEA = "Alta en línea"
 MOTIVO_BAJA_EN_LINEA = "Eliminado en línea"
+MOTIVO_PEGADO = "Líneas pegadas"
 # Cómo está armada la fila del padre cuando no está en la pestaña de otro padre.
 VISTA_LISTADO = "listado"
 ACCIONES = ("listar", "crear", "detalle", "editar", "confirmar_eliminar")
@@ -132,6 +142,8 @@ class VistasEntidad:
         if self.spec.alta_en_linea:
             bp.add_url_rule(f"{base}/alta_en_linea", f"{n}_alta_en_linea", self.alta_en_linea,
                             methods=["POST"])
+        if self.spec.pegado_en_linea:
+            bp.add_url_rule(f"{base}/pegar", f"{n}_pegar", self.pegar, methods=["POST"])
         if any(n in otra.subgrillas for otra in self.registry.values()):
             bp.add_url_rule(f"{base}/subgrilla", f"{n}_subgrilla", self.subgrilla)
             bp.add_url_rule(f"{base}/<int:id>/eliminar_en_linea", f"{n}_eliminar_en_linea",
@@ -812,6 +824,8 @@ class VistasEntidad:
             "grilla": contexto_grilla(hijo, columnas, {rel.fk: id}),
             "alta": (contexto_alta(hijo, columnas, {rel.fk: id})
                      if hay_alta_en_linea(hijo, rel, id) else None),
+            "pegado": (contexto_pegado(hijo, rel.fk, id)
+                       if hijo.pegado_en_linea and hay_alta_en_linea(hijo, rel, id) else None),
             "entidad": hijo.name,
             # Las columnas del listado de la entidad (no todas: la tabla desbordaría).
             "fields": {c: hijo.fields[c] for c in hijo.listado},
@@ -975,6 +989,31 @@ class VistasEntidad:
                                item=item_fila(self.spec, nuevo, columnas), alta=alta, botones=botones,
                                fila_padre=self._fila_padre())
 
+    def pegar(self):
+        """
+        «Pegar líneas» (fase 13.5): un alta por renglón del texto pegado. Sin
+        `confirmar`, la vista previa: se crea todo y se descarta (así muestra
+        exactamente lo que se cargaría). Con `confirmar`: todo o nada.
+        """
+        padre, padre_id = self._padre_desde_url()
+        if padre is None or padre.entidad != self.spec.alta_en_linea_padre:
+            abort(404)
+        repository.obtener_o_404(self.registry[padre.entidad].model, padre_id)
+        texto = request.form.get("texto", "")
+        confirmar = bool(request.form.get("confirmar"))
+        s = servicio(self.spec, confirmar=False)
+        resultado = pegado.procesar(self.spec, s, texto, padre.fk, padre_id, motivo=MOTIVO_PEGADO,
+                                    confirmar=confirmar)
+        if resultado.confirmado:
+            n = len(resultado.creados)
+            label = self.spec.label_singular if n == 1 else self.spec.label_plural
+            flash(f"Se agregaron {n} {label}.", "ok")
+            destino = url_for(endpoint(padre.entidad, "detalle"), id=padre_id, seccion=self.spec.name)
+            return "", 204, {"HX-Redirect": destino}
+        contexto = contexto_pegado(self.spec, padre.fk, padre_id, texto, resultado)
+        return (render_template("crud/partials/_pegado.html", pegado=contexto),
+                422 if confirmar else 200)
+
     # ------------------------------------------------------------------
     # SUBGRILLA (fase 13.4): los hijos desplegados bajo la fila del padre
     # ------------------------------------------------------------------
@@ -1109,6 +1148,21 @@ def hay_alta_en_linea(hijo: EntitySpec, rel: ParentSpec, padre_id) -> bool:
     if not hijo.alta_en_linea or hijo.alta_en_linea_padre != rel.entidad:
         return False
     return hijo.creable_si is None or permitido(hijo.creable_si({rel.fk: padre_id})) is None
+
+
+def contexto_pegado(spec: EntitySpec, padre_fk: str, padre_id, texto: str = "",
+                    resultado: "pegado.ResultadoPegado | None" = None) -> dict:
+    """Lo que crud/partials/_pegado.html necesita: el cuadro de texto y, si hay, la vista previa."""
+    p = spec.pegado_en_linea
+    return {
+        "id": f"pegado-{spec.name}",
+        "label": p.label or f"Pegar {spec.label_plural}",
+        "url": url_for(endpoint(spec.name, "pegar"), **{padre_fk: padre_id}),
+        "texto": texto,
+        "resultado": resultado,
+        "label_singular": spec.label_singular,
+        "label_plural": spec.label_plural,
+    }
 
 
 def fila_de_vista(spec: EntitySpec, registro, vista: str) -> dict:

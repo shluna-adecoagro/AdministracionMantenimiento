@@ -1075,6 +1075,20 @@ td.tabla-acciones form.form-en-linea button { padding: 0.45rem 0.9rem; font-size
 .alta-pie { display: flex; align-items: center; gap: 0.75rem; margin: 0.6rem 0 0; }
 .alta-pie .nota { color: #64748b; font-size: 0.85rem; }
 
+/* «Pegar líneas» (fase 13.5): cuadro de texto y vista previa */
+.pegado { margin-top: 0.9rem; }
+.pegado summary { display: inline-block; cursor: pointer; list-style: none; font-size: 0.85rem; }
+.pegado summary::-webkit-details-marker { display: none; }
+.pegado .pegado-form { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.6rem; max-width: 48rem; }
+.pegado .nota { color: #64748b; font-size: 0.85rem; }
+.pegado textarea { width: 100%; font-family: ui-monospace, monospace; font-size: 0.9rem; }
+.pegado .acciones-pegado { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.6rem; }
+.pegado .pegado-vista { margin-top: 0.9rem; overflow-x: auto; }
+.pegado .pegado-vista td { max-width: none; white-space: normal; }
+.pegado tr.invalida td { background: #fef2f2; }
+.pegado tr.con-aviso td { background: #fffbeb; }
+.pegado p.error-celda { color: #b91c1c; }
+
 /* Subgrillas (fase 13.4): los hijos de una fila, desplegados debajo de ella. */
 .btn-subgrilla { white-space: nowrap; }
 .btn-subgrilla[aria-expanded="true"] { background: #e0e7ff; }

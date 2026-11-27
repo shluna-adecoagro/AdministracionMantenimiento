@@ -2,7 +2,8 @@
   Pestaña de una subentidad en el detalle del padre (ej: «Líneas» del pedido).
   Si la entidad declara edicion_en_linea, la tabla es una grilla editable
   (grilla.js + htmx): ver crud/partials/_fila.html. Si además declara
-  alta_en_linea para este padre, termina con la fila de alta (_fila_alta.html).
+  alta_en_linea para este padre, termina con la fila de alta (_fila_alta.html),
+  y con pegado_en_linea, ofrece «Pegar líneas» debajo (_pegado.html).
 #}
 <section class="p-8">
 
@@ -53,6 +54,9 @@
     </div>
     {% if sub.alta %}
         {% with alta=sub.alta, label_singular=sub.label_singular %}{% include "crud/partials/_boton_alta.html" %}{% endwith %}
+    {% endif %}
+    {% if sub.pegado %}
+        {% with pegado=sub.pegado %}{% include "crud/partials/_pegado.html" %}{% endwith %}
     {% endif %}
 
 </section>

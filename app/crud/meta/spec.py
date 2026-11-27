@@ -261,6 +261,30 @@ class CeldaAltaSpec:
 
 
 @dataclass(frozen=True)
+class PegadoSpec:
+    """
+    «Pegar líneas» (fase 13.5): varias altas de una vez, una por renglón del texto
+    pegado (de un mail, de WhatsApp o de una planilla), en la pestaña del padre de
+    la alta rápida. Cada renglón es «cantidad texto»; lo lee app/crud/core/pegado.py.
+
+    cantidad  campo (de la entidad o de alta) que recibe el número del principio.
+    texto     intérprete del resto del renglón: campos (los que produce) y
+              leer(texto, spec) -> (datos, avisos). Nunca rechaza: lo que no
+              reconoce queda como texto (ej: CodigoEnTexto).
+    datos     datos fijos de cada alta (ej: el destino «a identificar»).
+    aviso     función(datos, padre_id) -> texto o None (opcional): un aviso que no
+              bloquea (ej: una línea igual a otra que ya está en el pedido).
+    label     texto del botón (por defecto, «Pegar <label_plural>»).
+    """
+
+    cantidad: str
+    texto: object
+    datos: dict = field(default_factory=dict)
+    aviso: object = None
+    label: str = ""
+
+
+@dataclass(frozen=True)
 class EntitySpec:
     name: str
     model: type
@@ -313,6 +337,9 @@ class EntitySpec:
     # hijo tiene que tener edicion_en_linea. Al cambiar un hijo, la fila de esta
     # entidad se actualiza fuera de banda (cambian sus columnas calculadas).
     subgrillas: tuple[str, ...] = ()
+    # «Pegar líneas» (fase 13.5): altas desde texto pegado, una por renglón, en la
+    # pestaña del padre de la alta rápida (requiere alta_en_linea). Ver PegadoSpec.
+    pegado_en_linea: PegadoSpec | None = None
 
     # Reglas de edición según el registro (fase 13.2). Las aplica el servicio, así
     # que valen en la grilla, el formulario, la API y la importación CSV:

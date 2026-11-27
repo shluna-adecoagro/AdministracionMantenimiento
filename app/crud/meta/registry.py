@@ -29,6 +29,7 @@ from app.crud.core.numeracion import FormatoInvalido, validar_formato
 from app.crud.introspect import columnas_hacia, fk_apunta_a, inferir_entidad
 from app.crud.meta.spec import (
     CeldaAltaSpec,
+    PegadoSpec,
     AUDITORIA_IGNORAR_DEFAULT,
     GENEROS,
     GRUPOS,
@@ -76,6 +77,7 @@ CLAVES_ENTIDAD = frozenset({
     "alta_en_linea",      # [{"nombre", "columnas", "interprete"...}] fila de alta de la grilla (fase 13.3)
     "alta_en_linea_padre",  # entidad padre en cuya pestaña está la fila de alta (por defecto, el principal)
     "subgrillas",         # [hijo, ...] se despliegan debajo de cada fila de la grilla (fase 13.4)
+    "pegado_en_linea",    # {"cantidad", "texto", "datos", "aviso", "label"} «Pegar líneas» (fase 13.5)
 })
 
 # Tipos de widget que por defecto aparecen en listado y filtros.
@@ -444,6 +446,8 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
 
     alta_en_linea, alta_en_linea_padre = _alta_en_linea(ov, campos, listado, padres, pref, errores)
 
+    pegado_en_linea = _pegado_en_linea(ov, campos, alta_en_linea, alta_en_linea_padre, padres, pref, errores)
+
     subgrillas = tuple(ov.get("subgrillas") or ())
     if subgrillas and not edicion_en_linea:
         errores.append(f"{pref} subgrillas: la entidad no tiene edicion_en_linea (las subgrillas van en su grilla)")
@@ -495,6 +499,7 @@ def construir_spec(nombre: str, ov: dict) -> tuple[EntitySpec | None, list[str]]
         alta_en_linea=alta_en_linea,
         alta_en_linea_padre=alta_en_linea_padre,
         subgrillas=subgrillas,
+        pegado_en_linea=pegado_en_linea,
         editable_si=editable_si,
         eliminable_si=ov.get("eliminable_si"),
         creable_si=ov.get("creable_si"),
@@ -584,6 +589,55 @@ def _alta_en_linea(ov, campos, listado, padres, pref, errores):
     if len({c.nombre for c in celdas}) != len(celdas):
         errores.append(f"{pref} alta_en_linea: hay celdas con el mismo nombre")
     return tuple(celdas), nombre_padre
+
+
+def _pegado_en_linea(ov, campos, alta_en_linea, nombre_padre, padres, pref, errores):
+    """«Pegar líneas» (fase 13.5): va en la misma pestaña que la alta rápida."""
+    cfg = ov.get("pegado_en_linea")
+    if not cfg:
+        return None
+    pref = f"{pref} pegado_en_linea:"
+    claves = {"cantidad", "texto", "datos", "aviso", "label"}
+    if not isinstance(cfg, dict) or not {"cantidad", "texto"} <= set(cfg) <= claves:
+        errores.append(f"{pref} es {{'cantidad', 'texto'}} (opcional: 'datos', 'aviso', 'label')")
+        return None
+    if not alta_en_linea:
+        errores.append(f"{pref} requiere alta_en_linea (va en la misma pestaña)")
+        return None
+    padre = next(p for p in padres if p.entidad == nombre_padre)
+    ok = True
+    f = campos.get(cfg["cantidad"])
+    if f is None or f.tipo != "number":
+        errores.append(f"{pref} 'cantidad' tiene que ser un campo numérico.{_sugerir(cfg['cantidad'], campos)}")
+        ok = False
+    texto = cfg["texto"]
+    if not all(hasattr(texto, a) for a in ("campos", "leer")):
+        errores.append(f"{pref} el intérprete de 'texto' no es válido (necesita campos y leer)")
+        return None
+    datos = dict(cfg.get("datos") or {})
+    for c in (cfg["cantidad"], *texto.campos, *datos):
+        f = campos.get(c)
+        motivo = None
+        if f is None:
+            motivo = f"no es un campo de la entidad.{_sugerir(c, campos)}"
+        elif f.solo_lectura or f.calculado_python:
+            motivo = "es calculado"
+        elif f.tipo == "file":
+            motivo = "es un archivo"
+        elif f.solo_importacion:
+            motivo = "es de solo importación (su dueño es el ERP u otra fuente)"
+        elif c == padre.fk:
+            motivo = "es el padre (viene de la pestaña)"
+        if motivo:
+            errores.append(f"{pref} '{c}' {motivo}")
+            ok = False
+    if cfg.get("aviso") is not None and not callable(cfg["aviso"]):
+        errores.append(f"{pref} 'aviso' debe ser una función (datos, padre_id)")
+        ok = False
+    if not ok:
+        return None
+    return PegadoSpec(cantidad=cfg["cantidad"], texto=texto, datos=datos, aviso=cfg.get("aviso"),
+                      label=cfg.get("label") or "")
 
 
 def _filas_accion(cfg, pref, errores) -> FilasAccionSpec | None:

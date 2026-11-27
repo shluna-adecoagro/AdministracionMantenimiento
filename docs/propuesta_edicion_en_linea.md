@@ -102,7 +102,7 @@ agregar líneas olvidadas a un pedido que Compras ya está cotizando.
 | B | Borrador y envío: `enviada_en` (migración), «Enviar a Compras», campos editables según la línea (`editable_si` en la spec), eliminar en borrador, anular o cancelar con motivo |
 | C | Alta rápida (última fila) usando `campos_alta`: material o descripción, cantidad y destino |
 | D | Subgrilla de destinos (fila de la línea actualizada fuera de banda, `hx-swap-oob`) y «Redistribuir» |
-| E | Pegar desde Excel: vista previa y confirmación «todo o nada» (`servicio(confirmar=False)`), con un adaptador «pegado» al formato interno común |
+| E | Pegar líneas (desde un mail o WhatsApp; antes «Pegar desde Excel»): vista previa y confirmación «todo o nada» (`servicio(confirmar=False)`), con un adaptador «pegado» al formato interno común. Ver las notas del PR 13.5 |
 | F | Colas de «a revisar» (destinos sin sector o cuenta, materiales sin identificar) |
 
 `editable_si` es una segunda clave de la spec: `{campo: función(registro) → bool}`. La usan

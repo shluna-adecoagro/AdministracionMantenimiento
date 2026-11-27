@@ -41,7 +41,8 @@ from datetime import datetime
 
 from app.core.db import db
 from app.crud.core.coercion import ErroresValidacion
-from app.crud.core.interpretes import FkEntre, FkOTexto
+from app.crud.core.interpretes import CodigoEnTexto, FkEntre, FkOTexto
+from app.crud.introspect import normalizar_texto
 from app.models.activos_models import Activo
 from app.models.marcas_modelos_models import Modelo
 from app.models.motivos_models import MotivoOperacion
@@ -72,6 +73,26 @@ DESTINO_EN_TEXTO = FkEntre(
     vacio={"destino": "a_identificar"},
 )
 MOTIVO_REDISTRIBUCION = "Redistribución"
+
+
+def aviso_linea_repetida(datos, pedido_id):
+    """
+    «Pegar líneas»: aviso (no bloquea) si el pedido ya tiene una línea no anulada
+    del mismo material, o con la misma descripción, y la misma cantidad. Pegar
+    dos veces el mismo mensaje duplicaría las líneas. Incluye las que se acaban
+    de agregar en el mismo pegado (ya están en la transacción).
+    """
+    material, texto = datos.get("material_id"), normalizar_texto(datos.get("descripcion"))
+    filas = (db.session.query(PedidoLinea.nro_linea, PedidoLinea.material_id, PedidoLinea.descripcion,
+                              PedidoLinea.solicitada)
+             .filter(PedidoLinea.pedido_id == pedido_id, PedidoLinea.estado != "anulado")
+             .order_by(PedidoLinea.nro_linea))
+    for nro, material_linea, descripcion, solicitada in filas:
+        igual = (material is not None and material_linea == material) or (
+            texto and normalizar_texto(descripcion) == texto)
+        if igual and solicitada is not None and float(solicitada) == float(datos.get("cantidad") or 0):
+            return f"Igual a la línea {nro} del pedido (mismo material o descripción y cantidad)."
+    return None
 
 
 def motivos_de_anulacion():
@@ -681,6 +702,17 @@ OVERRIDES = {
              "columnas": ["adjudicada", "recibida", "pendiente_comprar", "pendiente_recibir", "se_cuenta_en"],
              "interprete": DESTINO_EN_TEXTO, "repetir": True},
         ],
+        # «Pegar líneas» (fase 13.5): un renglón por línea, «cantidad código o
+        # descripción», copiado de un mail o de WhatsApp. El material se reconoce
+        # solo por un código exacto; el destino no se adivina: queda «a
+        # identificar» (y la línea, a revisar) hasta que el gestor lo complete.
+        "pegado_en_linea": {
+            "label": "Pegar líneas",
+            "cantidad": "cantidad",
+            "texto": CodigoEnTexto("material_id", "descripcion", "codigo"),
+            "datos": {"destino": "a_identificar"},
+            "aviso": aviso_linea_repetida,
+        },
         # Los destinos de cada línea se despliegan debajo de ella (fase 13.4).
         "subgrillas": ["pedido_linea_destinos"],
         "acciones": [ACCION_ANULAR, ACCION_REDISTRIBUIR],

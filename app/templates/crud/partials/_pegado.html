@@ -1,0 +1,80 @@
+{#
+  «Pegar líneas» (fase 13.5): cuadro de texto y vista previa, en la pestaña del
+  padre de la alta rápida. Variable: pegado (contexto_pegado en web/views.py).
+
+  Un renglón por alta: cantidad y código o descripción. «Vista previa» no guarda
+  nada; «Agregar» crea todo junto (todo o nada) y recarga la pestaña. Ctrl+V de
+  varios renglones en la fila de alta también llega acá (grilla.js).
+#}
+{% set p = pegado %}
+{% set r = p.resultado %}
+<div id="{{ p.id }}" class="pegado">
+    <details {% if r or p.texto %}open{% endif %}>
+        <summary class="btn-secondary">{{ p.label }}</summary>
+        <form class="pegado-form" hx-post="{{ p.url }}" hx-target="#{{ p.id }}" hx-swap="outerHTML">
+            <label for="{{ p.id }}-texto" class="nota">
+                Un renglón por línea: la cantidad y el código o la descripción, por ejemplo
+                «4 filtros RE504836». Copiá solo los renglones del pedido (sin los títulos).
+            </label>
+            <textarea id="{{ p.id }}-texto" name="texto" rows="8" spellcheck="false">{{ p.texto }}</textarea>
+            <div class="acciones-pegado">
+                <button type="submit" class="btn-secondary">Vista previa</button>
+                <button type="button" class="btn-secondary" data-descartar-pegado>Descartar</button>
+            </div>
+        </form>
+
+        {% if r %}
+        <section class="pegado-vista" aria-label="Vista previa">
+            {% if r.filas %}
+            <table class="tabla-listado">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Texto pegado</th>
+                        {% for c in r.columnas %}<th>{{ c }}</th>{% endfor %}
+                        <th>Avisos</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for f in r.filas %}
+                    <tr class="{% if f.error %}invalida{% elif f.avisos %}con-aviso{% endif %}">
+                        <td class="num">{{ f.n or '' }}</td>
+                        <td>{{ f.original }}</td>
+                        {% if f.error %}
+                            <td colspan="{{ r.columnas | length }}"></td>
+                            <td class="error-celda" role="alert">{{ f.error }}</td>
+                        {% else %}
+                            {% for v in f.vista %}
+                                <td{% if loop.first %} class="num"{% endif %}>{{ v or '—' }}</td>
+                            {% endfor %}
+                            <td>{{ f.avisos | join(' ') }}</td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            {% if r.valido %}
+                <form class="acciones-pegado" hx-post="{{ p.url }}" hx-target="#{{ p.id }}" hx-swap="outerHTML">
+                    <input type="hidden" name="texto" value="{{ p.texto }}">
+                    <input type="hidden" name="confirmar" value="1">
+                    {% set n = r.filas | length %}
+                    <button type="submit" class="btn-success">
+                        Agregar {{ n }} {{ p.label_singular if n == 1 else p.label_plural }}
+                    </button>
+                    <span class="nota">Se cargan todas juntas.</span>
+                </form>
+            {% elif not r.filas %}
+                <p class="nota">No hay renglones para cargar.</p>
+            {% else %}
+                <p class="error-celda" role="alert">
+                    {{ r.con_error | length }} {{ 'renglón' if r.con_error | length == 1 else 'renglones' }} con error:
+                    corregí el texto y volvé a ver la vista previa. No se carga ninguna línea hasta
+                    que estén todas bien.
+                </p>
+            {% endif %}
+        </section>
+        {% endif %}
+    </details>
+</div>
